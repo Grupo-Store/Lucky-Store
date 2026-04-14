@@ -117,8 +117,16 @@ export function OrderProvider({ children }: { children: React.ReactNode }) {
     });
   });
 
+  const applyDelayCheck = (o: Order): Order => {
+    const today = new Date().toISOString().slice(0, 10);
+    if (o.status !== 'Delivered' && o.status !== 'Delayed' && o.deliveryDate < today) {
+      return { ...o, status: 'Delayed' };
+    }
+    return o;
+  };
+
   const addOrder = useCallback((order: Order) => {
-    setOrders(prev => [...prev, order]);
+    setOrders(prev => [...prev, applyDelayCheck(order)]);
   }, []);
 
   const updateOrder = useCallback((order: Order) => {
