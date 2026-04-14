@@ -2,10 +2,9 @@ import { useState, useMemo } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { ArrowUpDown, Plus } from 'lucide-react';
+import { ArrowUp, ArrowDown, Plus } from 'lucide-react';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { useOrders, Order, OrderStatus, ItemStatus, ORDER_STATUS_COLORS, ITEM_STATUS_COLORS, isOpenOrder, calcTotal } from '@/store/OrderStore';
@@ -25,31 +24,44 @@ function formatBRL(v: number) {
   return v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 }
 
+type SortField = 'os' | 'deliveryDate';
+type SortDir = 'asc' | 'desc';
+
 export default function Sales() {
   const { orders, addOrder, updateOrder, deleteOrder, updateItemStatus } = useOrders();
   const [tab, setTab] = useState('orders');
   const [openOnly, setOpenOnly] = useState(false);
   const [statusFilter, setStatusFilter] = useState<string>('all');
-  const [sortByDelivery, setSortByDelivery] = useState(false);
+  const [sortField, setSortField] = useState<SortField | null>(null);
+  const [sortDir, setSortDir] = useState<SortDir>('asc');
   const [modalOpen, setModalOpen] = useState(false);
   const [editOrder, setEditOrder] = useState<Order | null>(null);
-
-  // Products filters
   const [prodStatusFilter, setProdStatusFilter] = useState<string>('all');
+
+  const toggleSort = (field: SortField) => {
+    if (sortField === field) {
+      setSortDir(d => d === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortField(field);
+      setSortDir('asc');
+    }
+  };
 
   const filteredOrders = useMemo(() => {
     let list = [...orders];
     if (openOnly) list = list.filter(o => isOpenOrder(o.status));
     if (statusFilter !== 'all') list = list.filter(o => o.status === statusFilter);
-    if (sortByDelivery) list.sort((a, b) => {
-      const da = Math.abs(new Date(a.deliveryDate).getTime() - Date.now());
-      const db = Math.abs(new Date(b.deliveryDate).getTime() - Date.now());
-      return da - db;
-    });
+    if (sortField) {
+      list.sort((a, b) => {
+        let cmp = 0;
+        if (sortField === 'os') cmp = a.os.localeCompare(b.os, undefined, { numeric: true });
+        else cmp = a.deliveryDate.localeCompare(b.deliveryDate);
+        return sortDir === 'asc' ? cmp : -cmp;
+      });
+    }
     return list;
-  }, [orders, openOnly, statusFilter, sortByDelivery]);
+  }, [orders, openOnly, statusFilter, sortField, sortDir]);
 
-  // Products: aggregated items from open orders
   const products = useMemo(() => {
     return orders
       .filter(o => isOpenOrder(o.status))
@@ -59,6 +71,16 @@ export default function Sales() {
 
   const handleStatusChange = (order: Order, newStatus: OrderStatus) => {
     updateOrder({ ...order, status: newStatus });
+  };
+
+  const SortArrow = ({ field }: { field: SortField }) => {
+    const active = sortField === field;
+    const Icon = active && sortDir === 'desc' ? ArrowDown : ArrowUp;
+    return (
+      <Button variant="ghost" size="icon" className={cn('h-6 w-6', active && 'text-secondary')} onClick={() => toggleSort(field)}>
+        <Icon className="h-3.5 w-3.5" />
+      </Button>
+    );
   };
 
   return (
@@ -72,14 +94,28 @@ export default function Sales() {
         <TabsContent value="orders">
           <Card>
             <CardContent className="p-4">
-              {/* Global filter */}
-              <div className="flex items-center gap-3 mb-4">
-                <span className="text-sm font-medium">Todos os Pedidos</span>
-                <Switch checked={openOnly} onCheckedChange={setOpenOnly} />
-                <span className="text-sm font-medium">Apenas Abertos</span>
+              {/* Segmented toggle */}
+              <div className="flex items-center gap-1 mb-4 bg-muted rounded-full p-1 w-fit">
+                <button
+                  onClick={() => setOpenOnly(false)}
+                  className={cn(
+                    'px-4 py-1.5 rounded-full text-sm font-medium transition-all',
+                    !openOnly ? 'bg-secondary text-secondary-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
+                  )}
+                >
+                  Todos os Pedidos
+                </button>
+                <button
+                  onClick={() => setOpenOnly(true)}
+                  className={cn(
+                    'px-4 py-1.5 rounded-full text-sm font-medium transition-all',
+                    openOnly ? 'bg-secondary text-secondary-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
+                  )}
+                >
+                  Apenas Abertos
+                </button>
               </div>
 
-              {/* Table controls */}
               <div className="flex justify-between items-center mb-4">
                 <Select value={statusFilter} onValueChange={setStatusFilter}>
                   <SelectTrigger className="w-56"><SelectValue placeholder="Filtrar por Status" /></SelectTrigger>
@@ -87,7 +123,7 @@ export default function Sales() {
                     <SelectItem value="all">Todos os Status</SelectItem>
                     {(Object.keys(STATUS_LABELS) as OrderStatus[]).map(s => (
                       <SelectItem key={s} value={s}>
-                        <span className={cn('px-2 py-0.5 rounded text-xs', ORDER_STATUS_COLORS[s])}>{STATUS_LABELS[s]}</span>
+                        <span className={cn('px-2 py-0.5 rounded text-xs font-medium', ORDER_STATUS_COLORS[s])}>{STATUS_LABELS[s]}</span>
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -97,20 +133,17 @@ export default function Sales() {
                 </Button>
               </div>
 
-              {/* Orders table */}
               <div className="overflow-x-auto rounded-lg border">
                 <Table>
                   <TableHeader>
                     <TableRow className="bg-secondary/10">
-                      <TableHead>OS</TableHead>
-                      <TableHead>Cliente</TableHead>
                       <TableHead>
-                        <div className="flex items-center gap-1">
-                          Data de Entrega
-                          <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setSortByDelivery(v => !v)}>
-                            <ArrowUpDown className="h-3 w-3" />
-                          </Button>
-                        </div>
+                        <div className="flex items-center gap-1">OS <SortArrow field="os" /></div>
+                      </TableHead>
+                      <TableHead>Cliente</TableHead>
+                      <TableHead>Empresa</TableHead>
+                      <TableHead>
+                        <div className="flex items-center gap-1">Data de Entrega <SortArrow field="deliveryDate" /></div>
                       </TableHead>
                       <TableHead>Status</TableHead>
                       <TableHead className="text-right">Valor Total</TableHead>
@@ -125,16 +158,17 @@ export default function Sales() {
                       >
                         <TableCell className="font-medium">{order.os}</TableCell>
                         <TableCell>{order.customer}</TableCell>
+                        <TableCell>{order.company || '—'}</TableCell>
                         <TableCell>{format(new Date(order.deliveryDate + 'T12:00:00'), 'dd/MM/yyyy')}</TableCell>
                         <TableCell onClick={e => e.stopPropagation()}>
                           <Select value={order.status} onValueChange={v => handleStatusChange(order, v as OrderStatus)}>
-                            <SelectTrigger className={cn('w-44 text-xs font-medium border', ORDER_STATUS_COLORS[order.status])}>
+                            <SelectTrigger className={cn('w-44 text-xs font-semibold border', ORDER_STATUS_COLORS[order.status])}>
                               <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
                               {(Object.keys(STATUS_LABELS) as OrderStatus[]).map(s => (
                                 <SelectItem key={s} value={s}>
-                                  <span className={cn('px-2 py-0.5 rounded', ORDER_STATUS_COLORS[s])}>{STATUS_LABELS[s]}</span>
+                                  <span className={cn('px-2 py-0.5 rounded text-xs font-medium', ORDER_STATUS_COLORS[s])}>{STATUS_LABELS[s]}</span>
                                 </SelectItem>
                               ))}
                             </SelectContent>
@@ -144,7 +178,7 @@ export default function Sales() {
                       </TableRow>
                     ))}
                     {filteredOrders.length === 0 && (
-                      <TableRow><TableCell colSpan={5} className="text-center py-8 text-muted-foreground">Nenhum pedido encontrado</TableCell></TableRow>
+                      <TableRow><TableCell colSpan={6} className="text-center py-8 text-muted-foreground">Nenhum pedido encontrado</TableCell></TableRow>
                     )}
                   </TableBody>
                 </Table>
@@ -164,7 +198,7 @@ export default function Sales() {
                     <SelectItem value="all">Todos os Status</SelectItem>
                     {(['To Buy', 'Bought', 'In Stock'] as ItemStatus[]).map(s => (
                       <SelectItem key={s} value={s}>
-                        <span className={cn('px-2 py-0.5 rounded text-xs', ITEM_STATUS_COLORS[s])}>{ITEM_STATUS_LABELS[s]}</span>
+                        <span className={cn('px-2 py-0.5 rounded text-xs font-medium', ITEM_STATUS_COLORS[s])}>{ITEM_STATUS_LABELS[s]}</span>
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -187,13 +221,13 @@ export default function Sales() {
                         <TableCell>{p.quantity}</TableCell>
                         <TableCell>
                           <Select value={p.status} onValueChange={v => updateItemStatus(p.orderId, p.id, v as ItemStatus)}>
-                            <SelectTrigger className={cn('w-40 text-xs font-medium border', ITEM_STATUS_COLORS[p.status])}>
+                            <SelectTrigger className={cn('w-40 text-xs font-semibold border', ITEM_STATUS_COLORS[p.status])}>
                               <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
                               {(['To Buy', 'Bought', 'In Stock'] as ItemStatus[]).map(s => (
                                 <SelectItem key={s} value={s}>
-                                  <span className={cn('px-2 py-0.5 rounded', ITEM_STATUS_COLORS[s])}>{ITEM_STATUS_LABELS[s]}</span>
+                                  <span className={cn('px-2 py-0.5 rounded text-xs font-medium', ITEM_STATUS_COLORS[s])}>{ITEM_STATUS_LABELS[s]}</span>
                                 </SelectItem>
                               ))}
                             </SelectContent>

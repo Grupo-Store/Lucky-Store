@@ -4,6 +4,7 @@ export type OrderStatus = 'To Buy' | 'Bought' | 'Received' | 'Ready for Delivery
 export type ItemStatus = 'To Buy' | 'Bought' | 'In Stock';
 export type PaymentMethod = 'Card' | 'Boleto';
 export type OcAfPed = '' | 'Purchase Order' | 'AF' | 'Pedido';
+export type Company = '' | 'Lucky Store' | 'BTech' | 'AJJ';
 
 export interface OrderItem {
   id: string;
@@ -17,6 +18,7 @@ export interface Order {
   os: string;
   orderDate: string;
   customer: string;
+  company: Company;
   invoice: string;
   ocAfPed: OcAfPed;
   paymentMethod: PaymentMethod;
@@ -36,19 +38,19 @@ export interface Order {
 }
 
 export const ORDER_STATUS_COLORS: Record<OrderStatus, string> = {
-  'To Buy': 'bg-yellow-100 text-yellow-800 border-yellow-300',
-  'Bought': 'bg-blue-100 text-blue-800 border-blue-300',
-  'Received': 'bg-purple-100 text-purple-800 border-purple-300',
-  'Ready for Delivery': 'bg-emerald-100 text-emerald-800 border-emerald-300',
-  'Out for Delivery': 'bg-orange-100 text-orange-800 border-orange-300',
-  'Delivered': 'bg-green-100 text-green-800 border-green-300',
-  'Delayed': 'bg-red-100 text-red-800 border-red-300',
+  'To Buy': 'bg-amber-100 text-amber-900 border-amber-400',
+  'Bought': 'bg-sky-100 text-sky-900 border-sky-400',
+  'Received': 'bg-violet-100 text-violet-900 border-violet-400',
+  'Ready for Delivery': 'bg-emerald-100 text-emerald-900 border-emerald-400',
+  'Out for Delivery': 'bg-orange-100 text-orange-900 border-orange-400',
+  'Delivered': 'bg-green-200 text-green-900 border-green-500',
+  'Delayed': 'bg-red-100 text-red-900 border-red-400',
 };
 
 export const ITEM_STATUS_COLORS: Record<ItemStatus, string> = {
-  'To Buy': 'bg-amber-100 text-amber-800 border-amber-300',
-  'Bought': 'bg-sky-100 text-sky-800 border-sky-300',
-  'In Stock': 'bg-green-100 text-green-800 border-green-300',
+  'To Buy': 'bg-amber-100 text-amber-900 border-amber-400',
+  'Bought': 'bg-sky-100 text-sky-900 border-sky-400',
+  'In Stock': 'bg-teal-100 text-teal-900 border-teal-400',
 };
 
 const OPEN_STATUSES: OrderStatus[] = ['To Buy', 'Bought', 'Received', 'Ready for Delivery', 'Out for Delivery', 'Delayed'];
@@ -61,10 +63,9 @@ export function calcTotal(o: Partial<Order>): number {
   return (o.productCost || 0) + (o.serviceCost || 0) + (o.purchaseTaxValue || 0) + (o.salesTaxValue || 0) + (o.cardFinanceCost || 0) + (o.boletoCost || 0) + (o.giftCost || 0) + (o.shippingCost || 0);
 }
 
-// Sample data
 const sampleOrders: Order[] = [
   {
-    id: '1', os: '1001', orderDate: '2026-04-01', customer: 'Tech Solutions Ltda', invoice: 'NF-001',
+    id: '1', os: '1001', orderDate: '2026-04-01', customer: 'Tech Solutions Ltda', company: 'Lucky Store', invoice: 'NF-001',
     ocAfPed: 'Purchase Order', paymentMethod: 'Card', deliveryDate: '2026-04-15', status: 'Bought',
     productCost: 1500, serviceCost: 200, cardFinanceCost: 50, boletoCost: 0, giftCost: 0, shippingCost: 80,
     purchaseTaxPercent: 10, purchaseTaxValue: 150, salesTaxPercent: 5, salesTaxValue: 75,
@@ -74,7 +75,7 @@ const sampleOrders: Order[] = [
     ]
   },
   {
-    id: '2', os: '1002', orderDate: '2026-04-05', customer: 'Escritório Digital', invoice: 'NF-002',
+    id: '2', os: '1002', orderDate: '2026-04-05', customer: 'Escritório Digital', company: 'BTech', invoice: 'NF-002',
     ocAfPed: 'AF', paymentMethod: 'Boleto', deliveryDate: '2026-04-20', status: 'To Buy',
     productCost: 3200, serviceCost: 0, cardFinanceCost: 0, boletoCost: 30, giftCost: 50, shippingCost: 120,
     purchaseTaxPercent: 12, purchaseTaxValue: 384, salesTaxPercent: 8, salesTaxValue: 256,
@@ -84,7 +85,7 @@ const sampleOrders: Order[] = [
     ]
   },
   {
-    id: '3', os: '1003', orderDate: '2026-03-20', customer: 'InfoShop Comércio', invoice: 'NF-003',
+    id: '3', os: '1003', orderDate: '2026-03-20', customer: 'InfoShop Comércio', company: 'AJJ', invoice: 'NF-003',
     ocAfPed: 'Pedido', paymentMethod: 'Card', deliveryDate: '2026-04-10', status: 'Delivered',
     productCost: 800, serviceCost: 100, cardFinanceCost: 25, boletoCost: 0, giftCost: 0, shippingCost: 40,
     purchaseTaxPercent: 10, purchaseTaxValue: 80, salesTaxPercent: 5, salesTaxValue: 40,
