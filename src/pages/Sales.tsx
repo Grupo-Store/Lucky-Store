@@ -2,9 +2,12 @@ import { useState, useMemo } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { ArrowUp, ArrowDown, Plus } from 'lucide-react';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Calendar } from '@/components/ui/calendar';
+import { ArrowUp, ArrowDown, Plus, Search, CalendarIcon, X } from 'lucide-react';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { useOrders, Order, OrderStatus, ItemStatus, ORDER_STATUS_COLORS, ITEM_STATUS_COLORS, isOpenOrder, calcTotal } from '@/store/OrderStore';
@@ -38,6 +41,12 @@ export default function Sales() {
   const [editOrder, setEditOrder] = useState<Order | null>(null);
   const [prodStatusFilter, setProdStatusFilter] = useState<string>('all');
 
+  // Search & date filter state
+  const [searchQuery, setSearchQuery] = useState('');
+  const [filterDate, setFilterDate] = useState<Date | undefined>(undefined);
+  const [prodSearchQuery, setProdSearchQuery] = useState('');
+  const [prodFilterDate, setProdFilterDate] = useState<Date | undefined>(undefined);
+
   const toggleSort = (field: SortField) => {
     if (sortField === field) {
       setSortDir(d => d === 'asc' ? 'desc' : 'asc');
@@ -47,10 +56,18 @@ export default function Sales() {
     }
   };
 
+  const matchesSearch = (order: Order, query: string, date?: Date) => {
+    const q = query.toLowerCase().trim();
+    const textMatch = !q || order.customer.toLowerCase().includes(q) || order.os.toLowerCase().includes(q);
+    const dateMatch = !date || order.deliveryDate === format(date, 'yyyy-MM-dd');
+    return textMatch && dateMatch;
+  };
+
   const filteredOrders = useMemo(() => {
     let list = [...orders];
     if (openOnly) list = list.filter(o => isOpenOrder(o.status));
     if (statusFilter !== 'all') list = list.filter(o => o.status === statusFilter);
+    list = list.filter(o => matchesSearch(o, searchQuery, filterDate));
     if (sortField) {
       list.sort((a, b) => {
         let cmp = 0;
@@ -60,14 +77,20 @@ export default function Sales() {
       });
     }
     return list;
-  }, [orders, openOnly, statusFilter, sortField, sortDir]);
+  }, [orders, openOnly, statusFilter, sortField, sortDir, searchQuery, filterDate]);
 
   const products = useMemo(() => {
     return orders
       .filter(o => isOpenOrder(o.status))
-      .flatMap(o => o.items.map(item => ({ ...item, orderId: o.id, deliveryDate: o.deliveryDate })))
-      .filter(p => prodStatusFilter === 'all' || p.status === prodStatusFilter);
-  }, [orders, prodStatusFilter]);
+      .flatMap(o => o.items.map(item => ({ ...item, orderId: o.id, deliveryDate: o.deliveryDate, customer: o.customer })))
+      .filter(p => prodStatusFilter === 'all' || p.status === prodStatusFilter)
+      .filter(p => {
+        const q = prodSearchQuery.toLowerCase().trim();
+        const textMatch = !q || p.name.toLowerCase().includes(q) || p.customer.toLowerCase().includes(q);
+        const dateMatch = !prodFilterDate || p.deliveryDate === format(prodFilterDate, 'yyyy-MM-dd');
+        return textMatch && dateMatch;
+      });
+  }, [orders, prodStatusFilter, prodSearchQuery, prodFilterDate]);
 
   const handleStatusChange = (order: Order, newStatus: OrderStatus) => {
     updateOrder({ ...order, status: newStatus });
@@ -83,6 +106,43 @@ export default function Sales() {
     );
   };
 
+  const SearchFilterBar = ({
+    query, onQueryChange, date, onDateChange
+  }: { query: string; onQueryChange: (v: string) => void; date?: Date; onDateChange: (d: Date | undefined) => void }) => (
+    <div className="flex items-center gap-2">
+      <div className="relative">
+        <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+        <Input
+          placeholder="Buscar por cliente ou OS..."
+          value={query}
+          onChange={e => onQueryChange(e.target.value)}
+          className="pl-9 w-64 bg-white"
+        />
+      </div>
+      <Popover>
+        <PopoverTrigger asChild>
+          <Button variant="outline" className={cn('gap-2', date && 'text-secondary border-secondary')}>
+            <CalendarIcon className="h-4 w-4" />
+            {date ? format(date, 'dd/MM/yyyy') : 'Data'}
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent className="w-auto p-0" align="end">
+          <Calendar
+            mode="single"
+            selected={date}
+            onSelect={onDateChange}
+            className="p-3 pointer-events-auto"
+          />
+        </PopoverContent>
+      </Popover>
+      {(query || date) && (
+        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => { onQueryChange(''); onDateChange(undefined); }}>
+          <X className="h-4 w-4" />
+        </Button>
+      )}
+    </div>
+  );
+
   return (
     <div>
       <Tabs value={tab} onValueChange={setTab}>
@@ -94,26 +154,29 @@ export default function Sales() {
         <TabsContent value="orders">
           <Card>
             <CardContent className="p-4">
-              {/* Segmented toggle */}
-              <div className="flex items-center gap-1 mb-4 bg-muted rounded-full p-1 w-fit">
-                <button
-                  onClick={() => setOpenOnly(false)}
-                  className={cn(
-                    'px-4 py-1.5 rounded-full text-sm font-medium transition-all',
-                    !openOnly ? 'bg-secondary text-secondary-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
-                  )}
-                >
-                  Todos os Pedidos
-                </button>
-                <button
-                  onClick={() => setOpenOnly(true)}
-                  className={cn(
-                    'px-4 py-1.5 rounded-full text-sm font-medium transition-all',
-                    openOnly ? 'bg-secondary text-secondary-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
-                  )}
-                >
-                  Apenas Abertos
-                </button>
+              {/* Top row: toggle + search */}
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-1 bg-muted rounded-full p-1 w-fit">
+                  <button
+                    onClick={() => setOpenOnly(false)}
+                    className={cn(
+                      'px-4 py-1.5 rounded-full text-sm font-medium transition-all',
+                      !openOnly ? 'bg-secondary text-secondary-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
+                    )}
+                  >
+                    Todos os Pedidos
+                  </button>
+                  <button
+                    onClick={() => setOpenOnly(true)}
+                    className={cn(
+                      'px-4 py-1.5 rounded-full text-sm font-medium transition-all',
+                      openOnly ? 'bg-secondary text-secondary-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
+                    )}
+                  >
+                    Apenas Abertos
+                  </button>
+                </div>
+                <SearchFilterBar query={searchQuery} onQueryChange={setSearchQuery} date={filterDate} onDateChange={setFilterDate} />
               </div>
 
               <div className="flex justify-between items-center mb-4">
@@ -192,23 +255,27 @@ export default function Sales() {
             <CardContent className="p-4">
               <div className="flex justify-between items-center mb-4">
                 <h2 className="text-lg font-semibold text-secondary">Produtos (Pedidos Abertos)</h2>
-                <Select value={prodStatusFilter} onValueChange={setProdStatusFilter}>
-                  <SelectTrigger className="w-56"><SelectValue placeholder="Filtrar por Status" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">Todos os Status</SelectItem>
-                    {(['To Buy', 'Bought', 'In Stock'] as ItemStatus[]).map(s => (
-                      <SelectItem key={s} value={s}>
-                        <span className={cn('px-2 py-0.5 rounded text-xs font-medium', ITEM_STATUS_COLORS[s])}>{ITEM_STATUS_LABELS[s]}</span>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <div className="flex items-center gap-3">
+                  <SearchFilterBar query={prodSearchQuery} onQueryChange={setProdSearchQuery} date={prodFilterDate} onDateChange={setProdFilterDate} />
+                  <Select value={prodStatusFilter} onValueChange={setProdStatusFilter}>
+                    <SelectTrigger className="w-48"><SelectValue placeholder="Filtrar por Status" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Todos os Status</SelectItem>
+                      {(['To Buy', 'Bought', 'In Stock'] as ItemStatus[]).map(s => (
+                        <SelectItem key={s} value={s}>
+                          <span className={cn('px-2 py-0.5 rounded text-xs font-medium', ITEM_STATUS_COLORS[s])}>{ITEM_STATUS_LABELS[s]}</span>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
               <div className="overflow-x-auto rounded-lg border">
                 <Table>
                   <TableHeader>
                     <TableRow className="bg-secondary/10">
                       <TableHead>Produto</TableHead>
+                      <TableHead>Cliente</TableHead>
                       <TableHead>Quantidade</TableHead>
                       <TableHead>Status</TableHead>
                       <TableHead>Prazo de Entrega</TableHead>
@@ -218,6 +285,7 @@ export default function Sales() {
                     {products.map(p => (
                       <TableRow key={`${p.orderId}-${p.id}`}>
                         <TableCell className="font-medium">{p.name}</TableCell>
+                        <TableCell>{p.customer}</TableCell>
                         <TableCell>{p.quantity}</TableCell>
                         <TableCell>
                           <Select value={p.status} onValueChange={v => updateItemStatus(p.orderId, p.id, v as ItemStatus)}>
@@ -237,7 +305,7 @@ export default function Sales() {
                       </TableRow>
                     ))}
                     {products.length === 0 && (
-                      <TableRow><TableCell colSpan={4} className="text-center py-8 text-muted-foreground">Nenhum produto encontrado</TableCell></TableRow>
+                      <TableRow><TableCell colSpan={5} className="text-center py-8 text-muted-foreground">Nenhum produto encontrado</TableCell></TableRow>
                     )}
                   </TableBody>
                 </Table>

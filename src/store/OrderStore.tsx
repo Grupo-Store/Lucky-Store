@@ -106,7 +106,16 @@ interface OrderContextType {
 const OrderContext = createContext<OrderContextType | null>(null);
 
 export function OrderProvider({ children }: { children: React.ReactNode }) {
-  const [orders, setOrders] = useState<Order[]>(sampleOrders);
+  const [orders, setOrders] = useState<Order[]>(() => {
+    // Auto-delay logic: flag overdue orders on init
+    const today = new Date().toISOString().slice(0, 10);
+    return sampleOrders.map(o => {
+      if (o.status !== 'Delivered' && o.deliveryDate < today) {
+        return { ...o, status: 'Delayed' as OrderStatus };
+      }
+      return o;
+    });
+  });
 
   const addOrder = useCallback((order: Order) => {
     setOrders(prev => [...prev, order]);
