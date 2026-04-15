@@ -1,4 +1,4 @@
-import { useState, useEffect, KeyboardEvent } from 'react';
+import { useState, useEffect, KeyboardEvent, useCallback } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -51,6 +51,8 @@ export function OrderModal({ open, onClose, order, onSave, onDelete }: Props) {
   // Currency field editing state – stores raw typed text while field is focused
   const [editingField, setEditingField] = useState<string | null>(null);
   const [editingValue, setEditingValue] = useState('');
+  const [orderDateOpen, setOrderDateOpen] = useState(false);
+  const [deliveryDateOpen, setDeliveryDateOpen] = useState(false);
 
   useEffect(() => {
     if (order) setForm({ ...order });
@@ -155,14 +157,14 @@ export function OrderModal({ open, onClose, order, onSave, onDelete }: Props) {
             </div>
             <div>
               <Label>Data do Pedido *</Label>
-              <Popover>
+              <Popover open={orderDateOpen} onOpenChange={setOrderDateOpen}>
                 <PopoverTrigger asChild>
                   <Button variant="outline" className="w-full justify-start text-left font-normal bg-white">
                     <CalendarIcon className="mr-2 h-4 w-4" />
                     {form.orderDate ? format(new Date(form.orderDate + 'T12:00:00'), 'dd/MM/yyyy') : 'Selecionar'}
                   </Button>
                 </PopoverTrigger>
-                <PopoverContent className="w-auto p-0"><Calendar mode="single" selected={form.orderDate ? new Date(form.orderDate + 'T12:00:00') : undefined} onSelect={d => d && set('orderDate', format(d, 'yyyy-MM-dd'))} locale={ptBR} className="p-3 pointer-events-auto" /></PopoverContent>
+                <PopoverContent className="w-auto p-0"><Calendar mode="single" selected={form.orderDate ? new Date(form.orderDate + 'T12:00:00') : undefined} onSelect={d => { if (d) { set('orderDate', format(d, 'yyyy-MM-dd')); } setOrderDateOpen(false); }} locale={ptBR} className="p-3 pointer-events-auto" /></PopoverContent>
               </Popover>
             </div>
             <div>
@@ -207,14 +209,14 @@ export function OrderModal({ open, onClose, order, onSave, onDelete }: Props) {
             </div>
             <div>
               <Label>Data de Entrega *</Label>
-              <Popover>
+              <Popover open={deliveryDateOpen} onOpenChange={setDeliveryDateOpen}>
                 <PopoverTrigger asChild>
                   <Button variant="outline" className="w-full justify-start text-left font-normal bg-white">
                     <CalendarIcon className="mr-2 h-4 w-4" />
                     {form.deliveryDate ? format(new Date(form.deliveryDate + 'T12:00:00'), 'dd/MM/yyyy') : 'Selecionar'}
                   </Button>
                 </PopoverTrigger>
-                <PopoverContent className="w-auto p-0"><Calendar mode="single" selected={form.deliveryDate ? new Date(form.deliveryDate + 'T12:00:00') : undefined} onSelect={d => d && set('deliveryDate', format(d, 'yyyy-MM-dd'))} locale={ptBR} className="p-3 pointer-events-auto" /></PopoverContent>
+                <PopoverContent className="w-auto p-0"><Calendar mode="single" selected={form.deliveryDate ? new Date(form.deliveryDate + 'T12:00:00') : undefined} onSelect={d => { if (d) { set('deliveryDate', format(d, 'yyyy-MM-dd')); } setDeliveryDateOpen(false); }} locale={ptBR} className="p-3 pointer-events-auto" /></PopoverContent>
               </Popover>
             </div>
           </div>
