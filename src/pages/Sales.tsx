@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, memo } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -12,6 +12,47 @@ import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { useOrders, Order, OrderStatus, ItemStatus, ORDER_STATUS_COLORS, ITEM_STATUS_COLORS, isOpenOrder, calcTotal } from '@/store/OrderStore';
 import { OrderModal } from '@/components/OrderModal';
+
+const SearchFilterBar = memo(({ query, onQueryChange, date, onDateChange }: {
+  query: string; onQueryChange: (v: string) => void; date?: Date; onDateChange: (d: Date | undefined) => void;
+}) => {
+  const [calOpen, setCalOpen] = useState(false);
+  return (
+    <div className="flex items-center gap-2">
+      <div className="relative">
+        <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+        <Input
+          placeholder="Buscar por cliente ou OS..."
+          value={query}
+          onChange={e => onQueryChange(e.target.value)}
+          onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
+          className="pl-9 w-64 bg-white"
+        />
+      </div>
+      <Popover open={calOpen} onOpenChange={setCalOpen}>
+        <PopoverTrigger asChild>
+          <Button variant="outline" className={cn('gap-2', date && 'text-secondary border-secondary')}>
+            <CalendarIcon className="h-4 w-4" />
+            {date ? format(date, 'dd/MM/yyyy') : 'Data'}
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent className="w-auto p-0" align="end">
+          <Calendar
+            mode="single"
+            selected={date}
+            onSelect={d => { onDateChange(d); setCalOpen(false); }}
+            className="p-3 pointer-events-auto"
+          />
+        </PopoverContent>
+      </Popover>
+      {(query || date) && (
+        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => { onQueryChange(''); onDateChange(undefined); }}>
+          <X className="h-4 w-4" />
+        </Button>
+      )}
+    </div>
+  );
+});
 
 const STATUS_LABELS: Record<OrderStatus, string> = {
   'To Buy': 'A Comprar', 'Bought': 'Comprado', 'Received': 'Recebido',
@@ -105,43 +146,6 @@ export default function Sales() {
       </Button>
     );
   };
-
-  const SearchFilterBar = ({
-    query, onQueryChange, date, onDateChange
-  }: { query: string; onQueryChange: (v: string) => void; date?: Date; onDateChange: (d: Date | undefined) => void }) => (
-    <div className="flex items-center gap-2">
-      <div className="relative">
-        <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-        <Input
-          placeholder="Buscar por cliente ou OS..."
-          value={query}
-          onChange={e => onQueryChange(e.target.value)}
-          className="pl-9 w-64 bg-white"
-        />
-      </div>
-      <Popover>
-        <PopoverTrigger asChild>
-          <Button variant="outline" className={cn('gap-2', date && 'text-secondary border-secondary')}>
-            <CalendarIcon className="h-4 w-4" />
-            {date ? format(date, 'dd/MM/yyyy') : 'Data'}
-          </Button>
-        </PopoverTrigger>
-        <PopoverContent className="w-auto p-0" align="end">
-          <Calendar
-            mode="single"
-            selected={date}
-            onSelect={onDateChange}
-            className="p-3 pointer-events-auto"
-          />
-        </PopoverContent>
-      </Popover>
-      {(query || date) && (
-        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => { onQueryChange(''); onDateChange(undefined); }}>
-          <X className="h-4 w-4" />
-        </Button>
-      )}
-    </div>
-  );
 
   return (
     <div>
