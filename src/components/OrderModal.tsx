@@ -332,6 +332,14 @@ export function OrderModal({ open, onClose, order, onSave, onDelete }: Props) {
                     ))}
                   </SelectContent>
                 </Select>
+                <Input
+                  type="date"
+                  className="flex-[1.2] bg-white border-border"
+                  value={item.productDeliveryDate || ''}
+                  onChange={e => updateItem(item.id, 'productDeliveryDate', e.target.value)}
+                  onKeyDown={handleEnterBlur}
+                  title="Entrega do Produto"
+                />
                 <Button variant="ghost" size="icon" onClick={() => removeItem(item.id)}>
                   <Trash2 className="h-4 w-4 text-destructive" />
                 </Button>
