@@ -10,12 +10,13 @@ import { CalendarIcon, Plus, Trash2 } from 'lucide-react';
 import { format, addDays } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
-import { Order, OrderItem, ItemStatus, OcAfPed, PaymentMethod, Company, ITEM_STATUS_COLORS, calcTotal } from '@/store/OrderStore';
+import { Order, OrderItem, ItemStatus, OcAfPed, PaymentMethod, Company, OrderStatus, ITEM_STATUS_COLORS, ORDER_STATUS_COLORS, ORDER_STATUS_LABELS, calcTotal } from '@/store/OrderStore';
+import { Checkbox } from '@/components/ui/checkbox';
 
 const emptyOrder = (): Partial<Order> => ({
-  os: '', orderDate: format(new Date(), 'yyyy-MM-dd'), customer: '', company: '', invoice: '',
+  os: '', orderDate: format(new Date(), 'yyyy-MM-dd'), customer: '', cnpj: '', company: '', seller: '', invoice: '',
   ocAfPed: '', paymentMethod: 'Card', deliveryDate: format(addDays(new Date(), 1), 'yyyy-MM-dd'),
-  status: 'To Buy', productCost: 0, serviceCost: 0, cardFinanceCost: 0, boletoCost: 0,
+  status: 'To Buy', isRMA: false, productCost: 0, serviceCost: 0, cardFinanceCost: 0, boletoCost: 0,
   giftCost: 0, shippingCost: 0, purchaseTaxPercent: 0, purchaseTaxValue: 0,
   salesTaxPercent: 0, salesTaxValue: 0, items: [],
 });
