@@ -42,6 +42,21 @@
     --sidebar-accent-foreground: 0 0% 100%;
     --sidebar-border: 192 76% 35%;
     --sidebar-ring: 0 0% 100%;
+
+    /* Order status palette (HSL) — semantic, used via classes below */
+    --st-quote: 210 16% 70%;             /* gray-blue */
+    --st-tobuy: 270 60% 60%;              /* purple */
+    --st-bought: 25 45% 38%;              /* brown */
+    --st-received: 215 10% 55%;           /* gray */
+    --st-toinvoice: 48 95% 55%;           /* yellow */
+    --st-invoiced-received: 28 95% 72%;   /* light orange */
+    --st-invoiced-pending: 22 95% 50%;    /* dark orange */
+    --st-topack: 200 85% 75%;             /* light blue */
+    --st-ready: 220 75% 40%;              /* dark blue */
+    --st-delivering: 130 55% 70%;         /* light green */
+    --st-delivered: 140 65% 30%;          /* dark green */
+    --st-delayed: 345 60% 30%;            /* wine */
+    --st-cancelled: 0 80% 50%;            /* red */
   }
 }
 
