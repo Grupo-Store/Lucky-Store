@@ -176,6 +176,14 @@ export function OrderModal({ open, onClose, order, onSave, onDelete }: Props) {
               <Input className="bg-white border-border" value={form.customer || ''} onChange={e => set('customer', e.target.value)} onKeyDown={handleEnterBlur} />
             </div>
             <div>
+              <Label>CNPJ</Label>
+              <Input className="bg-white border-border" value={form.cnpj || ''} onChange={e => set('cnpj', e.target.value)} onKeyDown={handleEnterBlur} />
+            </div>
+            <div>
+              <Label>Vendedor</Label>
+              <Input className="bg-white border-border" value={form.seller || ''} onChange={e => set('seller', e.target.value)} onKeyDown={handleEnterBlur} />
+            </div>
+            <div>
               <Label>Nota Fiscal *</Label>
               <Input className="bg-white border-border" value={form.invoice || ''} onChange={e => set('invoice', e.target.value)} onKeyDown={handleEnterBlur} />
             </div>
