@@ -231,6 +231,27 @@ export function OrderModal({ open, onClose, order, onSave, onDelete }: Props) {
                 <PopoverContent className="w-auto p-0"><Calendar mode="single" selected={form.deliveryDate ? new Date(form.deliveryDate + 'T12:00:00') : undefined} onSelect={d => { if (d) { set('deliveryDate', format(d, 'yyyy-MM-dd')); } setDeliveryDateOpen(false); }} locale={ptBR} className="p-3 pointer-events-auto" /></PopoverContent>
               </Popover>
             </div>
+            <div>
+              <Label>Status *</Label>
+              <Select value={form.status || 'To Buy'} onValueChange={v => set('status', v as OrderStatus)}>
+                <SelectTrigger className={cn('border', form.status && ORDER_STATUS_COLORS[form.status as OrderStatus])}>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {(Object.keys(ORDER_STATUS_LABELS) as OrderStatus[]).map(s => (
+                    <SelectItem key={s} value={s}>
+                      <span className={cn('px-2 py-0.5 rounded text-xs font-medium', ORDER_STATUS_COLORS[s])}>{ORDER_STATUS_LABELS[s]}</span>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex items-end">
+              <label className="flex items-center gap-2 cursor-pointer pb-2">
+                <Checkbox checked={!!form.isRMA} onCheckedChange={v => set('isRMA', !!v)} />
+                <span className="text-sm font-medium">RMA (Devolução / Garantia)</span>
+              </label>
+            </div>
           </div>
         </div>
 
