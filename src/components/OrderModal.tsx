@@ -10,12 +10,13 @@ import { CalendarIcon, Plus, Trash2 } from 'lucide-react';
 import { format, addDays } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
-import { Order, OrderItem, ItemStatus, OcAfPed, PaymentMethod, Company, ITEM_STATUS_COLORS, calcTotal } from '@/store/OrderStore';
+import { Order, OrderItem, ItemStatus, OcAfPed, PaymentMethod, Company, OrderStatus, ITEM_STATUS_COLORS, ORDER_STATUS_COLORS, ORDER_STATUS_LABELS, calcTotal } from '@/store/OrderStore';
+import { Checkbox } from '@/components/ui/checkbox';
 
 const emptyOrder = (): Partial<Order> => ({
-  os: '', orderDate: format(new Date(), 'yyyy-MM-dd'), customer: '', company: '', invoice: '',
+  os: '', orderDate: format(new Date(), 'yyyy-MM-dd'), customer: '', cnpj: '', company: '', seller: '', invoice: '',
   ocAfPed: '', paymentMethod: 'Card', deliveryDate: format(addDays(new Date(), 1), 'yyyy-MM-dd'),
-  status: 'To Buy', productCost: 0, serviceCost: 0, cardFinanceCost: 0, boletoCost: 0,
+  status: 'To Buy', isRMA: false, productCost: 0, serviceCost: 0, cardFinanceCost: 0, boletoCost: 0,
   giftCost: 0, shippingCost: 0, purchaseTaxPercent: 0, purchaseTaxValue: 0,
   salesTaxPercent: 0, salesTaxValue: 0, items: [],
 });
@@ -88,12 +89,15 @@ export function OrderModal({ open, onClose, order, onSave, onDelete }: Props) {
       os: form.os || '',
       orderDate: form.orderDate || '',
       customer: form.customer || '',
+      cnpj: form.cnpj || '',
       company: (form.company || '') as Company,
+      seller: form.seller || '',
       invoice: form.invoice || '',
       ocAfPed: (form.ocAfPed || '') as OcAfPed,
       paymentMethod: (form.paymentMethod || 'Card') as PaymentMethod,
       deliveryDate: form.deliveryDate || '',
       status: form.status || 'To Buy',
+      isRMA: !!form.isRMA,
       productCost: form.productCost || 0,
       serviceCost: form.serviceCost || 0,
       cardFinanceCost: form.cardFinanceCost || 0,
@@ -172,6 +176,14 @@ export function OrderModal({ open, onClose, order, onSave, onDelete }: Props) {
               <Input className="bg-white border-border" value={form.customer || ''} onChange={e => set('customer', e.target.value)} onKeyDown={handleEnterBlur} />
             </div>
             <div>
+              <Label>CNPJ</Label>
+              <Input className="bg-white border-border" value={form.cnpj || ''} onChange={e => set('cnpj', e.target.value)} onKeyDown={handleEnterBlur} />
+            </div>
+            <div>
+              <Label>Vendedor</Label>
+              <Input className="bg-white border-border" value={form.seller || ''} onChange={e => set('seller', e.target.value)} onKeyDown={handleEnterBlur} />
+            </div>
+            <div>
               <Label>Nota Fiscal *</Label>
               <Input className="bg-white border-border" value={form.invoice || ''} onChange={e => set('invoice', e.target.value)} onKeyDown={handleEnterBlur} />
             </div>
@@ -218,6 +230,27 @@ export function OrderModal({ open, onClose, order, onSave, onDelete }: Props) {
                 </PopoverTrigger>
                 <PopoverContent className="w-auto p-0"><Calendar mode="single" selected={form.deliveryDate ? new Date(form.deliveryDate + 'T12:00:00') : undefined} onSelect={d => { if (d) { set('deliveryDate', format(d, 'yyyy-MM-dd')); } setDeliveryDateOpen(false); }} locale={ptBR} className="p-3 pointer-events-auto" /></PopoverContent>
               </Popover>
+            </div>
+            <div>
+              <Label>Status *</Label>
+              <Select value={form.status || 'To Buy'} onValueChange={v => set('status', v as OrderStatus)}>
+                <SelectTrigger className={cn('border', form.status && ORDER_STATUS_COLORS[form.status as OrderStatus])}>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {(Object.keys(ORDER_STATUS_LABELS) as OrderStatus[]).map(s => (
+                    <SelectItem key={s} value={s}>
+                      <span className={cn('px-2 py-0.5 rounded text-xs font-medium', ORDER_STATUS_COLORS[s])}>{ORDER_STATUS_LABELS[s]}</span>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex items-end">
+              <label className="flex items-center gap-2 cursor-pointer pb-2">
+                <Checkbox checked={!!form.isRMA} onCheckedChange={v => set('isRMA', !!v)} />
+                <span className="text-sm font-medium">RMA (Devolução / Garantia)</span>
+              </label>
             </div>
           </div>
         </div>
@@ -299,6 +332,14 @@ export function OrderModal({ open, onClose, order, onSave, onDelete }: Props) {
                     ))}
                   </SelectContent>
                 </Select>
+                <Input
+                  type="date"
+                  className="flex-[1.2] bg-white border-border"
+                  value={item.productDeliveryDate || ''}
+                  onChange={e => updateItem(item.id, 'productDeliveryDate', e.target.value)}
+                  onKeyDown={handleEnterBlur}
+                  title="Entrega do Produto"
+                />
                 <Button variant="ghost" size="icon" onClick={() => removeItem(item.id)}>
                   <Trash2 className="h-4 w-4 text-destructive" />
                 </Button>
