@@ -124,7 +124,7 @@ type SortField = 'os' | 'deliveryDate';
 type SortDir = 'asc' | 'desc';
 
 export default function Sales() {
-  const { orders, addOrder, updateOrder, deleteOrder, updateItemStatus } = useOrders();
+  const { orders, addOrder, updateOrder, deleteOrder, updateItemStatus, nextOS } = useOrders();
   const [tab, setTab] = useState('orders');
   const [modalOpen, setModalOpen] = useState(false);
   const [editOrder, setEditOrder] = useState<Order | null>(null);
@@ -497,6 +497,7 @@ export default function Sales() {
           order={editOrder}
           onSave={o => editOrder ? updateOrder(o) : addOrder(o)}
           onDelete={deleteOrder}
+          nextOS={nextOS}
         />
       </div>
     </TooltipProvider>
