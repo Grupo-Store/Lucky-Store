@@ -497,6 +497,7 @@ export default function Sales() {
           order={editOrder}
           onSave={o => editOrder ? updateOrder(o) : addOrder(o)}
           onDelete={deleteOrder}
+          nextOS={nextOS}
         />
       </div>
     </TooltipProvider>
