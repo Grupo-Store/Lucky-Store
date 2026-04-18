@@ -322,7 +322,7 @@ const sampleOrders: Order[] = [
   }),
   baseOrder({
     id: '4', os: '1004', orderDate: '2026-04-10', customer: 'StartUp Hub', cnpj: '11.222.333/0001-44',
-    company: 'BTech', seller: 'Alcides', deliveryDate: '2026-05-01', status: 'Quote',
+    company: 'BTech', seller: 'Alcides', deliveryDate: '2026-05-01', status: 'To Buy',
     paymentMethods: ['Credit Card'], installments: 6,
     initialProductCost: 5000, finalProductCost: 0, salesValue: 9500,
     items: [{ id: 'i6', name: 'Servidor Dell PowerEdge', quantity: 1, status: 'To Buy', projectedValue: 9500, purchaseValue: 0 }],
@@ -354,7 +354,7 @@ const today = () => new Date().toISOString().slice(0, 10);
 
 const applyDelayCheck = (o: Order): Order => {
   if (o.cancelled) return { ...o, status: 'Cancelled' };
-  if (o.status === 'Delivered' || o.status === 'Cancelled' || o.status === 'Quote') return o;
+  if (o.status === 'Delivered' || o.status === 'Cancelled') return o;
   if (o.status !== 'Delayed' && o.deliveryDate && o.deliveryDate < today()) {
     return { ...o, status: 'Delayed' };
   }
