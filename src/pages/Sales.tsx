@@ -512,6 +512,13 @@ export default function Sales() {
           onDelete={deleteOrder}
           nextOS={nextOS}
         />
+        <ProductModal
+          open={productModalOpen}
+          onClose={() => setProductModalOpen(false)}
+          order={productModalCtx?.order || null}
+          item={productModalCtx?.item || null}
+          onSave={updateOrder}
+        />
       </div>
     </TooltipProvider>
   );
