@@ -457,7 +457,7 @@ export default function Sales() {
                       {products.map(p => {
                         const productLate = p.productDeliveryDate && p.productDeliveryDate > p.orderDeliveryDate;
                         return (
-                          <TableRow key={`${p.orderId}-${p.id}`}>
+                          <TableRow key={`${p.orderId}-${p.id}`} className="cursor-pointer hover:bg-muted/50" onClick={() => openProductModal(p.orderId, p.id)}>
                             <TableCell className="font-medium">{p.os}</TableCell>
                             <TableCell>{p.name}</TableCell>
                             <TableCell>{p.customer}</TableCell>
