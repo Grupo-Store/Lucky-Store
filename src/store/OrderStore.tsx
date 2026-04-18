@@ -67,7 +67,17 @@ export interface RmaItem {
   sourceItemId: string;
   name: string;
   quantity: number;
+  /** Free-text — who is fixing the item */
+  repairedBy?: string;
   status: RmaItemStatus;
+}
+
+/** Freight/Delivery card used in both Orders and RMAs */
+export interface FreightCard {
+  id: string;
+  deliveryPerson: string;
+  value: number;
+  deliveryDate?: string;
 }
 export type PaymentMethod = 'Credit Card' | 'Debit Card' | 'Boleto' | 'Pix' | 'TED' | 'Cash';
 export type Company = '' | 'Lucky Store' | 'BTech' | 'AJJ';
@@ -130,6 +140,8 @@ export function calcItemLatestDelivery(item: OrderItem): string | undefined {
 export interface Order {
   id: string;
   os: string;
+  /** Creation timestamp (ms) — used for default newest-first sort */
+  createdAt: number;
   orderDate: string;
   customer: string;
   cnpj: string;
@@ -149,11 +161,17 @@ export interface Order {
   rmaNumber?: string;
   rmaParentOrderId?: string;
   rmaItems?: RmaItem[];
+  /** Freight cards for RMA orders */
+  rmaFreight?: FreightCard[];
   cancelled: boolean;
   observations: string;
   /** Financial section */
   initialProductCost: number;
   finalProductCost: number;
+  /** Boleto cost (R$) */
+  boletoCost: number;
+  /** Gift cost (R$) */
+  giftCost: number;
   creditCostPercent: number;
   creditCostValue: number;
   debitCostPercent: number;
@@ -165,6 +183,25 @@ export interface Order {
   /** Final sales value entered by user */
   salesValue: number;
   items: OrderItem[];
+  /** Freight cards for non-RMA orders */
+  freight: FreightCard[];
+}
+
+/** Sum of freight card values */
+export function calcFreightTotal(cards?: FreightCard[]): number {
+  return (cards || []).reduce((s, c) => s + (c.value || 0), 0);
+}
+
+/** RMA priority order = the canonical RMA_ITEM_STATUSES list (lower index = lower priority/earlier stage) */
+export function calcRmaParentStatus(items?: RmaItem[]): RmaItemStatus | null {
+  if (!items || items.length === 0) return null;
+  let lowest = RMA_ITEM_STATUSES.length; // sentinel max
+  let result: RmaItemStatus = items[0].status;
+  for (const it of items) {
+    const idx = RMA_ITEM_STATUSES.indexOf(it.status);
+    if (idx >= 0 && idx < lowest) { lowest = idx; result = it.status; }
+  }
+  return result;
 }
 
 /** Tailwind classes using HSL status tokens defined in index.css */
