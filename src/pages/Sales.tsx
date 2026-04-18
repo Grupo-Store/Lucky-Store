@@ -202,6 +202,7 @@ export default function Sales() {
         company: o.company,
         seller: o.seller,
         orderDeliveryDate: o.deliveryDate,
+        productDeliveryDate: calcItemLatestDelivery(item),
       })))
       .filter(p => !q || (
         p.os.toLowerCase().includes(q) ||
@@ -215,6 +216,15 @@ export default function Sales() {
         return isInRange(dateIso, prodRange);
       });
   }, [orders, prodSearch, prodDateField, prodRange]);
+
+  const openProductModal = (orderId: string, itemId: string) => {
+    const o = orders.find(x => x.id === orderId);
+    const it = o?.items.find(i => i.id === itemId);
+    if (o && it) {
+      setProductModalCtx({ order: o, item: it });
+      setProductModalOpen(true);
+    }
+  };
 
   const handleStatusChange = (order: Order, newStatus: OrderStatus) => {
     updateOrder({ ...order, status: newStatus });
