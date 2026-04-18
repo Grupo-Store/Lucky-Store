@@ -71,21 +71,27 @@ export function OrderModal({ open, onClose, order, onSave, nextOS }: Props) {
   const set = (k: keyof Order, v: any) => setForm(prev => ({ ...prev, [k]: v }));
 
   /* ---------------- Derived calculations ---------------- */
+  // Final product cost = sum of all items' purchase values (driven by ProductModal sub-purchases)
+  const derivedFinalProductCost = useMemo(
+    () => (form.items || []).reduce((s, i) => s + (i.purchaseValue || 0), 0),
+    [form.items]
+  );
+
   // Recompute monetary values whenever percentages or base amounts change
   const computed = useMemo(() => {
     const sales = form.salesValue || 0;
-    const finalProd = form.finalProductCost || 0;
+    const finalProd = derivedFinalProductCost;
     return {
       creditCostValue: ((form.creditCostPercent || 0) * sales) / 100,
       debitCostValue: ((form.debitCostPercent || 0) * sales) / 100,
       purchaseTaxValue: ((form.purchaseTaxPercent || 0) * finalProd) / 100,
       salesTaxValue: ((form.salesTaxPercent || 0) * sales) / 100,
     };
-  }, [form.salesValue, form.finalProductCost, form.creditCostPercent, form.debitCostPercent, form.purchaseTaxPercent, form.salesTaxPercent]);
+  }, [form.salesValue, derivedFinalProductCost, form.creditCostPercent, form.debitCostPercent, form.purchaseTaxPercent, form.salesTaxPercent]);
 
   // Final cost & profit derived from latest computed values
-  const finalCost = calcFinalCost({ ...form, ...computed });
-  const profit = calcProfit({ ...form, ...computed });
+  const finalCost = calcFinalCost({ ...form, finalProductCost: derivedFinalProductCost, ...computed });
+  const profit = calcProfit({ ...form, finalProductCost: derivedFinalProductCost, ...computed });
 
   /* ---------------- Items ---------------- */
   const addItem = () => {
