@@ -8,16 +8,19 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { ArrowLeft, CalendarIcon, Search, ChevronRight } from 'lucide-react';
+import { ArrowLeft, CalendarIcon, Search, ChevronRight, Plus, Trash2 } from 'lucide-react';
 import { format, addDays } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
 import {
-  Order, OrderItem, RmaItem, RmaItemStatus,
+  Order, RmaItem, RmaItemStatus, FreightCard,
   Company, Seller, SELLERS,
   RMA_ITEM_STATUSES, RMA_STATUS_LABELS, RMA_STATUS_COLORS,
+  calcFreightTotal,
 } from '@/store/OrderStore';
 
+function toBRL(v: number) { return v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }); }
+function parseBRL(s: string): number { return parseFloat(s.replace(/[R$\s.]/g, '').replace(',', '.')) || 0; }
 function fmtDate(iso?: string) {
   if (!iso) return 'Selecionar';
   return format(new Date(iso + 'T12:00:00'), 'dd/MM/yyyy');
@@ -33,27 +36,45 @@ interface Props {
   onClose: () => void;
   /** All orders — used to filter for "Delivered" candidates */
   orders: Order[];
+  /** Existing RMA being edited — when set, the modal opens directly in 'form' step */
+  rma?: Order | null;
   onSave: (rma: Order) => void;
   nextRmaNumber: (parentOs: string) => string;
 }
 
-export function RmaModal({ open, onClose, orders, onSave, nextRmaNumber }: Props) {
-  const [step, setStep] = useState<Step>('pick-order');
+export function RmaModal({ open, onClose, orders, rma, onSave, nextRmaNumber }: Props) {
+  const isEdit = !!rma;
+  const [step, setStep] = useState<Step>(isEdit ? 'form' : 'pick-order');
   const [search, setSearch] = useState('');
   const [parent, setParent] = useState<Order | null>(null);
   const [selectedItemIds, setSelectedItemIds] = useState<Set<string>>(new Set());
 
+  const [rmaNumberDisplay, setRmaNumberDisplay] = useState('');
   const [registrationDate, setRegistrationDate] = useState(format(new Date(), 'yyyy-MM-dd'));
   const [deliveryDate, setDeliveryDate] = useState(format(addDays(new Date(), 14), 'yyyy-MM-dd'));
   const [seller, setSeller] = useState<Seller>('');
   const [company, setCompany] = useState<Company>('');
   const [rmaItems, setRmaItems] = useState<RmaItem[]>([]);
+  const [freight, setFreight] = useState<FreightCard[]>([]);
   const [regDateOpen, setRegDateOpen] = useState(false);
   const [delDateOpen, setDelDateOpen] = useState(false);
 
   // Reset on open
   useEffect(() => {
-    if (open) {
+    if (!open) return;
+    if (rma) {
+      // EDIT mode
+      const parentOrder = orders.find(o => o.id === rma.rmaParentOrderId) || null;
+      setParent(parentOrder);
+      setStep('form');
+      setRmaNumberDisplay(rma.rmaNumber || rma.os);
+      setRegistrationDate(rma.orderDate);
+      setDeliveryDate(rma.deliveryDate);
+      setSeller(rma.seller);
+      setCompany(rma.company);
+      setRmaItems(rma.rmaItems ? rma.rmaItems.map(i => ({ ...i })) : []);
+      setFreight(rma.rmaFreight ? rma.rmaFreight.map(f => ({ ...f })) : []);
+    } else {
       setStep('pick-order');
       setSearch('');
       setParent(null);
@@ -63,8 +84,10 @@ export function RmaModal({ open, onClose, orders, onSave, nextRmaNumber }: Props
       setSeller('');
       setCompany('');
       setRmaItems([]);
+      setFreight([]);
+      setRmaNumberDisplay('');
     }
-  }, [open]);
+  }, [open, rma, orders]);
 
   /* ---------- Step 1: order list ---------- */
   const deliveredOrders = useMemo(() => {
@@ -83,6 +106,7 @@ export function RmaModal({ open, onClose, orders, onSave, nextRmaNumber }: Props
     setSelectedItemIds(new Set());
     setCompany(o.company);
     setSeller(o.seller);
+    setRmaNumberDisplay(nextRmaNumber(o.os));
     setStep('pick-items');
   };
 
@@ -103,6 +127,7 @@ export function RmaModal({ open, onClose, orders, onSave, nextRmaNumber }: Props
       sourceItemId: i.id,
       name: i.name,
       quantity: i.quantity,
+      repairedBy: '',
       status: 'Not Received',
     })));
     setStep('form');
@@ -112,13 +137,24 @@ export function RmaModal({ open, onClose, orders, onSave, nextRmaNumber }: Props
     setRmaItems(prev => prev.map(i => i.id === id ? { ...i, [field]: value } : i));
   };
 
+  /* ---------- Freight ---------- */
+  const addFreight = () => setFreight(prev => [...prev, {
+    id: crypto.randomUUID(), deliveryPerson: '', value: 0, deliveryDate: undefined,
+  }]);
+  const updateFreight = (id: string, field: keyof FreightCard, value: any) => {
+    setFreight(prev => prev.map(f => f.id === id ? { ...f, [field]: value } : f));
+  };
+  const removeFreight = (id: string) => setFreight(prev => prev.filter(f => f.id !== id));
+  const freightTotal = useMemo(() => calcFreightTotal(freight), [freight]);
+
   /* ---------- Save ---------- */
   const handleSave = () => {
     if (!parent || rmaItems.length === 0) return;
-    const rmaNumber = nextRmaNumber(parent.os);
+    const rmaNumber = isEdit ? (rma!.rmaNumber || rma!.os) : nextRmaNumber(parent.os);
     const newOrder: Order = {
-      id: crypto.randomUUID(),
-      os: rmaNumber, // RMA number lives in the OS column for table integration
+      id: rma?.id || crypto.randomUUID(),
+      os: rmaNumber,
+      createdAt: rma?.createdAt || Date.now(),
       orderDate: registrationDate,
       customer: parent.customer,
       cnpj: parent.cnpj,
@@ -131,20 +167,23 @@ export function RmaModal({ open, onClose, orders, onSave, nextRmaNumber }: Props
       paymentMethods: [],
       installments: 1,
       deliveryDate,
-      status: 'To Pack', // baseline non-empty status; RMA items have their own statuses
+      status: 'To Pack',
       isRMA: true,
       rmaNumber,
       rmaParentOrderId: parent.id,
       cancelled: false,
-      observations: `RMA do pedido ${parent.os}`,
+      observations: rma?.observations || `RMA do pedido ${parent.os}`,
       initialProductCost: 0, finalProductCost: 0,
+      boletoCost: 0, giftCost: 0,
       creditCostPercent: 0, creditCostValue: 0,
       debitCostPercent: 0, debitCostValue: 0,
       purchaseTaxPercent: 0, purchaseTaxValue: 0,
       salesTaxPercent: 0, salesTaxValue: 0,
       salesValue: 0,
       items: [],
+      freight: [],
       rmaItems,
+      rmaFreight: freight,
     };
     onSave(newOrder);
     onClose();
@@ -155,7 +194,7 @@ export function RmaModal({ open, onClose, orders, onSave, nextRmaNumber }: Props
       <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto bg-card">
         <DialogHeader>
           <DialogTitle className="text-secondary text-xl flex items-center gap-2">
-            {step !== 'pick-order' && (
+            {!isEdit && step !== 'pick-order' && (
               <Button variant="ghost" size="icon" className="h-7 w-7"
                 onClick={() => setStep(step === 'form' ? 'pick-items' : 'pick-order')}>
                 <ArrowLeft className="h-4 w-4" />
@@ -163,7 +202,7 @@ export function RmaModal({ open, onClose, orders, onSave, nextRmaNumber }: Props
             )}
             {step === 'pick-order' && 'Novo RMA — Selecionar Pedido Entregue'}
             {step === 'pick-items' && `RMA — Selecionar Itens (Pedido #${parent?.os})`}
-            {step === 'form' && `Novo RMA — ${parent ? nextRmaNumber(parent.os) : ''}`}
+            {step === 'form' && (isEdit ? `Editar RMA — ${rmaNumberDisplay}` : `Novo RMA — ${rmaNumberDisplay}`)}
           </DialogTitle>
         </DialogHeader>
 
@@ -264,7 +303,7 @@ export function RmaModal({ open, onClose, orders, onSave, nextRmaNumber }: Props
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 <div>
                   <Label>Nº RMA (auto)</Label>
-                  <Input readOnly className="bg-muted border-border font-semibold" value={nextRmaNumber(parent.os)} />
+                  <Input readOnly className="bg-muted border-border font-semibold" value={rmaNumberDisplay} />
                 </div>
                 <div><Label>Cliente</Label><Input readOnly value={parent.customer} className="bg-muted border-border" /></div>
                 <div><Label>CNPJ</Label><Input readOnly value={parent.cnpj || '—'} className="bg-muted border-border" /></div>
@@ -320,6 +359,10 @@ export function RmaModal({ open, onClose, orders, onSave, nextRmaNumber }: Props
                     </PopoverContent>
                   </Popover>
                 </div>
+                <div>
+                  <Label>Frete <span className="text-xs text-muted-foreground">(soma)</span></Label>
+                  <Input readOnly value={toBRL(freightTotal)} className="bg-muted border-border font-semibold" />
+                </div>
               </div>
             </section>
 
@@ -327,7 +370,7 @@ export function RmaModal({ open, onClose, orders, onSave, nextRmaNumber }: Props
               <h3 className="text-sm font-bold text-secondary uppercase tracking-wide mb-3">Produtos do RMA</h3>
               <div className="space-y-3">
                 {rmaItems.map(it => (
-                  <div key={it.id} className="border rounded-md p-3 bg-muted/20 grid grid-cols-1 md:grid-cols-3 gap-3 items-end">
+                  <div key={it.id} className="border rounded-md p-3 bg-muted/20 grid grid-cols-1 md:grid-cols-4 gap-3 items-end">
                     <div>
                       <Label>Produto</Label>
                       <Input className="bg-white border-border" value={it.name}
@@ -337,6 +380,12 @@ export function RmaModal({ open, onClose, orders, onSave, nextRmaNumber }: Props
                       <Label>Quantidade</Label>
                       <Input type="number" min={1} className="bg-white border-border" value={it.quantity}
                         onChange={e => updateRmaItem(it.id, 'quantity', parseInt(e.target.value) || 1)} onKeyDown={handleEnterBlur} />
+                    </div>
+                    <div>
+                      <Label>Consertado por</Label>
+                      <Input className="bg-white border-border" value={it.repairedBy || ''}
+                        onChange={e => updateRmaItem(it.id, 'repairedBy', e.target.value)} onKeyDown={handleEnterBlur}
+                        placeholder="Técnico/Fornecedor" />
                     </div>
                     <div>
                       <Label>Status</Label>
@@ -360,13 +409,83 @@ export function RmaModal({ open, onClose, orders, onSave, nextRmaNumber }: Props
               </div>
             </section>
 
+            {/* Freight section */}
+            <section className="border rounded-lg p-4">
+              <div className="flex justify-between items-center mb-3">
+                <h3 className="text-sm font-bold text-secondary uppercase tracking-wide">Frete</h3>
+                <Button size="sm" onClick={addFreight} className="bg-secondary hover:bg-secondary/90">
+                  <Plus className="h-4 w-4 mr-1" /> Adicionar Frete
+                </Button>
+              </div>
+              <div className="space-y-2">
+                {freight.map((f, idx) => (
+                  <RmaFreightRow key={f.id} idx={idx} card={f}
+                    onChange={(k, v) => updateFreight(f.id, k, v)}
+                    onRemove={() => removeFreight(f.id)} />
+                ))}
+                {freight.length === 0 && (
+                  <p className="text-sm text-muted-foreground text-center py-3">Nenhum frete adicionado</p>
+                )}
+              </div>
+              <div className="mt-3 text-right text-sm font-semibold text-secondary">
+                Total: {toBRL(freightTotal)}
+              </div>
+            </section>
+
             <div className="flex justify-end gap-2">
               <Button variant="outline" onClick={onClose}>Cancelar</Button>
-              <Button onClick={handleSave} className="bg-secondary hover:bg-secondary/90">Criar RMA</Button>
+              <Button onClick={handleSave} className="bg-secondary hover:bg-secondary/90">
+                {isEdit ? 'Salvar Alterações' : 'Criar RMA'}
+              </Button>
             </div>
           </>
         )}
       </DialogContent>
     </Dialog>
+  );
+}
+
+/* ---------- RMA Freight row ---------- */
+function RmaFreightRow({ idx, card, onChange, onRemove }: {
+  idx: number; card: FreightCard;
+  onChange: (k: keyof FreightCard, v: any) => void;
+  onRemove: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState('');
+  return (
+    <div className="grid grid-cols-12 gap-2 items-center border rounded-md p-2 bg-muted/20">
+      <span className="col-span-1 text-xs font-bold text-secondary">#{idx + 1}</span>
+      <Input placeholder="Entregador" className="col-span-4 bg-white border-border"
+        value={card.deliveryPerson} onChange={e => onChange('deliveryPerson', e.target.value)} onKeyDown={handleEnterBlur} />
+      <div className="col-span-3">
+        <Input placeholder="R$ 0,00" className="bg-white border-border"
+          value={editing ? draft : toBRL(card.value || 0)}
+          onFocus={() => { setEditing(true); setDraft(card.value ? String(card.value) : ''); }}
+          onBlur={() => { onChange('value', parseBRL(draft) || parseFloat(draft) || 0); setEditing(false); }}
+          onChange={e => setDraft(e.target.value)}
+          onKeyDown={handleEnterBlur} />
+      </div>
+      <div className="col-span-3">
+        <Popover open={open} onOpenChange={setOpen}>
+          <PopoverTrigger asChild>
+            <Button variant="outline" className="w-full justify-start text-left font-normal bg-white">
+              <CalendarIcon className="mr-2 h-4 w-4" />
+              {card.deliveryDate ? format(new Date(card.deliveryDate + 'T12:00:00'), 'dd/MM/yyyy') : 'Data'}
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-auto p-0">
+            <Calendar mode="single"
+              selected={card.deliveryDate ? new Date(card.deliveryDate + 'T12:00:00') : undefined}
+              onSelect={d => { onChange('deliveryDate', d ? format(d, 'yyyy-MM-dd') : undefined); setOpen(false); }}
+              locale={ptBR} className="p-3 pointer-events-auto" />
+          </PopoverContent>
+        </Popover>
+      </div>
+      <Button variant="ghost" size="icon" className="col-span-1" onClick={onRemove}>
+        <Trash2 className="h-4 w-4 text-destructive" />
+      </Button>
+    </div>
   );
 }

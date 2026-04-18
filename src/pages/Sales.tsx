@@ -5,17 +5,15 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Calendar } from '@/components/ui/calendar';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { ArrowUp, ArrowDown, Plus, Search, CalendarIcon, X, AlertTriangle } from 'lucide-react';
+import { ArrowUp, ArrowDown, Plus, Search, X, AlertTriangle } from 'lucide-react';
 import { format, differenceInCalendarDays } from 'date-fns';
-import { ptBR } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
 import {
   useOrders, Order, OrderItem, OrderStatus, ItemStatus,
   ORDER_STATUS_COLORS, ORDER_STATUS_LABELS, ITEM_STATUS_COLORS,
   WARN_STATUSES, isOpenOrder, calcTotal, calcItemLatestDelivery,
+  RMA_STATUS_LABELS, RMA_STATUS_COLORS, calcRmaParentStatus,
 } from '@/store/OrderStore';
 import {
   useQuotes, Quote, QuotePhaseKey, QUOTE_PHASE_LABELS, QUOTE_PHASE_COLORS,
@@ -25,6 +23,8 @@ import { OrderModal } from '@/components/OrderModal';
 import { ProductModal } from '@/components/ProductModal';
 import { QuoteModal } from '@/components/QuoteModal';
 import { RmaModal } from '@/components/RmaModal';
+import { DateFilter, DateRange } from '@/components/DateFilter';
+import { Pagination, PAGE_SIZE } from '@/components/Pagination';
 
 const ITEM_STATUS_LABELS: Record<ItemStatus, string> = {
   'To Buy': 'A Comprar', 'Bought': 'Comprado', 'In Stock': 'Em Estoque',
@@ -38,61 +38,8 @@ function fmtDate(iso?: string) {
   return format(new Date(iso + 'T12:00:00'), 'dd/MM/yyyy');
 }
 
-type DateRange = { from?: Date; to?: Date };
-
 /* ============================================================
- * Date range picker (used in both tabs)
- * ============================================================ */
-const DateRangeFilter = memo(({
-  field, onFieldChange, fieldOptions, range, onRangeChange,
-}: {
-  field: string;
-  onFieldChange: (v: string) => void;
-  fieldOptions: { value: string; label: string }[];
-  range: DateRange;
-  onRangeChange: (r: DateRange) => void;
-}) => {
-  const [open, setOpen] = useState(false);
-  const hasRange = !!range.from;
-  const label = hasRange
-    ? range.to && range.to.getTime() !== range.from!.getTime()
-      ? `${format(range.from!, 'dd/MM/yy')} → ${format(range.to, 'dd/MM/yy')}`
-      : format(range.from!, 'dd/MM/yyyy')
-    : 'Período';
-  return (
-    <div className="flex items-center gap-1">
-      <Select value={field} onValueChange={onFieldChange}>
-        <SelectTrigger className="w-44 bg-white"><SelectValue /></SelectTrigger>
-        <SelectContent>
-          {fieldOptions.map(o => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
-        </SelectContent>
-      </Select>
-      <Popover open={open} onOpenChange={setOpen}>
-        <PopoverTrigger asChild>
-          <Button variant="outline" className={cn('gap-2 bg-white', hasRange && 'text-secondary border-secondary')}>
-            <CalendarIcon className="h-4 w-4" />{label}
-          </Button>
-        </PopoverTrigger>
-        <PopoverContent className="w-auto p-0" align="end">
-          <Calendar
-            mode="range"
-            selected={range as any}
-            onSelect={(r: any) => onRangeChange(r || {})}
-            locale={ptBR}
-            numberOfMonths={2}
-            className="p-3 pointer-events-auto"
-          />
-          <div className="p-2 border-t flex justify-end">
-            <Button size="sm" variant="ghost" onClick={() => { onRangeChange({}); setOpen(false); }}>Limpar</Button>
-          </div>
-        </PopoverContent>
-      </Popover>
-    </div>
-  );
-});
-
-/* ============================================================
- * Search bar (memoized to keep focus while typing)
+ * Search bar (memoized)
  * ============================================================ */
 const SearchBar = memo(({ value, onChange, placeholder }: {
   value: string; onChange: (v: string) => void; placeholder: string;
@@ -108,6 +55,7 @@ const SearchBar = memo(({ value, onChange, placeholder }: {
     />
   </div>
 ));
+SearchBar.displayName = 'SearchBar';
 
 /* ============================================================
  * Helpers
@@ -141,6 +89,7 @@ export default function Sales() {
   const [quoteModalOpen, setQuoteModalOpen] = useState(false);
   const [editQuote, setEditQuote] = useState<Quote | null>(null);
   const [rmaModalOpen, setRmaModalOpen] = useState(false);
+  const [editRma, setEditRma] = useState<Order | null>(null);
 
   /* ---------- Orders tab state ---------- */
   const [orderSearch, setOrderSearch] = useState('');
@@ -148,32 +97,42 @@ export default function Sales() {
   const [orderRange, setOrderRange] = useState<DateRange>({});
   const [orderView, setOrderView] = useState<'all' | 'open' | 'rma'>('all');
   const [orderStatusFilter, setOrderStatusFilter] = useState<string>('all');
+  const [orderAlertsOnly, setOrderAlertsOnly] = useState(false);
   const [sortField, setSortField] = useState<SortField | null>(null);
   const [sortDir, setSortDir] = useState<SortDir>('asc');
+  const [orderPage, setOrderPage] = useState(1);
 
   /* ---------- Products tab state ---------- */
   const [prodSearch, setProdSearch] = useState('');
   const [prodDateField, setProdDateField] = useState<'order' | 'product'>('order');
   const [prodRange, setProdRange] = useState<DateRange>({});
+  const [prodAlertsOnly, setProdAlertsOnly] = useState(false);
+  const [prodStatusFilter, setProdStatusFilter] = useState<string>('all');
+  const [prodPage, setProdPage] = useState(1);
 
   /* ---------- Quotes tab state ---------- */
   const [quoteSearch, setQuoteSearch] = useState('');
   const [quoteDateField, setQuoteDateField] = useState<'requestDate' | 'phaseDate'>('requestDate');
   const [quoteRange, setQuoteRange] = useState<DateRange>({});
   const [quoteStatusFilter, setQuoteStatusFilter] = useState<string>('all');
+  const [quotePage, setQuotePage] = useState(1);
 
   const toggleSort = (field: SortField) => {
     if (sortField === field) setSortDir(d => d === 'asc' ? 'desc' : 'asc');
     else { setSortField(field); setSortDir('asc'); }
   };
 
-  /* ---------- Orders filter (excludes Quotes) ---------- */
+  /* ---------- Orders filter ---------- */
   const filteredOrders = useMemo(() => {
     const q = orderSearch.toLowerCase().trim();
-    let list = orders.filter(o => o.status !== 'Quote');
+    let list = [...orders];
     if (orderView === 'open') list = list.filter(o => isOpenOrder(o.status));
     if (orderView === 'rma') list = list.filter(o => o.isRMA);
+    else if (orderView === 'all') {
+      // 'all' shows everything (including RMAs)
+    }
     if (orderStatusFilter !== 'all') list = list.filter(o => o.status === orderStatusFilter);
+    if (orderAlertsOnly) list = list.filter(o => shouldWarnDelivery(o));
     if (q) list = list.filter(o =>
       o.os.toLowerCase().includes(q) ||
       o.customer.toLowerCase().includes(q) ||
@@ -189,14 +148,23 @@ export default function Sales() {
           : a.deliveryDate.localeCompare(b.deliveryDate);
         return sortDir === 'asc' ? cmp : -cmp;
       });
+    } else {
+      // Default: newest created on top
+      list.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
     }
     return list;
-  }, [orders, orderSearch, orderView, orderStatusFilter, orderDateField, orderRange, sortField, sortDir]);
+  }, [orders, orderSearch, orderView, orderStatusFilter, orderAlertsOnly, orderDateField, orderRange, sortField, sortDir]);
 
-  /* ---------- Quotes (isolated store) ---------- */
+  const orderPageCount = Math.max(1, Math.ceil(filteredOrders.length / PAGE_SIZE));
+  const pagedOrders = useMemo(
+    () => filteredOrders.slice((orderPage - 1) * PAGE_SIZE, orderPage * PAGE_SIZE),
+    [filteredOrders, orderPage]
+  );
+
+  /* ---------- Quotes ---------- */
   const filteredQuotes = useMemo(() => {
     const q = quoteSearch.toLowerCase().trim();
-    return quotes.filter(qt => {
+    const list = quotes.filter(qt => {
       const highest = getHighestPhase(qt);
       if (quoteStatusFilter !== 'all' && highest !== quoteStatusFilter) return false;
       if (q && !(
@@ -211,12 +179,20 @@ export default function Sales() {
       if (quoteRange.from && !dateIso) return false;
       return isInRange(dateIso, quoteRange);
     });
+    list.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+    return list;
   }, [quotes, quoteSearch, quoteStatusFilter, quoteDateField, quoteRange]);
+
+  const quotePageCount = Math.max(1, Math.ceil(filteredQuotes.length / PAGE_SIZE));
+  const pagedQuotes = useMemo(
+    () => filteredQuotes.slice((quotePage - 1) * PAGE_SIZE, quotePage * PAGE_SIZE),
+    [filteredQuotes, quotePage]
+  );
 
   /* ---------- Products ---------- */
   const products = useMemo(() => {
     const q = prodSearch.toLowerCase().trim();
-    return orders
+    const list = orders
       .filter(o => isOpenOrder(o.status))
       .flatMap(o => o.items.map(item => ({
         ...item,
@@ -227,6 +203,7 @@ export default function Sales() {
         seller: o.seller,
         orderDeliveryDate: o.deliveryDate,
         productDeliveryDate: calcItemLatestDelivery(item),
+        createdAt: o.createdAt,
       })))
       .filter(p => !q || (
         p.os.toLowerCase().includes(q) ||
@@ -235,11 +212,24 @@ export default function Sales() {
         (p.seller || '').toLowerCase().includes(q) ||
         p.name.toLowerCase().includes(q)
       ))
+      .filter(p => prodStatusFilter === 'all' || p.status === prodStatusFilter)
       .filter(p => {
         const dateIso = prodDateField === 'order' ? p.orderDeliveryDate : (p.productDeliveryDate || p.orderDeliveryDate);
         return isInRange(dateIso, prodRange);
+      })
+      .filter(p => {
+        if (!prodAlertsOnly) return true;
+        return p.productDeliveryDate && p.productDeliveryDate > p.orderDeliveryDate;
       });
-  }, [orders, prodSearch, prodDateField, prodRange]);
+    list.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+    return list;
+  }, [orders, prodSearch, prodDateField, prodRange, prodStatusFilter, prodAlertsOnly]);
+
+  const prodPageCount = Math.max(1, Math.ceil(products.length / PAGE_SIZE));
+  const pagedProducts = useMemo(
+    () => products.slice((prodPage - 1) * PAGE_SIZE, prodPage * PAGE_SIZE),
+    [products, prodPage]
+  );
 
   const openProductModal = (orderId: string, itemId: string) => {
     const o = orders.find(x => x.id === orderId);
@@ -266,6 +256,16 @@ export default function Sales() {
 
   const ALL_STATUSES = Object.keys(ORDER_STATUS_LABELS) as OrderStatus[];
 
+  const handleRowClick = (order: Order) => {
+    if (order.isRMA) {
+      setEditRma(order);
+      setRmaModalOpen(true);
+    } else {
+      setEditOrder(order);
+      setModalOpen(true);
+    }
+  };
+
   return (
     <TooltipProvider>
       <div>
@@ -284,7 +284,7 @@ export default function Sales() {
                   <h2 className="text-lg font-semibold text-secondary">Cotações</h2>
                   <div className="flex items-center gap-2 flex-wrap">
                     <SearchBar value={quoteSearch} onChange={setQuoteSearch} placeholder="Cliente, Req, Empresa, Vendedor, Fat. Direto..." />
-                    <DateRangeFilter
+                    <DateFilter
                       field={quoteDateField}
                       onFieldChange={v => setQuoteDateField(v as any)}
                       fieldOptions={[
@@ -331,10 +331,9 @@ export default function Sales() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {filteredQuotes.map(qt => {
+                      {pagedQuotes.map(qt => {
                         const highest = getHighestPhase(qt);
                         const phaseDate = getPhaseDate(qt);
-                        const value = qt.phases.closed.active ? (qt.phases.closed.value || 0) : 0;
                         return (
                           <TableRow key={qt.id} className="cursor-pointer hover:bg-muted/50"
                             onClick={() => { setEditQuote(qt); setQuoteModalOpen(true); }}>
@@ -352,17 +351,18 @@ export default function Sales() {
                             </TableCell>
                             <TableCell>{fmtDate(phaseDate)}</TableCell>
                             <TableCell className="text-right font-semibold">
-                              {qt.phases.closed.active ? formatBRL(value) : '—'}
+                              {qt.value ? formatBRL(qt.value) : '—'}
                             </TableCell>
                           </TableRow>
                         );
                       })}
-                      {filteredQuotes.length === 0 && (
+                      {pagedQuotes.length === 0 && (
                         <TableRow><TableCell colSpan={8} className="text-center py-8 text-muted-foreground">Nenhuma cotação encontrada</TableCell></TableRow>
                       )}
                     </TableBody>
                   </Table>
                 </div>
+                <Pagination page={quotePage} pageCount={quotePageCount} total={filteredQuotes.length} pageSize={PAGE_SIZE} onPageChange={setQuotePage} />
               </CardContent>
             </Card>
           </TabsContent>
@@ -391,15 +391,22 @@ export default function Sales() {
                   </div>
                   <div className="flex items-center gap-2 flex-wrap">
                     <SearchBar value={orderSearch} onChange={setOrderSearch} placeholder="OS, Cliente, CNPJ, Empresa, Vendedor..." />
-                    <DateRangeFilter
+                    <Button
+                      variant={orderAlertsOnly ? 'default' : 'outline'}
+                      onClick={() => setOrderAlertsOnly(v => !v)}
+                      className={cn('gap-1.5', orderAlertsOnly ? 'bg-[hsl(var(--st-invoiced-pending))] text-white hover:bg-[hsl(var(--st-invoiced-pending))]/90' : 'bg-white')}
+                    >
+                      <AlertTriangle className="h-4 w-4" /> Alertas
+                    </Button>
+                    <DateFilter
                       field={orderDateField}
                       onFieldChange={v => setOrderDateField(v as any)}
                       fieldOptions={[{ value: 'orderDate', label: 'Data do Pedido' }, { value: 'deliveryDate', label: 'Data de Entrega' }]}
                       range={orderRange}
                       onRangeChange={setOrderRange}
                     />
-                    {(orderSearch || orderRange.from) && (
-                      <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => { setOrderSearch(''); setOrderRange({}); }}>
+                    {(orderSearch || orderRange.from || orderAlertsOnly) && (
+                      <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => { setOrderSearch(''); setOrderRange({}); setOrderAlertsOnly(false); }}>
                         <X className="h-4 w-4" />
                       </Button>
                     )}
@@ -411,7 +418,7 @@ export default function Sales() {
                     <SelectTrigger className="w-64 bg-white"><SelectValue placeholder="Filtrar por Status" /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="all">Todos os Status</SelectItem>
-                      {ALL_STATUSES.filter(s => s !== 'Quote').map(s => (
+                      {ALL_STATUSES.map(s => (
                         <SelectItem key={s} value={s}>
                           <span className={cn('px-2 py-0.5 rounded text-xs font-medium', ORDER_STATUS_COLORS[s])}>{ORDER_STATUS_LABELS[s]}</span>
                         </SelectItem>
@@ -419,7 +426,7 @@ export default function Sales() {
                     </SelectContent>
                   </Select>
                   <div className="flex items-center gap-2">
-                    <Button onClick={() => setRmaModalOpen(true)} variant="outline" className="border-secondary text-secondary hover:bg-secondary/10">
+                    <Button onClick={() => { setEditRma(null); setRmaModalOpen(true); }} variant="outline" className="border-secondary text-secondary hover:bg-secondary/10">
                       <Plus className="h-4 w-4 mr-1" /> Adicionar RMA
                     </Button>
                     <Button onClick={() => { setEditOrder(null); setModalOpen(true); }} className="bg-secondary hover:bg-secondary/90">
@@ -442,10 +449,11 @@ export default function Sales() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {filteredOrders.map(order => {
+                      {pagedOrders.map(order => {
                         const warn = shouldWarnDelivery(order);
+                        const rmaParentStatus = order.isRMA ? calcRmaParentStatus(order.rmaItems) : null;
                         return (
-                          <TableRow key={order.id} className="cursor-pointer hover:bg-muted/50" onClick={() => { setEditOrder(order); setModalOpen(true); }}>
+                          <TableRow key={order.id} className="cursor-pointer hover:bg-muted/50" onClick={() => handleRowClick(order)}>
                             <TableCell className="font-medium">
                               <div className="flex items-center gap-1.5">
                                 {warn && (
@@ -465,18 +473,26 @@ export default function Sales() {
                             <TableCell>{order.seller || '—'}</TableCell>
                             <TableCell>{fmtDate(order.deliveryDate)}</TableCell>
                             <TableCell onClick={e => e.stopPropagation()}>
-                              <Select value={order.status} onValueChange={v => handleStatusChange(order, v as OrderStatus)}>
-                                <SelectTrigger className={cn('w-56 text-xs font-semibold border', ORDER_STATUS_COLORS[order.status])}>
-                                  <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  {ALL_STATUSES.map(s => (
-                                    <SelectItem key={s} value={s}>
-                                      <span className={cn('px-2 py-0.5 rounded text-xs font-medium', ORDER_STATUS_COLORS[s])}>{ORDER_STATUS_LABELS[s]}</span>
-                                    </SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
+                              {order.isRMA ? (
+                                rmaParentStatus ? (
+                                  <span className={cn('px-2 py-0.5 rounded text-xs font-semibold border', RMA_STATUS_COLORS[rmaParentStatus])}>
+                                    {RMA_STATUS_LABELS[rmaParentStatus]}
+                                  </span>
+                                ) : <span className="text-muted-foreground text-xs">—</span>
+                              ) : (
+                                <Select value={order.status} onValueChange={v => handleStatusChange(order, v as OrderStatus)}>
+                                  <SelectTrigger className={cn('w-56 text-xs font-semibold border', ORDER_STATUS_COLORS[order.status])}>
+                                    <SelectValue />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    {ALL_STATUSES.map(s => (
+                                      <SelectItem key={s} value={s}>
+                                        <span className={cn('px-2 py-0.5 rounded text-xs font-medium', ORDER_STATUS_COLORS[s])}>{ORDER_STATUS_LABELS[s]}</span>
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                              )}
                             </TableCell>
                             <TableCell className="text-right font-semibold">
                               {order.isRMA ? <span className="text-muted-foreground">—</span> : formatBRL(calcTotal(order))}
@@ -484,12 +500,13 @@ export default function Sales() {
                           </TableRow>
                         );
                       })}
-                      {filteredOrders.length === 0 && (
+                      {pagedOrders.length === 0 && (
                         <TableRow><TableCell colSpan={7} className="text-center py-8 text-muted-foreground">Nenhum pedido encontrado</TableCell></TableRow>
                       )}
                     </TableBody>
                   </Table>
                 </div>
+                <Pagination page={orderPage} pageCount={orderPageCount} total={filteredOrders.length} pageSize={PAGE_SIZE} onPageChange={setOrderPage} />
               </CardContent>
             </Card>
           </TabsContent>
@@ -502,15 +519,33 @@ export default function Sales() {
                   <h2 className="text-lg font-semibold text-secondary">Produtos (Pedidos Abertos)</h2>
                   <div className="flex items-center gap-2 flex-wrap">
                     <SearchBar value={prodSearch} onChange={setProdSearch} placeholder="OS, Cliente, Empresa, Vendedor, Produto..." />
-                    <DateRangeFilter
+                    <Button
+                      variant={prodAlertsOnly ? 'default' : 'outline'}
+                      onClick={() => setProdAlertsOnly(v => !v)}
+                      className={cn('gap-1.5', prodAlertsOnly ? 'bg-[hsl(var(--st-delayed))] text-white hover:bg-[hsl(var(--st-delayed))]/90' : 'bg-white')}
+                    >
+                      <AlertTriangle className="h-4 w-4" /> Alertas
+                    </Button>
+                    <Select value={prodStatusFilter} onValueChange={setProdStatusFilter}>
+                      <SelectTrigger className="w-44 bg-white"><SelectValue placeholder="Status" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">Todos os Status</SelectItem>
+                        {(['To Buy', 'Bought', 'In Stock'] as ItemStatus[]).map(s => (
+                          <SelectItem key={s} value={s}>
+                            <span className={cn('px-2 py-0.5 rounded text-xs font-medium', ITEM_STATUS_COLORS[s])}>{ITEM_STATUS_LABELS[s]}</span>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <DateFilter
                       field={prodDateField}
                       onFieldChange={v => setProdDateField(v as any)}
                       fieldOptions={[{ value: 'order', label: 'Entrega Pedido' }, { value: 'product', label: 'Entrega Produto' }]}
                       range={prodRange}
                       onRangeChange={setProdRange}
                     />
-                    {(prodSearch || prodRange.from) && (
-                      <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => { setProdSearch(''); setProdRange({}); }}>
+                    {(prodSearch || prodRange.from || prodAlertsOnly || prodStatusFilter !== 'all') && (
+                      <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => { setProdSearch(''); setProdRange({}); setProdAlertsOnly(false); setProdStatusFilter('all'); }}>
                         <X className="h-4 w-4" />
                       </Button>
                     )}
@@ -530,7 +565,7 @@ export default function Sales() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {products.map(p => {
+                      {pagedProducts.map(p => {
                         const productLate = p.productDeliveryDate && p.productDeliveryDate > p.orderDeliveryDate;
                         return (
                           <TableRow key={`${p.orderId}-${p.id}`} className="cursor-pointer hover:bg-muted/50" onClick={() => openProductModal(p.orderId, p.id)}>
@@ -569,12 +604,13 @@ export default function Sales() {
                           </TableRow>
                         );
                       })}
-                      {products.length === 0 && (
+                      {pagedProducts.length === 0 && (
                         <TableRow><TableCell colSpan={7} className="text-center py-8 text-muted-foreground">Nenhum produto encontrado</TableCell></TableRow>
                       )}
                     </TableBody>
                   </Table>
                 </div>
+                <Pagination page={prodPage} pageCount={prodPageCount} total={products.length} pageSize={PAGE_SIZE} onPageChange={setProdPage} />
               </CardContent>
             </Card>
           </TabsContent>
@@ -607,7 +643,8 @@ export default function Sales() {
           open={rmaModalOpen}
           onClose={() => setRmaModalOpen(false)}
           orders={orders}
-          onSave={addOrder}
+          rma={editRma}
+          onSave={o => editRma ? updateOrder(o) : addOrder(o)}
           nextRmaNumber={nextRmaNumber}
         />
       </div>

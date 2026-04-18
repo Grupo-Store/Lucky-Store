@@ -1,7 +1,6 @@
 import React, { createContext, useContext, useState, useCallback } from 'react';
 
 export type OrderStatus =
-  | 'Quote'
   | 'To Buy'
   | 'Bought'
   | 'Received'
@@ -67,7 +66,17 @@ export interface RmaItem {
   sourceItemId: string;
   name: string;
   quantity: number;
+  /** Free-text — who is fixing the item */
+  repairedBy?: string;
   status: RmaItemStatus;
+}
+
+/** Freight/Delivery card used in both Orders and RMAs */
+export interface FreightCard {
+  id: string;
+  deliveryPerson: string;
+  value: number;
+  deliveryDate?: string;
 }
 export type PaymentMethod = 'Credit Card' | 'Debit Card' | 'Boleto' | 'Pix' | 'TED' | 'Cash';
 export type Company = '' | 'Lucky Store' | 'BTech' | 'AJJ';
@@ -94,6 +103,8 @@ export interface SubPurchase {
   receiptDate?: string;
   purchaseValue: number;
   paymentMethod: PaymentMethod | '';
+  /** Number of installments — only meaningful when paymentMethod === 'Credit Card' */
+  installments?: number;
   status: ItemStatus;
 }
 
@@ -130,6 +141,8 @@ export function calcItemLatestDelivery(item: OrderItem): string | undefined {
 export interface Order {
   id: string;
   os: string;
+  /** Creation timestamp (ms) — used for default newest-first sort */
+  createdAt: number;
   orderDate: string;
   customer: string;
   cnpj: string;
@@ -149,11 +162,17 @@ export interface Order {
   rmaNumber?: string;
   rmaParentOrderId?: string;
   rmaItems?: RmaItem[];
+  /** Freight cards for RMA orders */
+  rmaFreight?: FreightCard[];
   cancelled: boolean;
   observations: string;
   /** Financial section */
   initialProductCost: number;
   finalProductCost: number;
+  /** Boleto cost (R$) */
+  boletoCost: number;
+  /** Gift cost (R$) */
+  giftCost: number;
   creditCostPercent: number;
   creditCostValue: number;
   debitCostPercent: number;
@@ -165,11 +184,30 @@ export interface Order {
   /** Final sales value entered by user */
   salesValue: number;
   items: OrderItem[];
+  /** Freight cards for non-RMA orders */
+  freight: FreightCard[];
+}
+
+/** Sum of freight card values */
+export function calcFreightTotal(cards?: FreightCard[]): number {
+  return (cards || []).reduce((s, c) => s + (c.value || 0), 0);
+}
+
+/** RMA priority order = the canonical RMA_ITEM_STATUSES list (lower index = lower priority/earlier stage) */
+export function calcRmaParentStatus(items?: RmaItem[]): RmaItemStatus | null {
+  if (!items || items.length === 0) return null;
+  let lowest = RMA_ITEM_STATUSES.length; // sentinel max
+  let result: RmaItemStatus = items[0].status;
+  for (const it of items) {
+    const idx = RMA_ITEM_STATUSES.indexOf(it.status);
+    if (idx >= 0 && idx < lowest) { lowest = idx; result = it.status; }
+  }
+  return result;
 }
 
 /** Tailwind classes using HSL status tokens defined in index.css */
 export const ORDER_STATUS_COLORS: Record<OrderStatus, string> = {
-  'Quote':                          'bg-[hsl(var(--st-quote)/0.18)] text-[hsl(var(--st-quote))] border-[hsl(var(--st-quote)/0.5)]',
+  
   'To Buy':                         'bg-[hsl(var(--st-tobuy)/0.18)] text-[hsl(var(--st-tobuy))] border-[hsl(var(--st-tobuy)/0.5)]',
   'Bought':                         'bg-[hsl(var(--st-bought)/0.18)] text-[hsl(var(--st-bought))] border-[hsl(var(--st-bought)/0.5)]',
   'Received':                       'bg-[hsl(var(--st-received)/0.18)] text-[hsl(var(--st-received))] border-[hsl(var(--st-received)/0.5)]',
@@ -185,7 +223,7 @@ export const ORDER_STATUS_COLORS: Record<OrderStatus, string> = {
 };
 
 export const ORDER_STATUS_LABELS: Record<OrderStatus, string> = {
-  'Quote': 'Cotação',
+  
   'To Buy': 'A Comprar',
   'Bought': 'Comprado',
   'Received': 'Recebido',
@@ -222,6 +260,9 @@ export function isOpenOrder(status: OrderStatus) {
 /** Final cost = sum of all monetary R$ values from the Financial Section */
 export function calcFinalCost(o: Partial<Order>): number {
   return (o.finalProductCost || 0)
+    + (o.boletoCost || 0)
+    + calcFreightTotal(o.freight)
+    + (o.giftCost || 0)
     + (o.creditCostValue || 0)
     + (o.debitCostValue || 0)
     + (o.purchaseTaxValue || 0)
@@ -238,16 +279,17 @@ export function calcTotal(o: Partial<Order>): number {
 }
 
 const baseOrder = (over: Partial<Order>): Order => ({
-  id: '', os: '', orderDate: '', customer: '', cnpj: '', company: '', seller: '',
+  id: '', os: '', createdAt: Date.now(), orderDate: '', customer: '', cnpj: '', company: '', seller: '',
   ocAfPed: '', directBilling: false, supplier: '', invoice: '',
   paymentMethods: [], installments: 1, deliveryDate: '', status: 'To Buy',
   isRMA: false, cancelled: false, observations: '',
-  initialProductCost: 0, finalProductCost: 0,
+  initialProductCost: 0, finalProductCost: 0, boletoCost: 0, giftCost: 0,
   creditCostPercent: 0, creditCostValue: 0, debitCostPercent: 0, debitCostValue: 0,
   purchaseTaxPercent: 0, purchaseTaxValue: 0, salesTaxPercent: 0, salesTaxValue: 0,
-  salesValue: 0, items: [],
+  salesValue: 0, items: [], freight: [],
   ...over,
 });
+
 
 const sampleOrders: Order[] = [
   baseOrder({
@@ -282,7 +324,7 @@ const sampleOrders: Order[] = [
   }),
   baseOrder({
     id: '4', os: '1004', orderDate: '2026-04-10', customer: 'StartUp Hub', cnpj: '11.222.333/0001-44',
-    company: 'BTech', seller: 'Alcides', deliveryDate: '2026-05-01', status: 'Quote',
+    company: 'BTech', seller: 'Alcides', deliveryDate: '2026-05-01', status: 'To Buy',
     paymentMethods: ['Credit Card'], installments: 6,
     initialProductCost: 5000, finalProductCost: 0, salesValue: 9500,
     items: [{ id: 'i6', name: 'Servidor Dell PowerEdge', quantity: 1, status: 'To Buy', projectedValue: 9500, purchaseValue: 0 }],
@@ -314,7 +356,7 @@ const today = () => new Date().toISOString().slice(0, 10);
 
 const applyDelayCheck = (o: Order): Order => {
   if (o.cancelled) return { ...o, status: 'Cancelled' };
-  if (o.status === 'Delivered' || o.status === 'Cancelled' || o.status === 'Quote') return o;
+  if (o.status === 'Delivered' || o.status === 'Cancelled') return o;
   if (o.status !== 'Delayed' && o.deliveryDate && o.deliveryDate < today()) {
     return { ...o, status: 'Delayed' };
   }
