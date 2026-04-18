@@ -205,7 +205,7 @@ export function calcRmaParentStatus(items?: RmaItem[]): RmaItemStatus | null {
 
 /** Tailwind classes using HSL status tokens defined in index.css */
 export const ORDER_STATUS_COLORS: Record<OrderStatus, string> = {
-  'Quote':                          'bg-[hsl(var(--st-quote)/0.18)] text-[hsl(var(--st-quote))] border-[hsl(var(--st-quote)/0.5)]',
+  
   'To Buy':                         'bg-[hsl(var(--st-tobuy)/0.18)] text-[hsl(var(--st-tobuy))] border-[hsl(var(--st-tobuy)/0.5)]',
   'Bought':                         'bg-[hsl(var(--st-bought)/0.18)] text-[hsl(var(--st-bought))] border-[hsl(var(--st-bought)/0.5)]',
   'Received':                       'bg-[hsl(var(--st-received)/0.18)] text-[hsl(var(--st-received))] border-[hsl(var(--st-received)/0.5)]',
@@ -221,7 +221,7 @@ export const ORDER_STATUS_COLORS: Record<OrderStatus, string> = {
 };
 
 export const ORDER_STATUS_LABELS: Record<OrderStatus, string> = {
-  'Quote': 'Cotação',
+  
   'To Buy': 'A Comprar',
   'Bought': 'Comprado',
   'Received': 'Recebido',
