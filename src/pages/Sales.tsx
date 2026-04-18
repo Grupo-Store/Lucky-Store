@@ -131,11 +131,14 @@ type SortDir = 'asc' | 'desc';
 
 export default function Sales() {
   const { orders, addOrder, updateOrder, deleteOrder, updateItemStatus, nextOS } = useOrders();
+  const { quotes, addQuote, updateQuote, deleteQuote, nextIndex } = useQuotes();
   const [tab, setTab] = useState('orders');
   const [modalOpen, setModalOpen] = useState(false);
   const [editOrder, setEditOrder] = useState<Order | null>(null);
   const [productModalOpen, setProductModalOpen] = useState(false);
   const [productModalCtx, setProductModalCtx] = useState<{ order: Order; item: OrderItem } | null>(null);
+  const [quoteModalOpen, setQuoteModalOpen] = useState(false);
+  const [editQuote, setEditQuote] = useState<Quote | null>(null);
 
   /* ---------- Orders tab state ---------- */
   const [orderSearch, setOrderSearch] = useState('');
@@ -153,6 +156,9 @@ export default function Sales() {
 
   /* ---------- Quotes tab state ---------- */
   const [quoteSearch, setQuoteSearch] = useState('');
+  const [quoteDateField, setQuoteDateField] = useState<'requestDate' | 'phaseDate'>('requestDate');
+  const [quoteRange, setQuoteRange] = useState<DateRange>({});
+  const [quoteStatusFilter, setQuoteStatusFilter] = useState<string>('all');
 
   const toggleSort = (field: SortField) => {
     if (sortField === field) setSortDir(d => d === 'asc' ? 'desc' : 'asc');
