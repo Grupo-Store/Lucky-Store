@@ -1,7 +1,6 @@
 import React, { createContext, useContext, useState, useCallback } from 'react';
 
 export type OrderStatus =
-  | 'Quote'
   | 'To Buy'
   | 'Bought'
   | 'Received'
