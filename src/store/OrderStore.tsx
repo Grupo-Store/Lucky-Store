@@ -304,6 +304,8 @@ interface OrderContextType {
   updateItemStatus: (orderId: string, itemId: string, status: ItemStatus) => void;
   /** Returns the next OS number as a string (auto-increment) */
   nextOS: () => string;
+  /** Returns the next sequential RMA number for a given parent OS, e.g. "14-1", "14-2" */
+  nextRmaNumber: (parentOs: string) => string;
 }
 
 const OrderContext = createContext<OrderContextType | null>(null);
