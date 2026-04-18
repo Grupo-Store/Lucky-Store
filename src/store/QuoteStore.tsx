@@ -24,13 +24,15 @@ export const QUOTE_PHASE_COLORS: Record<QuotePhaseKey, string> = {
 export interface QuotePhases {
   sent: { active: boolean; date?: string };
   forClosing: { active: boolean };
-  closed: { active: boolean; date?: string; value?: number };
+  closed: { active: boolean; date?: string };
   dropped: { active: boolean; date?: string };
 }
 
 export interface Quote {
   id: string;
   index: string;
+  /** Creation timestamp (ms) — used for default newest-first sort */
+  createdAt: number;
   customer: string;
   cnpj: string;
   requestNumber: string;
@@ -39,6 +41,8 @@ export interface Quote {
   directBilling: boolean;
   supplier: string;
   seller: Seller;
+  /** Quote value (R$) — entered in General Info */
+  value: number;
   phases: QuotePhases;
 }
 
@@ -70,20 +74,24 @@ export function getPhaseDate(q: Quote): string | undefined {
 
 const sampleQuotes: Quote[] = [
   {
-    id: 'q1', index: 'COT-001', customer: 'Mega Corp', cnpj: '11.111.111/0001-11',
+    id: 'q1', index: 'COT-001', createdAt: Date.now() - 3 * 86400000,
+    customer: 'Mega Corp', cnpj: '11.111.111/0001-11',
     requestNumber: 'REQ-7781', requestDate: '2026-04-01',
     company: 'Lucky Store', directBilling: false, supplier: '', seller: 'Alcides',
+    value: 12500,
     phases: {
       sent: { active: true, date: '2026-04-02' },
       forClosing: { active: true },
-      closed: { active: true, date: '2026-04-08', value: 12500 },
+      closed: { active: true, date: '2026-04-08' },
       dropped: { active: false },
     },
   },
   {
-    id: 'q2', index: 'COT-002', customer: 'StartUp Hub', cnpj: '22.222.222/0001-22',
+    id: 'q2', index: 'COT-002', createdAt: Date.now() - 2 * 86400000,
+    customer: 'StartUp Hub', cnpj: '22.222.222/0001-22',
     requestNumber: 'REQ-7782', requestDate: '2026-04-05',
     company: 'BTech', directBilling: true, supplier: 'Distribuidora ABC', seller: 'Lucas',
+    value: 0,
     phases: {
       sent: { active: true, date: '2026-04-06' },
       forClosing: { active: true },
@@ -92,9 +100,11 @@ const sampleQuotes: Quote[] = [
     },
   },
   {
-    id: 'q3', index: 'COT-003', customer: 'Old Client', cnpj: '33.333.333/0001-33',
+    id: 'q3', index: 'COT-003', createdAt: Date.now() - 1 * 86400000,
+    customer: 'Old Client', cnpj: '33.333.333/0001-33',
     requestNumber: 'REQ-7790', requestDate: '2026-03-28',
     company: 'AJJ', directBilling: false, supplier: '', seller: 'Pedro',
+    value: 0,
     phases: {
       sent: { active: true, date: '2026-03-29' },
       forClosing: { active: false },
