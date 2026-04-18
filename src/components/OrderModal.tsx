@@ -148,7 +148,7 @@ export function OrderModal({ open, onClose, order, onSave, nextOS }: Props) {
       cancelled: !!form.cancelled,
       observations: form.observations || '',
       initialProductCost: form.initialProductCost || 0,
-      finalProductCost: form.finalProductCost || 0,
+      finalProductCost: derivedFinalProductCost,
       creditCostPercent: form.creditCostPercent || 0,
       creditCostValue: computed.creditCostValue,
       debitCostPercent: form.debitCostPercent || 0,
@@ -429,8 +429,14 @@ export function OrderModal({ open, onClose, order, onSave, nextOS }: Props) {
                     value={item.projectedValue || ''} onChange={e => updateItem(item.id, 'projectedValue', parseFloat(e.target.value) || 0)} onKeyDown={handleEnterBlur} />
                 </div>
                 <div className="col-span-2">
-                  <Input type="number" step="0.01" placeholder="Valor de Compra R$" className="bg-white border-border"
-                    value={item.purchaseValue || ''} onChange={e => updateItem(item.id, 'purchaseValue', parseFloat(e.target.value) || 0)} onKeyDown={handleEnterBlur} />
+                  {item.subPurchases && item.subPurchases.length > 0 ? (
+                    <Input readOnly placeholder="Valor de Compra R$" className="bg-muted border-border"
+                      title="Sincronizado a partir do Modal de Produto"
+                      value={(item.purchaseValue || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} />
+                  ) : (
+                    <Input type="number" step="0.01" placeholder="Valor de Compra R$" className="bg-white border-border"
+                      value={item.purchaseValue || ''} onChange={e => updateItem(item.id, 'purchaseValue', parseFloat(e.target.value) || 0)} onKeyDown={handleEnterBlur} />
+                  )}
                 </div>
                 <Button variant="ghost" size="icon" className="col-span-1" onClick={() => removeItem(item.id)}>
                   <Trash2 className="h-4 w-4 text-destructive" />
