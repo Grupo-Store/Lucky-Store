@@ -347,7 +347,10 @@ export function OrderModal({ open, onClose, order, onSave, nextOS }: Props) {
           <h3 className="text-sm font-bold text-secondary uppercase tracking-wide mb-3">Financeiro</h3>
           <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
             {renderCurrencyInput('initialProductCost', 'Custo Inicial Produto')}
-            {renderCurrencyInput('finalProductCost', 'Custo Final Produto', { readOnly: true, muted: true })}
+            <div>
+              <Label>Custo Final Produto <span className="text-xs text-muted-foreground">(soma das compras)</span></Label>
+              <Input readOnly value={toBRL(derivedFinalProductCost)} className="bg-muted border-border font-semibold" />
+            </div>
           </div>
 
           {/* Percentage → R$ rows */}
