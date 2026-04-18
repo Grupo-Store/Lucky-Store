@@ -418,9 +418,14 @@ export default function Sales() {
                       ))}
                     </SelectContent>
                   </Select>
-                  <Button onClick={() => { setEditOrder(null); setModalOpen(true); }} className="bg-secondary hover:bg-secondary/90">
-                    <Plus className="h-4 w-4 mr-1" /> Adicionar Pedido
-                  </Button>
+                  <div className="flex items-center gap-2">
+                    <Button onClick={() => setRmaModalOpen(true)} variant="outline" className="border-secondary text-secondary hover:bg-secondary/10">
+                      <Plus className="h-4 w-4 mr-1" /> Adicionar RMA
+                    </Button>
+                    <Button onClick={() => { setEditOrder(null); setModalOpen(true); }} className="bg-secondary hover:bg-secondary/90">
+                      <Plus className="h-4 w-4 mr-1" /> Adicionar Pedido
+                    </Button>
+                  </div>
                 </div>
 
                 <div className="overflow-x-auto rounded-lg border">
@@ -473,7 +478,9 @@ export default function Sales() {
                                 </SelectContent>
                               </Select>
                             </TableCell>
-                            <TableCell className="text-right font-semibold">{formatBRL(calcTotal(order))}</TableCell>
+                            <TableCell className="text-right font-semibold">
+                              {order.isRMA ? <span className="text-muted-foreground">—</span> : formatBRL(calcTotal(order))}
+                            </TableCell>
                           </TableRow>
                         );
                       })}
