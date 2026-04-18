@@ -289,17 +289,6 @@ const baseOrder = (over: Partial<Order>): Order => ({
   ...over,
 });
 
-const baseOrder = (over: Partial<Order>): Order => ({
-  id: '', os: '', orderDate: '', customer: '', cnpj: '', company: '', seller: '',
-  ocAfPed: '', directBilling: false, supplier: '', invoice: '',
-  paymentMethods: [], installments: 1, deliveryDate: '', status: 'To Buy',
-  isRMA: false, cancelled: false, observations: '',
-  initialProductCost: 0, finalProductCost: 0,
-  creditCostPercent: 0, creditCostValue: 0, debitCostPercent: 0, debitCostValue: 0,
-  purchaseTaxPercent: 0, purchaseTaxValue: 0, salesTaxPercent: 0, salesTaxValue: 0,
-  salesValue: 0, items: [],
-  ...over,
-});
 
 const sampleOrders: Order[] = [
   baseOrder({
