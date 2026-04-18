@@ -191,14 +191,25 @@ export default function Sales() {
     return list;
   }, [orders, orderSearch, orderView, orderStatusFilter, orderDateField, orderRange, sortField, sortDir]);
 
-  /* ---------- Quotes ---------- */
+  /* ---------- Quotes (isolated store) ---------- */
   const filteredQuotes = useMemo(() => {
     const q = quoteSearch.toLowerCase().trim();
-    return orders.filter(o => o.status === 'Quote' && (
-      !q || o.os.toLowerCase().includes(q) || o.customer.toLowerCase().includes(q) ||
-      (o.company || '').toLowerCase().includes(q) || (o.seller || '').toLowerCase().includes(q)
-    ));
-  }, [orders, quoteSearch]);
+    return quotes.filter(qt => {
+      const highest = getHighestPhase(qt);
+      if (quoteStatusFilter !== 'all' && highest !== quoteStatusFilter) return false;
+      if (q && !(
+        qt.index.toLowerCase().includes(q) ||
+        qt.customer.toLowerCase().includes(q) ||
+        qt.requestNumber.toLowerCase().includes(q) ||
+        (qt.company || '').toLowerCase().includes(q) ||
+        (qt.seller || '').toLowerCase().includes(q) ||
+        (qt.directBilling ? 'sim faturamento direto' : 'não nao').includes(q)
+      )) return false;
+      const dateIso = quoteDateField === 'requestDate' ? qt.requestDate : (getPhaseDate(qt) || '');
+      if (quoteRange.from && !dateIso) return false;
+      return isInRange(dateIso, quoteRange);
+    });
+  }, [quotes, quoteSearch, quoteStatusFilter, quoteDateField, quoteRange]);
 
   /* ---------- Products ---------- */
   const products = useMemo(() => {
