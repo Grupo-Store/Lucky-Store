@@ -13,23 +13,25 @@ import { CalendarIcon, Plus, Trash2, Printer } from 'lucide-react';
 import { format, addDays } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
+import { toast } from 'sonner';
 import {
-  Order, OrderItem, ItemStatus, PaymentMethod, Company, Seller, OrderStatus,
+  Order, OrderItem, ItemStatus, PaymentMethod, Company, Seller, OrderStatus, FreightCard,
   ITEM_STATUS_COLORS, ORDER_STATUS_COLORS, ORDER_STATUS_LABELS,
   PAYMENT_METHODS, PAYMENT_METHOD_LABELS, SELLERS,
-  calcFinalCost, calcProfit,
+  calcFinalCost, calcProfit, calcFreightTotal,
 } from '@/store/OrderStore';
 
 const emptyOrder = (os: string): Partial<Order> => ({
-  os, orderDate: format(new Date(), 'yyyy-MM-dd'), customer: '', cnpj: '', company: '', seller: '',
+  os, createdAt: Date.now(),
+  orderDate: format(new Date(), 'yyyy-MM-dd'), customer: '', cnpj: '', company: '', seller: '',
   ocAfPed: '', directBilling: false, supplier: '', invoice: '',
   paymentMethods: [], installments: 1,
   deliveryDate: format(addDays(new Date(), 1), 'yyyy-MM-dd'),
   status: 'To Buy', isRMA: false, cancelled: false, observations: '',
-  initialProductCost: 0, finalProductCost: 0,
+  initialProductCost: 0, finalProductCost: 0, boletoCost: 0, giftCost: 0,
   creditCostPercent: 0, creditCostValue: 0, debitCostPercent: 0, debitCostValue: 0,
   purchaseTaxPercent: 0, purchaseTaxValue: 0, salesTaxPercent: 0, salesTaxValue: 0,
-  salesValue: 0, items: [],
+  salesValue: 0, items: [], freight: [],
 });
 
 function toBRL(v: number): string {
@@ -49,7 +51,6 @@ interface Props {
   order?: Order | null;
   onSave: (order: Order) => void;
   onDelete?: (id: string) => void;
-  /** Callback to compute next OS for new orders */
   nextOS?: () => string;
 }
 
@@ -63,7 +64,7 @@ export function OrderModal({ open, onClose, order, onSave, nextOS }: Props) {
   const [deliveryDateOpen, setDeliveryDateOpen] = useState(false);
 
   useEffect(() => {
-    if (order) setForm({ ...order });
+    if (order) setForm({ ...order, freight: order.freight || [] });
     else setForm(emptyOrder(nextOS?.() || ''));
     setEditingField(null);
   }, [order, open, nextOS]);
@@ -71,13 +72,12 @@ export function OrderModal({ open, onClose, order, onSave, nextOS }: Props) {
   const set = (k: keyof Order, v: any) => setForm(prev => ({ ...prev, [k]: v }));
 
   /* ---------------- Derived calculations ---------------- */
-  // Final product cost = sum of all items' purchase values (driven by ProductModal sub-purchases)
   const derivedFinalProductCost = useMemo(
     () => (form.items || []).reduce((s, i) => s + (i.purchaseValue || 0), 0),
     [form.items]
   );
+  const derivedFreightTotal = useMemo(() => calcFreightTotal(form.freight), [form.freight]);
 
-  // Recompute monetary values whenever percentages or base amounts change
   const computed = useMemo(() => {
     const sales = form.salesValue || 0;
     const finalProd = derivedFinalProductCost;
@@ -89,9 +89,12 @@ export function OrderModal({ open, onClose, order, onSave, nextOS }: Props) {
     };
   }, [form.salesValue, derivedFinalProductCost, form.creditCostPercent, form.debitCostPercent, form.purchaseTaxPercent, form.salesTaxPercent]);
 
-  // Final cost & profit derived from latest computed values
-  const finalCost = calcFinalCost({ ...form, finalProductCost: derivedFinalProductCost, ...computed });
-  const profit = calcProfit({ ...form, finalProductCost: derivedFinalProductCost, ...computed });
+  const finalCost = calcFinalCost({
+    ...form, finalProductCost: derivedFinalProductCost, freight: form.freight, ...computed,
+  });
+  const profit = calcProfit({
+    ...form, finalProductCost: derivedFinalProductCost, freight: form.freight, ...computed,
+  });
 
   /* ---------------- Items ---------------- */
   const addItem = () => {
@@ -110,6 +113,15 @@ export function OrderModal({ open, onClose, order, onSave, nextOS }: Props) {
     set('items', (form.items || []).filter(i => i.id !== id));
   };
 
+  /* ---------------- Freight ---------------- */
+  const addFreight = () => set('freight', [...(form.freight || []), {
+    id: crypto.randomUUID(), deliveryPerson: '', value: 0, deliveryDate: undefined,
+  } as FreightCard]);
+  const updateFreight = (id: string, field: keyof FreightCard, value: any) => {
+    set('freight', (form.freight || []).map(f => f.id === id ? { ...f, [field]: value } : f));
+  };
+  const removeFreight = (id: string) => set('freight', (form.freight || []).filter(f => f.id !== id));
+
   /* ---------------- Payment methods ---------------- */
   const togglePayment = (m: PaymentMethod) => {
     const cur = form.paymentMethods || [];
@@ -126,11 +138,23 @@ export function OrderModal({ open, onClose, order, onSave, nextOS }: Props) {
     }));
   };
 
-  /* ---------------- Save ---------------- */
+  /* ---------------- Save (with validation) ---------------- */
   const handleSave = () => {
+    // Mandatory fields: orderDate, deliveryDate, customer, ocAfPed
+    const missing: string[] = [];
+    if (!form.orderDate) missing.push('Data do Pedido');
+    if (!form.deliveryDate) missing.push('Data de Entrega');
+    if (!(form.customer || '').trim()) missing.push('Cliente');
+    if (!(form.ocAfPed || '').trim()) missing.push('OC/AF/PED');
+    if (missing.length > 0) {
+      toast.error(`Preencha os campos obrigatórios: ${missing.join(', ')}`);
+      return;
+    }
+
     const o: Order = {
       id: order?.id || crypto.randomUUID(),
       os: form.os || '',
+      createdAt: form.createdAt || Date.now(),
       orderDate: form.orderDate || '',
       customer: form.customer || '',
       cnpj: form.cnpj || '',
@@ -149,6 +173,8 @@ export function OrderModal({ open, onClose, order, onSave, nextOS }: Props) {
       observations: form.observations || '',
       initialProductCost: form.initialProductCost || 0,
       finalProductCost: derivedFinalProductCost,
+      boletoCost: form.boletoCost || 0,
+      giftCost: form.giftCost || 0,
       creditCostPercent: form.creditCostPercent || 0,
       creditCostValue: computed.creditCostValue,
       debitCostPercent: form.debitCostPercent || 0,
@@ -159,6 +185,7 @@ export function OrderModal({ open, onClose, order, onSave, nextOS }: Props) {
       salesTaxValue: computed.salesTaxValue,
       salesValue: form.salesValue || 0,
       items: form.items || [],
+      freight: form.freight || [],
     };
     onSave(o);
     onClose();
@@ -204,7 +231,7 @@ export function OrderModal({ open, onClose, order, onSave, nextOS }: Props) {
               <Input readOnly className="bg-muted border-border font-semibold" value={form.os || ''} />
             </div>
             <div>
-              <Label>Data do Pedido *</Label>
+              <Label>Data do Pedido <span className="text-destructive">*</span></Label>
               <Popover open={orderDateOpen} onOpenChange={setOrderDateOpen}>
                 <PopoverTrigger asChild>
                   <Button variant="outline" className="w-full justify-start text-left font-normal bg-white">
@@ -220,7 +247,7 @@ export function OrderModal({ open, onClose, order, onSave, nextOS }: Props) {
               </Popover>
             </div>
             <div>
-              <Label>Data de Entrega *</Label>
+              <Label>Data de Entrega <span className="text-destructive">*</span></Label>
               <Popover open={deliveryDateOpen} onOpenChange={setDeliveryDateOpen}>
                 <PopoverTrigger asChild>
                   <Button variant="outline" className="w-full justify-start text-left font-normal bg-white">
@@ -236,7 +263,7 @@ export function OrderModal({ open, onClose, order, onSave, nextOS }: Props) {
               </Popover>
             </div>
             <div>
-              <Label>Status *</Label>
+              <Label>Status</Label>
               <Select value={form.status || 'To Buy'} onValueChange={v => set('status', v as OrderStatus)}>
                 <SelectTrigger className={cn('border', form.status && ORDER_STATUS_COLORS[form.status as OrderStatus])}>
                   <SelectValue />
@@ -252,7 +279,7 @@ export function OrderModal({ open, onClose, order, onSave, nextOS }: Props) {
             </div>
 
             <div>
-              <Label>Cliente *</Label>
+              <Label>Cliente <span className="text-destructive">*</span></Label>
               <Input className="bg-white border-border" value={form.customer || ''} onChange={e => set('customer', e.target.value)} onKeyDown={handleEnterBlur} />
             </div>
             <div>
@@ -260,11 +287,11 @@ export function OrderModal({ open, onClose, order, onSave, nextOS }: Props) {
               <Input className="bg-white border-border" value={form.cnpj || ''} onChange={e => set('cnpj', e.target.value)} onKeyDown={handleEnterBlur} />
             </div>
             <div>
-              <Label>OC/AF/PED</Label>
+              <Label>OC/AF/PED <span className="text-destructive">*</span></Label>
               <Input className="bg-white border-border" value={form.ocAfPed || ''} onChange={e => set('ocAfPed', e.target.value)} onKeyDown={handleEnterBlur} placeholder="Ex: OC-1234" />
             </div>
             <div>
-              <Label>Empresa *</Label>
+              <Label>Empresa</Label>
               <Select value={form.company || ''} onValueChange={v => set('company', v)}>
                 <SelectTrigger className="bg-white border-border"><SelectValue placeholder="Selecionar" /></SelectTrigger>
                 <SelectContent>
@@ -276,7 +303,7 @@ export function OrderModal({ open, onClose, order, onSave, nextOS }: Props) {
             </div>
 
             <div>
-              <Label>Vendedor *</Label>
+              <Label>Vendedor</Label>
               <Select value={form.seller || ''} onValueChange={v => set('seller', v)}>
                 <SelectTrigger className="bg-white border-border"><SelectValue placeholder="Selecionar" /></SelectTrigger>
                 <SelectContent>
@@ -284,6 +311,9 @@ export function OrderModal({ open, onClose, order, onSave, nextOS }: Props) {
                 </SelectContent>
               </Select>
             </div>
+
+            {/* Sales Value (moved from summary) */}
+            {renderCurrencyInput('salesValue', 'Valor de Venda')}
 
             {/* Direct billing toggle */}
             <div className="flex items-end">
@@ -304,18 +334,11 @@ export function OrderModal({ open, onClose, order, onSave, nextOS }: Props) {
                 </div>
               </>
             )}
-
-            <div className="flex items-end">
-              <label className="flex items-center gap-2 cursor-pointer pb-2">
-                <Checkbox checked={!!form.isRMA} onCheckedChange={v => set('isRMA', !!v)} />
-                <span className="text-sm font-medium">RMA (Garantia)</span>
-              </label>
-            </div>
           </div>
 
           {/* Payment methods */}
           <div className="mt-4">
-            <Label className="mb-2 block">Forma de Pagamento *</Label>
+            <Label className="mb-2 block">Forma de Pagamento</Label>
             <div className="flex flex-wrap gap-3">
               {PAYMENT_METHODS.map(m => (
                 <label key={m} className="flex items-center gap-2 px-3 py-1.5 border rounded-md bg-white cursor-pointer hover:bg-muted/50">
@@ -351,6 +374,12 @@ export function OrderModal({ open, onClose, order, onSave, nextOS }: Props) {
               <Label>Custo Final Produto <span className="text-xs text-muted-foreground">(soma das compras)</span></Label>
               <Input readOnly value={toBRL(derivedFinalProductCost)} className="bg-muted border-border font-semibold" />
             </div>
+            {renderCurrencyInput('boletoCost', 'Custo Boleto')}
+            <div>
+              <Label>Frete <span className="text-xs text-muted-foreground">(soma da seção Frete)</span></Label>
+              <Input readOnly value={toBRL(derivedFreightTotal)} className="bg-muted border-border font-semibold" />
+            </div>
+            {renderCurrencyInput('giftCost', 'Brinde')}
           </div>
 
           {/* Percentage → R$ rows */}
@@ -449,15 +478,29 @@ export function OrderModal({ open, onClose, order, onSave, nextOS }: Props) {
             {(form.items || []).length === 0 && (
               <p className="text-sm text-muted-foreground text-center py-4">Nenhum item adicionado</p>
             )}
-            {(form.items || []).length > 0 && (
-              <div className="grid grid-cols-12 gap-2 px-2 text-xs text-muted-foreground font-medium pt-1">
-                <div className="col-span-4">Nome</div>
-                <div className="col-span-1">Qtd</div>
-                <div className="col-span-2">Status</div>
-                <div className="col-span-2">Valor Projetado</div>
-                <div className="col-span-2">Valor de Compra</div>
-              </div>
+          </div>
+        </section>
+
+        {/* ============== 3b. FRETE ============== */}
+        <section className="border rounded-lg p-4">
+          <div className="flex justify-between items-center mb-3">
+            <h3 className="text-sm font-bold text-secondary uppercase tracking-wide">Frete</h3>
+            <Button size="sm" onClick={addFreight} className="bg-secondary hover:bg-secondary/90">
+              <Plus className="h-4 w-4 mr-1" /> Adicionar Frete
+            </Button>
+          </div>
+          <div className="space-y-2">
+            {(form.freight || []).map((f, idx) => (
+              <FreightRow key={f.id} idx={idx} card={f}
+                onChange={(k, v) => updateFreight(f.id, k, v)}
+                onRemove={() => removeFreight(f.id)} />
+            ))}
+            {(form.freight || []).length === 0 && (
+              <p className="text-sm text-muted-foreground text-center py-3">Nenhum frete adicionado</p>
             )}
+          </div>
+          <div className="mt-3 text-right text-sm font-semibold text-secondary">
+            Total: {toBRL(derivedFreightTotal)}
           </div>
         </section>
 
@@ -486,7 +529,10 @@ export function OrderModal({ open, onClose, order, onSave, nextOS }: Props) {
         <section className="border rounded-lg p-4 bg-secondary/5">
           <h3 className="text-sm font-bold text-secondary uppercase tracking-wide mb-3">Resumo de Valores</h3>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {renderCurrencyInput('salesValue', 'Valor de Venda')}
+            <div>
+              <Label>Valor de Venda</Label>
+              <Input readOnly value={toBRL(form.salesValue || 0)} className="bg-muted border-border font-semibold" />
+            </div>
             <div>
               <Label>Custo Final</Label>
               <Input readOnly value={toBRL(finalCost)} className="bg-muted border-border font-semibold" />
@@ -511,5 +557,50 @@ export function OrderModal({ open, onClose, order, onSave, nextOS }: Props) {
         </div>
       </DialogContent>
     </Dialog>
+  );
+}
+
+/* ---------- Freight row component ---------- */
+function FreightRow({ idx, card, onChange, onRemove }: {
+  idx: number; card: FreightCard;
+  onChange: (k: keyof FreightCard, v: any) => void;
+  onRemove: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState('');
+  return (
+    <div className="grid grid-cols-12 gap-2 items-center border rounded-md p-2 bg-muted/20">
+      <span className="col-span-1 text-xs font-bold text-secondary">#{idx + 1}</span>
+      <Input placeholder="Entregador" className="col-span-4 bg-white border-border"
+        value={card.deliveryPerson} onChange={e => onChange('deliveryPerson', e.target.value)} onKeyDown={handleEnterBlur} />
+      <div className="col-span-3">
+        <Input placeholder="R$ 0,00" className="bg-white border-border"
+          value={editing ? draft : toBRL(card.value || 0)}
+          onFocus={() => { setEditing(true); setDraft(card.value ? String(card.value) : ''); }}
+          onBlur={() => { onChange('value', parseBRL(draft) || parseFloat(draft) || 0); setEditing(false); }}
+          onChange={e => setDraft(e.target.value)}
+          onKeyDown={handleEnterBlur} />
+      </div>
+      <div className="col-span-3">
+        <Popover open={open} onOpenChange={setOpen}>
+          <PopoverTrigger asChild>
+            <Button variant="outline" className="w-full justify-start text-left font-normal bg-white">
+              <CalendarIcon className="mr-2 h-4 w-4" />
+              {card.deliveryDate ? format(new Date(card.deliveryDate + 'T12:00:00'), 'dd/MM/yyyy') : 'Data'}
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-auto p-0">
+            <Calendar mode="single"
+              selected={card.deliveryDate ? new Date(card.deliveryDate + 'T12:00:00') : undefined}
+              onSelect={d => { onChange('deliveryDate', d ? format(d, 'yyyy-MM-dd') : undefined); setOpen(false); }}
+              locale={ptBR} className="p-3 pointer-events-auto" />
+          </PopoverContent>
+        </Popover>
+      </div>
+      <Button variant="ghost" size="icon" className="col-span-1" onClick={onRemove}>
+        <Trash2 className="h-4 w-4 text-destructive" />
+      </Button>
+    </div>
   );
 }

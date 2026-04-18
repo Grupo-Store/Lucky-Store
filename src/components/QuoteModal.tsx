@@ -30,10 +30,10 @@ function handleEnterBlur(e: KeyboardEvent<HTMLInputElement>) {
 }
 
 const emptyQuote = (index: string): Quote => ({
-  id: '', index, customer: '', cnpj: '',
+  id: '', index, createdAt: Date.now(), customer: '', cnpj: '',
   requestNumber: '', requestDate: format(new Date(), 'yyyy-MM-dd'),
   company: '', directBilling: false, supplier: '', seller: '',
-  phases: emptyPhases(),
+  value: 0, phases: emptyPhases(),
 });
 
 interface Props {
@@ -66,7 +66,7 @@ export function QuoteModal({ open, onClose, quote, onSave, onDelete, nextIndex }
   };
 
   const handleSave = () => {
-    onSave({ ...form, id: form.id || crypto.randomUUID() });
+    onSave({ ...form, id: form.id || crypto.randomUUID(), createdAt: form.createdAt || Date.now() });
     onClose();
   };
 
@@ -142,7 +142,7 @@ export function QuoteModal({ open, onClose, quote, onSave, onDelete, nextIndex }
               <DateField phaseKey="reqDate" value={form.requestDate} onChange={d => set('requestDate', d || '')} />
             </div>
             <div>
-              <Label>Empresa *</Label>
+              <Label>Empresa</Label>
               <Select value={form.company || ''} onValueChange={v => set('company', v as Company)}>
                 <SelectTrigger className="bg-white border-border"><SelectValue placeholder="Selecionar" /></SelectTrigger>
                 <SelectContent>
@@ -153,13 +153,23 @@ export function QuoteModal({ open, onClose, quote, onSave, onDelete, nextIndex }
               </Select>
             </div>
             <div>
-              <Label>Vendedor *</Label>
+              <Label>Vendedor</Label>
               <Select value={form.seller || ''} onValueChange={v => set('seller', v as Seller)}>
                 <SelectTrigger className="bg-white border-border"><SelectValue placeholder="Selecionar" /></SelectTrigger>
                 <SelectContent>
                   {SELLERS.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
                 </SelectContent>
               </Select>
+            </div>
+            <div>
+              <Label>Valor (R$)</Label>
+              <Input className="bg-white border-border"
+                value={valueEditing ? valueDraft : toBRL(form.value || 0)}
+                onFocus={() => { setValueEditing(true); setValueDraft(String(form.value || '')); }}
+                onBlur={() => { set('value', parseBRL(valueDraft) || parseFloat(valueDraft) || 0); setValueEditing(false); }}
+                onChange={e => setValueDraft(e.target.value)}
+                onKeyDown={handleEnterBlur}
+              />
             </div>
             <div className="flex items-end">
               <label className="flex items-center gap-2 cursor-pointer pb-2">
@@ -192,24 +202,11 @@ export function QuoteModal({ open, onClose, quote, onSave, onDelete, nextIndex }
               <p className="text-xs text-muted-foreground italic">Sem campos adicionais.</p>
             ))}
             {phaseCard('closed', (
-              <>
-                <div>
-                  <Label className="text-xs">Data de Fechamento</Label>
-                  <DateField phaseKey="closed" value={form.phases.closed.date}
-                    onChange={d => setPhase('closed', { date: d })} />
-                </div>
-                <div>
-                  <Label className="text-xs">Valor (R$)</Label>
-                  <Input
-                    className="bg-white border-border"
-                    value={valueEditing ? valueDraft : toBRL(form.phases.closed.value || 0)}
-                    onFocus={() => { setValueEditing(true); setValueDraft(String(form.phases.closed.value || '')); }}
-                    onBlur={() => { setPhase('closed', { value: parseBRL(valueDraft) || parseFloat(valueDraft) || 0 }); setValueEditing(false); }}
-                    onChange={e => setValueDraft(e.target.value)}
-                    onKeyDown={handleEnterBlur}
-                  />
-                </div>
-              </>
+              <div>
+                <Label className="text-xs">Data de Fechamento</Label>
+                <DateField phaseKey="closed" value={form.phases.closed.date}
+                  onChange={d => setPhase('closed', { date: d })} />
+              </div>
             ))}
             {phaseCard('dropped', (
               <div>

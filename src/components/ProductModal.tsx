@@ -13,7 +13,7 @@ import { cn } from '@/lib/utils';
 import {
   Order, OrderItem, SubPurchase, ItemStatus, PaymentMethod,
   ITEM_STATUS_COLORS, PAYMENT_METHODS, PAYMENT_METHOD_LABELS,
-  calcItemFinalValue, calcItemLatestDelivery,
+  SELLERS, calcItemFinalValue, calcItemLatestDelivery,
 } from '@/store/OrderStore';
 
 const ITEM_STATUS_LABELS: Record<ItemStatus, string> = {
