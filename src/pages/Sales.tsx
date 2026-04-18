@@ -586,6 +586,14 @@ export default function Sales() {
           item={productModalCtx?.item || null}
           onSave={updateOrder}
         />
+        <QuoteModal
+          open={quoteModalOpen}
+          onClose={() => setQuoteModalOpen(false)}
+          quote={editQuote}
+          onSave={q => editQuote ? updateQuote(q) : addQuote(q)}
+          onDelete={deleteQuote}
+          nextIndex={nextIndex}
+        />
       </div>
     </TooltipProvider>
   );
