@@ -31,15 +31,47 @@ export const PAYMENT_METHOD_LABELS: Record<PaymentMethod, string> = {
   'Cash': 'Dinheiro',
 };
 
+export interface SubPurchase {
+  id: string;
+  selectedQuantity: number;
+  supplier: string;
+  buyer: string;
+  purchaseDate?: string;
+  productDeliveryDate?: string;
+  receiptDate?: string;
+  purchaseValue: number;
+  paymentMethod: PaymentMethod | '';
+  status: ItemStatus;
+}
+
 export interface OrderItem {
   id: string;
   name: string;
   quantity: number;
   status: ItemStatus;
   projectedValue: number;
+  /** Aggregated from subPurchases (sum). Kept on item for backwards-compat & quick reads. */
   purchaseValue: number;
-  /** Optional product-level delivery date (ISO yyyy-mm-dd) */
+  /** Optional product-level delivery date (ISO yyyy-mm-dd) — latest among sub-purchases. */
   productDeliveryDate?: string;
+  /** Sub-purchasing breakdown: multiple supplier purchases fulfilling the total quantity. */
+  subPurchases?: SubPurchase[];
+}
+
+/** Sum of all purchase values from sub-purchases (falls back to item.purchaseValue if none). */
+export function calcItemFinalValue(item: OrderItem): number {
+  if (item.subPurchases && item.subPurchases.length > 0) {
+    return item.subPurchases.reduce((s, sp) => s + (sp.purchaseValue || 0), 0);
+  }
+  return item.purchaseValue || 0;
+}
+
+/** Latest product delivery date among sub-purchases (ISO yyyy-mm-dd) */
+export function calcItemLatestDelivery(item: OrderItem): string | undefined {
+  if (!item.subPurchases || item.subPurchases.length === 0) return item.productDeliveryDate;
+  const dates = item.subPurchases.map(sp => sp.productDeliveryDate).filter(Boolean) as string[];
+  if (dates.length === 0) return item.productDeliveryDate;
+  return dates.sort().slice(-1)[0];
 }
 
 export interface Order {
