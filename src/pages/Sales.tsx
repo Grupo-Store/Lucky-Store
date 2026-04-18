@@ -24,6 +24,7 @@ import {
 import { OrderModal } from '@/components/OrderModal';
 import { ProductModal } from '@/components/ProductModal';
 import { QuoteModal } from '@/components/QuoteModal';
+import { RmaModal } from '@/components/RmaModal';
 
 const ITEM_STATUS_LABELS: Record<ItemStatus, string> = {
   'To Buy': 'A Comprar', 'Bought': 'Comprado', 'In Stock': 'Em Estoque',
@@ -130,7 +131,7 @@ type SortField = 'os' | 'deliveryDate';
 type SortDir = 'asc' | 'desc';
 
 export default function Sales() {
-  const { orders, addOrder, updateOrder, deleteOrder, updateItemStatus, nextOS } = useOrders();
+  const { orders, addOrder, updateOrder, deleteOrder, updateItemStatus, nextOS, nextRmaNumber } = useOrders();
   const { quotes, addQuote, updateQuote, deleteQuote, nextIndex } = useQuotes();
   const [tab, setTab] = useState('orders');
   const [modalOpen, setModalOpen] = useState(false);
@@ -139,6 +140,7 @@ export default function Sales() {
   const [productModalCtx, setProductModalCtx] = useState<{ order: Order; item: OrderItem } | null>(null);
   const [quoteModalOpen, setQuoteModalOpen] = useState(false);
   const [editQuote, setEditQuote] = useState<Quote | null>(null);
+  const [rmaModalOpen, setRmaModalOpen] = useState(false);
 
   /* ---------- Orders tab state ---------- */
   const [orderSearch, setOrderSearch] = useState('');
