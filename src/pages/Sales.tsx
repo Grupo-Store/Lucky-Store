@@ -13,11 +13,12 @@ import { format, differenceInCalendarDays } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
 import {
-  useOrders, Order, OrderStatus, ItemStatus,
+  useOrders, Order, OrderItem, OrderStatus, ItemStatus,
   ORDER_STATUS_COLORS, ORDER_STATUS_LABELS, ITEM_STATUS_COLORS,
-  WARN_STATUSES, isOpenOrder, calcTotal,
+  WARN_STATUSES, isOpenOrder, calcTotal, calcItemLatestDelivery,
 } from '@/store/OrderStore';
 import { OrderModal } from '@/components/OrderModal';
+import { ProductModal } from '@/components/ProductModal';
 
 const ITEM_STATUS_LABELS: Record<ItemStatus, string> = {
   'To Buy': 'A Comprar', 'Bought': 'Comprado', 'In Stock': 'Em Estoque',
@@ -128,6 +129,8 @@ export default function Sales() {
   const [tab, setTab] = useState('orders');
   const [modalOpen, setModalOpen] = useState(false);
   const [editOrder, setEditOrder] = useState<Order | null>(null);
+  const [productModalOpen, setProductModalOpen] = useState(false);
+  const [productModalCtx, setProductModalCtx] = useState<{ order: Order; item: OrderItem } | null>(null);
 
   /* ---------- Orders tab state ---------- */
   const [orderSearch, setOrderSearch] = useState('');
@@ -199,6 +202,7 @@ export default function Sales() {
         company: o.company,
         seller: o.seller,
         orderDeliveryDate: o.deliveryDate,
+        productDeliveryDate: calcItemLatestDelivery(item),
       })))
       .filter(p => !q || (
         p.os.toLowerCase().includes(q) ||
@@ -212,6 +216,15 @@ export default function Sales() {
         return isInRange(dateIso, prodRange);
       });
   }, [orders, prodSearch, prodDateField, prodRange]);
+
+  const openProductModal = (orderId: string, itemId: string) => {
+    const o = orders.find(x => x.id === orderId);
+    const it = o?.items.find(i => i.id === itemId);
+    if (o && it) {
+      setProductModalCtx({ order: o, item: it });
+      setProductModalOpen(true);
+    }
+  };
 
   const handleStatusChange = (order: Order, newStatus: OrderStatus) => {
     updateOrder({ ...order, status: newStatus });
@@ -444,12 +457,12 @@ export default function Sales() {
                       {products.map(p => {
                         const productLate = p.productDeliveryDate && p.productDeliveryDate > p.orderDeliveryDate;
                         return (
-                          <TableRow key={`${p.orderId}-${p.id}`}>
+                          <TableRow key={`${p.orderId}-${p.id}`} className="cursor-pointer hover:bg-muted/50" onClick={() => openProductModal(p.orderId, p.id)}>
                             <TableCell className="font-medium">{p.os}</TableCell>
                             <TableCell>{p.name}</TableCell>
                             <TableCell>{p.customer}</TableCell>
                             <TableCell>{p.quantity}</TableCell>
-                            <TableCell>
+                            <TableCell onClick={e => e.stopPropagation()}>
                               <Select value={p.status} onValueChange={v => updateItemStatus(p.orderId, p.id, v as ItemStatus)}>
                                 <SelectTrigger className={cn('w-40 text-xs font-semibold border', ITEM_STATUS_COLORS[p.status])}>
                                   <SelectValue />
@@ -498,6 +511,13 @@ export default function Sales() {
           onSave={o => editOrder ? updateOrder(o) : addOrder(o)}
           onDelete={deleteOrder}
           nextOS={nextOS}
+        />
+        <ProductModal
+          open={productModalOpen}
+          onClose={() => setProductModalOpen(false)}
+          order={productModalCtx?.order || null}
+          item={productModalCtx?.item || null}
+          onSave={updateOrder}
         />
       </div>
     </TooltipProvider>

@@ -71,21 +71,27 @@ export function OrderModal({ open, onClose, order, onSave, nextOS }: Props) {
   const set = (k: keyof Order, v: any) => setForm(prev => ({ ...prev, [k]: v }));
 
   /* ---------------- Derived calculations ---------------- */
+  // Final product cost = sum of all items' purchase values (driven by ProductModal sub-purchases)
+  const derivedFinalProductCost = useMemo(
+    () => (form.items || []).reduce((s, i) => s + (i.purchaseValue || 0), 0),
+    [form.items]
+  );
+
   // Recompute monetary values whenever percentages or base amounts change
   const computed = useMemo(() => {
     const sales = form.salesValue || 0;
-    const finalProd = form.finalProductCost || 0;
+    const finalProd = derivedFinalProductCost;
     return {
       creditCostValue: ((form.creditCostPercent || 0) * sales) / 100,
       debitCostValue: ((form.debitCostPercent || 0) * sales) / 100,
       purchaseTaxValue: ((form.purchaseTaxPercent || 0) * finalProd) / 100,
       salesTaxValue: ((form.salesTaxPercent || 0) * sales) / 100,
     };
-  }, [form.salesValue, form.finalProductCost, form.creditCostPercent, form.debitCostPercent, form.purchaseTaxPercent, form.salesTaxPercent]);
+  }, [form.salesValue, derivedFinalProductCost, form.creditCostPercent, form.debitCostPercent, form.purchaseTaxPercent, form.salesTaxPercent]);
 
   // Final cost & profit derived from latest computed values
-  const finalCost = calcFinalCost({ ...form, ...computed });
-  const profit = calcProfit({ ...form, ...computed });
+  const finalCost = calcFinalCost({ ...form, finalProductCost: derivedFinalProductCost, ...computed });
+  const profit = calcProfit({ ...form, finalProductCost: derivedFinalProductCost, ...computed });
 
   /* ---------------- Items ---------------- */
   const addItem = () => {
@@ -142,7 +148,7 @@ export function OrderModal({ open, onClose, order, onSave, nextOS }: Props) {
       cancelled: !!form.cancelled,
       observations: form.observations || '',
       initialProductCost: form.initialProductCost || 0,
-      finalProductCost: form.finalProductCost || 0,
+      finalProductCost: derivedFinalProductCost,
       creditCostPercent: form.creditCostPercent || 0,
       creditCostValue: computed.creditCostValue,
       debitCostPercent: form.debitCostPercent || 0,
@@ -341,7 +347,10 @@ export function OrderModal({ open, onClose, order, onSave, nextOS }: Props) {
           <h3 className="text-sm font-bold text-secondary uppercase tracking-wide mb-3">Financeiro</h3>
           <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
             {renderCurrencyInput('initialProductCost', 'Custo Inicial Produto')}
-            {renderCurrencyInput('finalProductCost', 'Custo Final Produto', { readOnly: true, muted: true })}
+            <div>
+              <Label>Custo Final Produto <span className="text-xs text-muted-foreground">(soma das compras)</span></Label>
+              <Input readOnly value={toBRL(derivedFinalProductCost)} className="bg-muted border-border font-semibold" />
+            </div>
           </div>
 
           {/* Percentage → R$ rows */}
@@ -423,8 +432,14 @@ export function OrderModal({ open, onClose, order, onSave, nextOS }: Props) {
                     value={item.projectedValue || ''} onChange={e => updateItem(item.id, 'projectedValue', parseFloat(e.target.value) || 0)} onKeyDown={handleEnterBlur} />
                 </div>
                 <div className="col-span-2">
-                  <Input type="number" step="0.01" placeholder="Valor de Compra R$" className="bg-white border-border"
-                    value={item.purchaseValue || ''} onChange={e => updateItem(item.id, 'purchaseValue', parseFloat(e.target.value) || 0)} onKeyDown={handleEnterBlur} />
+                  {item.subPurchases && item.subPurchases.length > 0 ? (
+                    <Input readOnly placeholder="Valor de Compra R$" className="bg-muted border-border"
+                      title="Sincronizado a partir do Modal de Produto"
+                      value={(item.purchaseValue || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} />
+                  ) : (
+                    <Input type="number" step="0.01" placeholder="Valor de Compra R$" className="bg-white border-border"
+                      value={item.purchaseValue || ''} onChange={e => updateItem(item.id, 'purchaseValue', parseFloat(e.target.value) || 0)} onKeyDown={handleEnterBlur} />
+                  )}
                 </div>
                 <Button variant="ghost" size="icon" className="col-span-1" onClick={() => removeItem(item.id)}>
                   <Trash2 className="h-4 w-4 text-destructive" />
