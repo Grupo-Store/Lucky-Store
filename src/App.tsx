@@ -5,6 +5,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider, useAuth } from "@/store/AuthStore";
 import { OrderProvider } from "@/store/OrderStore";
+import { QuoteProvider } from "@/store/QuoteStore";
 import { LoginScreen } from "@/components/LoginScreen";
 import { AppLayout } from "@/components/AppLayout";
 import Sales from "@/pages/Sales";
@@ -19,15 +20,17 @@ function AuthGate() {
 
   return (
     <OrderProvider>
-      <BrowserRouter>
-        <Routes>
-          <Route element={<AppLayout />}>
-            <Route path="/" element={<Sales />} />
-            <Route path="/dashboard" element={<Dashboard />} />
-          </Route>
-          <Route path="*" element={<NotFound />} />
-        </Routes>
-      </BrowserRouter>
+      <QuoteProvider>
+        <BrowserRouter>
+          <Routes>
+            <Route element={<AppLayout />}>
+              <Route path="/" element={<Sales />} />
+              <Route path="/dashboard" element={<Dashboard />} />
+            </Route>
+            <Route path="*" element={<NotFound />} />
+          </Routes>
+        </BrowserRouter>
+      </QuoteProvider>
     </OrderProvider>
   );
 }
