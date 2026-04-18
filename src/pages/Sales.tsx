@@ -13,11 +13,12 @@ import { format, differenceInCalendarDays } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
 import {
-  useOrders, Order, OrderStatus, ItemStatus,
+  useOrders, Order, OrderItem, OrderStatus, ItemStatus,
   ORDER_STATUS_COLORS, ORDER_STATUS_LABELS, ITEM_STATUS_COLORS,
-  WARN_STATUSES, isOpenOrder, calcTotal,
+  WARN_STATUSES, isOpenOrder, calcTotal, calcItemLatestDelivery,
 } from '@/store/OrderStore';
 import { OrderModal } from '@/components/OrderModal';
+import { ProductModal } from '@/components/ProductModal';
 
 const ITEM_STATUS_LABELS: Record<ItemStatus, string> = {
   'To Buy': 'A Comprar', 'Bought': 'Comprado', 'In Stock': 'Em Estoque',
