@@ -259,6 +259,9 @@ export function isOpenOrder(status: OrderStatus) {
 /** Final cost = sum of all monetary R$ values from the Financial Section */
 export function calcFinalCost(o: Partial<Order>): number {
   return (o.finalProductCost || 0)
+    + (o.boletoCost || 0)
+    + calcFreightTotal(o.freight)
+    + (o.giftCost || 0)
     + (o.creditCostValue || 0)
     + (o.debitCostValue || 0)
     + (o.purchaseTaxValue || 0)
@@ -273,6 +276,18 @@ export function calcProfit(o: Partial<Order>): number {
 export function calcTotal(o: Partial<Order>): number {
   return o.salesValue || 0;
 }
+
+const baseOrder = (over: Partial<Order>): Order => ({
+  id: '', os: '', createdAt: Date.now(), orderDate: '', customer: '', cnpj: '', company: '', seller: '',
+  ocAfPed: '', directBilling: false, supplier: '', invoice: '',
+  paymentMethods: [], installments: 1, deliveryDate: '', status: 'To Buy',
+  isRMA: false, cancelled: false, observations: '',
+  initialProductCost: 0, finalProductCost: 0, boletoCost: 0, giftCost: 0,
+  creditCostPercent: 0, creditCostValue: 0, debitCostPercent: 0, debitCostValue: 0,
+  purchaseTaxPercent: 0, purchaseTaxValue: 0, salesTaxPercent: 0, salesTaxValue: 0,
+  salesValue: 0, items: [], freight: [],
+  ...over,
+});
 
 const baseOrder = (over: Partial<Order>): Order => ({
   id: '', os: '', orderDate: '', customer: '', cnpj: '', company: '', seller: '',
