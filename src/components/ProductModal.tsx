@@ -61,8 +61,7 @@ export function ProductModal({ open, onClose, order, item, onSave }: Props) {
     }
   }, [item, open]);
 
-  const totalSelected = useMemo(() => subs.reduce((s, sp) => s + (sp.selectedQuantity || 0), 0);
-  /* eslint-disable */, [subs]);
+  const totalSelected = useMemo(() => subs.reduce((s, sp) => s + (sp.selectedQuantity || 0), 0), [subs]);
   const projected = item?.projectedValue || 0;
   const finalValue = useMemo(() => subs.reduce((s, sp) => s + (sp.purchaseValue || 0), 0), [subs]);
   const savings = projected - finalValue;
