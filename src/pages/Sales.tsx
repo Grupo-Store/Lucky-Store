@@ -603,6 +603,13 @@ export default function Sales() {
           onDelete={deleteQuote}
           nextIndex={nextIndex}
         />
+        <RmaModal
+          open={rmaModalOpen}
+          onClose={() => setRmaModalOpen(false)}
+          orders={orders}
+          onSave={addOrder}
+          nextRmaNumber={nextRmaNumber}
+        />
       </div>
     </TooltipProvider>
   );
