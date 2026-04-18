@@ -171,10 +171,12 @@ export function ProductModal({ open, onClose, order, item, onSave }: Props) {
                   </div>
                   <div>
                     <Label>Comprador</Label>
-                    <Input className="bg-white border-border"
-                      value={sp.buyer}
-                      onChange={e => updateSub(sp.id, 'buyer', e.target.value)}
-                      onKeyDown={handleEnterBlur} />
+                    <Select value={sp.buyer || ''} onValueChange={v => updateSub(sp.id, 'buyer', v)}>
+                      <SelectTrigger className="bg-white border-border"><SelectValue placeholder="Selecionar" /></SelectTrigger>
+                      <SelectContent>
+                        {SELLERS.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
                   </div>
                   <div>
                     <Label>Status</Label>
@@ -201,7 +203,7 @@ export function ProductModal({ open, onClose, order, item, onSave }: Props) {
                       onChange={e => updateSub(sp.id, 'purchaseValue', parseFloat(e.target.value) || 0)}
                       onKeyDown={handleEnterBlur} />
                   </div>
-                  <div className="md:col-span-2">
+                  <div className={cn(sp.paymentMethod === 'Credit Card' ? 'md:col-span-1' : 'md:col-span-2')}>
                     <Label>Forma de Pagamento</Label>
                     <Select value={sp.paymentMethod || ''} onValueChange={v => updateSub(sp.id, 'paymentMethod', v as PaymentMethod)}>
                       <SelectTrigger className="bg-white border-border"><SelectValue placeholder="Selecionar" /></SelectTrigger>
@@ -212,6 +214,15 @@ export function ProductModal({ open, onClose, order, item, onSave }: Props) {
                       </SelectContent>
                     </Select>
                   </div>
+                  {sp.paymentMethod === 'Credit Card' && (
+                    <div>
+                      <Label>Parcelas</Label>
+                      <Input type="number" min={1} max={24} className="bg-white border-border"
+                        value={sp.installments || 1}
+                        onChange={e => updateSub(sp.id, 'installments', parseInt(e.target.value) || 1)}
+                        onKeyDown={handleEnterBlur} />
+                    </div>
+                  )}
                 </div>
               </div>
             ))}

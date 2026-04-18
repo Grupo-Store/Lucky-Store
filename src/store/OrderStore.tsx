@@ -103,6 +103,8 @@ export interface SubPurchase {
   receiptDate?: string;
   purchaseValue: number;
   paymentMethod: PaymentMethod | '';
+  /** Number of installments — only meaningful when paymentMethod === 'Credit Card' */
+  installments?: number;
   status: ItemStatus;
 }
 
