@@ -326,10 +326,21 @@ export function OrderProvider({ children }: { children: React.ReactNode }) {
 
   const nextOS = useCallback(() => {
     const max = orders.reduce((m, o) => {
+      if (o.isRMA) return m;
       const n = parseInt(o.os, 10);
       return Number.isFinite(n) && n > m ? n : m;
     }, 1000);
     return String(max + 1);
+  }, [orders]);
+
+  const nextRmaNumber = useCallback((parentOs: string) => {
+    const prefix = `${parentOs}-`;
+    const max = orders.reduce((m, o) => {
+      if (!o.isRMA || !o.rmaNumber || !o.rmaNumber.startsWith(prefix)) return m;
+      const n = parseInt(o.rmaNumber.slice(prefix.length), 10);
+      return Number.isFinite(n) && n > m ? n : m;
+    }, 0);
+    return `${parentOs}-${max + 1}`;
   }, [orders]);
 
   const addOrder = useCallback((order: Order) => {
@@ -352,7 +363,7 @@ export function OrderProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   return (
-    <OrderContext.Provider value={{ orders, addOrder, updateOrder, deleteOrder, updateItemStatus, nextOS }}>
+    <OrderContext.Provider value={{ orders, addOrder, updateOrder, deleteOrder, updateItemStatus, nextOS, nextRmaNumber }}>
       {children}
     </OrderContext.Provider>
   );
