@@ -17,8 +17,13 @@ import {
   ORDER_STATUS_COLORS, ORDER_STATUS_LABELS, ITEM_STATUS_COLORS,
   WARN_STATUSES, isOpenOrder, calcTotal, calcItemLatestDelivery,
 } from '@/store/OrderStore';
+import {
+  useQuotes, Quote, QuotePhaseKey, QUOTE_PHASE_LABELS, QUOTE_PHASE_COLORS,
+  getHighestPhase, getPhaseDate,
+} from '@/store/QuoteStore';
 import { OrderModal } from '@/components/OrderModal';
 import { ProductModal } from '@/components/ProductModal';
+import { QuoteModal } from '@/components/QuoteModal';
 
 const ITEM_STATUS_LABELS: Record<ItemStatus, string> = {
   'To Buy': 'A Comprar', 'Bought': 'Comprado', 'In Stock': 'Em Estoque',
@@ -126,11 +131,14 @@ type SortDir = 'asc' | 'desc';
 
 export default function Sales() {
   const { orders, addOrder, updateOrder, deleteOrder, updateItemStatus, nextOS } = useOrders();
+  const { quotes, addQuote, updateQuote, deleteQuote, nextIndex } = useQuotes();
   const [tab, setTab] = useState('orders');
   const [modalOpen, setModalOpen] = useState(false);
   const [editOrder, setEditOrder] = useState<Order | null>(null);
   const [productModalOpen, setProductModalOpen] = useState(false);
   const [productModalCtx, setProductModalCtx] = useState<{ order: Order; item: OrderItem } | null>(null);
+  const [quoteModalOpen, setQuoteModalOpen] = useState(false);
+  const [editQuote, setEditQuote] = useState<Quote | null>(null);
 
   /* ---------- Orders tab state ---------- */
   const [orderSearch, setOrderSearch] = useState('');
@@ -148,6 +156,9 @@ export default function Sales() {
 
   /* ---------- Quotes tab state ---------- */
   const [quoteSearch, setQuoteSearch] = useState('');
+  const [quoteDateField, setQuoteDateField] = useState<'requestDate' | 'phaseDate'>('requestDate');
+  const [quoteRange, setQuoteRange] = useState<DateRange>({});
+  const [quoteStatusFilter, setQuoteStatusFilter] = useState<string>('all');
 
   const toggleSort = (field: SortField) => {
     if (sortField === field) setSortDir(d => d === 'asc' ? 'desc' : 'asc');
@@ -180,14 +191,25 @@ export default function Sales() {
     return list;
   }, [orders, orderSearch, orderView, orderStatusFilter, orderDateField, orderRange, sortField, sortDir]);
 
-  /* ---------- Quotes ---------- */
+  /* ---------- Quotes (isolated store) ---------- */
   const filteredQuotes = useMemo(() => {
     const q = quoteSearch.toLowerCase().trim();
-    return orders.filter(o => o.status === 'Quote' && (
-      !q || o.os.toLowerCase().includes(q) || o.customer.toLowerCase().includes(q) ||
-      (o.company || '').toLowerCase().includes(q) || (o.seller || '').toLowerCase().includes(q)
-    ));
-  }, [orders, quoteSearch]);
+    return quotes.filter(qt => {
+      const highest = getHighestPhase(qt);
+      if (quoteStatusFilter !== 'all' && highest !== quoteStatusFilter) return false;
+      if (q && !(
+        qt.index.toLowerCase().includes(q) ||
+        qt.customer.toLowerCase().includes(q) ||
+        qt.requestNumber.toLowerCase().includes(q) ||
+        (qt.company || '').toLowerCase().includes(q) ||
+        (qt.seller || '').toLowerCase().includes(q) ||
+        (qt.directBilling ? 'sim faturamento direto' : 'não nao').includes(q)
+      )) return false;
+      const dateIso = quoteDateField === 'requestDate' ? qt.requestDate : (getPhaseDate(qt) || '');
+      if (quoteRange.from && !dateIso) return false;
+      return isInRange(dateIso, quoteRange);
+    });
+  }, [quotes, quoteSearch, quoteStatusFilter, quoteDateField, quoteRange]);
 
   /* ---------- Products ---------- */
   const products = useMemo(() => {
@@ -256,11 +278,38 @@ export default function Sales() {
           <TabsContent value="quotes">
             <Card>
               <CardContent className="p-4">
-                <div className="flex justify-between items-center mb-4">
+                <div className="flex flex-wrap justify-between items-center gap-3 mb-4">
                   <h2 className="text-lg font-semibold text-secondary">Cotações</h2>
-                  <div className="flex items-center gap-2">
-                    <SearchBar value={quoteSearch} onChange={setQuoteSearch} placeholder="Buscar cotação..." />
-                    <Button onClick={() => { setEditOrder(null); setModalOpen(true); }} className="bg-secondary hover:bg-secondary/90">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <SearchBar value={quoteSearch} onChange={setQuoteSearch} placeholder="Cliente, Req, Empresa, Vendedor, Fat. Direto..." />
+                    <DateRangeFilter
+                      field={quoteDateField}
+                      onFieldChange={v => setQuoteDateField(v as any)}
+                      fieldOptions={[
+                        { value: 'requestDate', label: 'Data Requisição' },
+                        { value: 'phaseDate', label: 'Data da Fase' },
+                      ]}
+                      range={quoteRange}
+                      onRangeChange={setQuoteRange}
+                    />
+                    <Select value={quoteStatusFilter} onValueChange={setQuoteStatusFilter}>
+                      <SelectTrigger className="w-44 bg-white"><SelectValue placeholder="Status" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">Todos os Status</SelectItem>
+                        {(Object.keys(QUOTE_PHASE_LABELS) as QuotePhaseKey[]).map(k => (
+                          <SelectItem key={k} value={k}>
+                            <span className={cn('px-2 py-0.5 rounded text-xs font-medium', QUOTE_PHASE_COLORS[k])}>{QUOTE_PHASE_LABELS[k]}</span>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    {(quoteSearch || quoteRange.from || quoteStatusFilter !== 'all') && (
+                      <Button variant="ghost" size="icon" className="h-8 w-8"
+                        onClick={() => { setQuoteSearch(''); setQuoteRange({}); setQuoteStatusFilter('all'); }}>
+                        <X className="h-4 w-4" />
+                      </Button>
+                    )}
+                    <Button onClick={() => { setEditQuote(null); setQuoteModalOpen(true); }} className="bg-secondary hover:bg-secondary/90">
                       <Plus className="h-4 w-4 mr-1" /> Nova Cotação
                     </Button>
                   </div>
@@ -269,27 +318,45 @@ export default function Sales() {
                   <Table>
                     <TableHeader>
                       <TableRow className="bg-secondary/10">
-                        <TableHead>OS</TableHead>
+                        <TableHead>Índice</TableHead>
                         <TableHead>Cliente</TableHead>
+                        <TableHead>Data Requisição</TableHead>
                         <TableHead>Empresa</TableHead>
                         <TableHead>Vendedor</TableHead>
-                        <TableHead>Data do Pedido</TableHead>
+                        <TableHead>Status</TableHead>
+                        <TableHead>Data</TableHead>
                         <TableHead className="text-right">Valor</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {filteredQuotes.map(o => (
-                        <TableRow key={o.id} className="cursor-pointer hover:bg-muted/50" onClick={() => { setEditOrder(o); setModalOpen(true); }}>
-                          <TableCell className="font-medium">{o.os}</TableCell>
-                          <TableCell>{o.customer}</TableCell>
-                          <TableCell>{o.company || '—'}</TableCell>
-                          <TableCell>{o.seller || '—'}</TableCell>
-                          <TableCell>{fmtDate(o.orderDate)}</TableCell>
-                          <TableCell className="text-right font-semibold">{formatBRL(calcTotal(o))}</TableCell>
-                        </TableRow>
-                      ))}
+                      {filteredQuotes.map(qt => {
+                        const highest = getHighestPhase(qt);
+                        const phaseDate = getPhaseDate(qt);
+                        const value = qt.phases.closed.active ? (qt.phases.closed.value || 0) : 0;
+                        return (
+                          <TableRow key={qt.id} className="cursor-pointer hover:bg-muted/50"
+                            onClick={() => { setEditQuote(qt); setQuoteModalOpen(true); }}>
+                            <TableCell className="font-medium">{qt.index}</TableCell>
+                            <TableCell>{qt.customer}</TableCell>
+                            <TableCell>{fmtDate(qt.requestDate)}</TableCell>
+                            <TableCell>{qt.company || '—'}</TableCell>
+                            <TableCell>{qt.seller || '—'}</TableCell>
+                            <TableCell>
+                              {highest ? (
+                                <span className={cn('px-2 py-0.5 rounded text-xs font-semibold border', QUOTE_PHASE_COLORS[highest])}>
+                                  {QUOTE_PHASE_LABELS[highest]}
+                                </span>
+                              ) : <span className="text-muted-foreground text-xs">—</span>}
+                            </TableCell>
+                            <TableCell>{fmtDate(phaseDate)}</TableCell>
+                            <TableCell className="text-right font-semibold">
+                              {qt.phases.closed.active ? formatBRL(value) : '—'}
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
                       {filteredQuotes.length === 0 && (
-                        <TableRow><TableCell colSpan={6} className="text-center py-8 text-muted-foreground">Nenhuma cotação encontrada</TableCell></TableRow>
+                        <TableRow><TableCell colSpan={8} className="text-center py-8 text-muted-foreground">Nenhuma cotação encontrada</TableCell></TableRow>
                       )}
                     </TableBody>
                   </Table>
@@ -518,6 +585,14 @@ export default function Sales() {
           order={productModalCtx?.order || null}
           item={productModalCtx?.item || null}
           onSave={updateOrder}
+        />
+        <QuoteModal
+          open={quoteModalOpen}
+          onClose={() => setQuoteModalOpen(false)}
+          quote={editQuote}
+          onSave={q => editQuote ? updateQuote(q) : addQuote(q)}
+          onDelete={deleteQuote}
+          nextIndex={nextIndex}
         />
       </div>
     </TooltipProvider>
