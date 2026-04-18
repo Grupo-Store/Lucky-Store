@@ -462,7 +462,7 @@ export default function Sales() {
                             <TableCell>{p.name}</TableCell>
                             <TableCell>{p.customer}</TableCell>
                             <TableCell>{p.quantity}</TableCell>
-                            <TableCell>
+                            <TableCell onClick={e => e.stopPropagation()}>
                               <Select value={p.status} onValueChange={v => updateItemStatus(p.orderId, p.id, v as ItemStatus)}>
                                 <SelectTrigger className={cn('w-40 text-xs font-semibold border', ITEM_STATUS_COLORS[p.status])}>
                                   <SelectValue />
