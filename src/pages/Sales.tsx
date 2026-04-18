@@ -17,8 +17,13 @@ import {
   ORDER_STATUS_COLORS, ORDER_STATUS_LABELS, ITEM_STATUS_COLORS,
   WARN_STATUSES, isOpenOrder, calcTotal, calcItemLatestDelivery,
 } from '@/store/OrderStore';
+import {
+  useQuotes, Quote, QuotePhaseKey, QUOTE_PHASE_LABELS, QUOTE_PHASE_COLORS,
+  getHighestPhase, getPhaseDate,
+} from '@/store/QuoteStore';
 import { OrderModal } from '@/components/OrderModal';
 import { ProductModal } from '@/components/ProductModal';
+import { QuoteModal } from '@/components/QuoteModal';
 
 const ITEM_STATUS_LABELS: Record<ItemStatus, string> = {
   'To Buy': 'A Comprar', 'Bought': 'Comprado', 'In Stock': 'Em Estoque',
