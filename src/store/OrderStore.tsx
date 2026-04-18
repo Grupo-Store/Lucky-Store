@@ -16,6 +16,59 @@ export type OrderStatus =
   | 'Cancelled';
 
 export type ItemStatus = 'To Buy' | 'Bought' | 'In Stock';
+
+export type RmaItemStatus =
+  | 'Not Received'
+  | 'Received'
+  | 'Sent for Repair'
+  | 'In Repair'
+  | 'Repaired and Not Received'
+  | 'Repaired and Received'
+  | 'To Pack'
+  | 'Ready for Delivery'
+  | 'Out for Delivery'
+  | 'Delivered';
+
+export const RMA_ITEM_STATUSES: RmaItemStatus[] = [
+  'Not Received', 'Received', 'Sent for Repair', 'In Repair',
+  'Repaired and Not Received', 'Repaired and Received',
+  'To Pack', 'Ready for Delivery', 'Out for Delivery', 'Delivered',
+];
+
+export const RMA_STATUS_LABELS: Record<RmaItemStatus, string> = {
+  'Not Received': 'NÃO RECEBIDO',
+  'Received': 'RECEBIDO',
+  'Sent for Repair': 'ENVIADO PARA REPARO',
+  'In Repair': 'EM REPARO',
+  'Repaired and Not Received': 'REPARADO E NÃO RECEBIDO',
+  'Repaired and Received': 'REPARADO E RECEBIDO',
+  'To Pack': 'A EMBALAR',
+  'Ready for Delivery': 'PRONTO P/ ENTREGA',
+  'Out for Delivery': 'EM ENTREGA',
+  'Delivered': 'ENTREGUE',
+};
+
+export const RMA_STATUS_COLORS: Record<RmaItemStatus, string> = {
+  'Not Received':              'bg-[hsl(var(--st-cancelled)/0.18)] text-[hsl(var(--st-cancelled))] border-[hsl(var(--st-cancelled)/0.5)]',
+  'Received':                  'bg-[hsl(var(--st-received)/0.18)] text-[hsl(var(--st-received))] border-[hsl(var(--st-received)/0.5)]',
+  'Sent for Repair':           'bg-[hsl(var(--st-tobuy)/0.18)] text-[hsl(var(--st-tobuy))] border-[hsl(var(--st-tobuy)/0.5)]',
+  'In Repair':                 'bg-[hsl(var(--st-bought)/0.18)] text-[hsl(var(--st-bought))] border-[hsl(var(--st-bought)/0.5)]',
+  'Repaired and Not Received': 'bg-[hsl(var(--st-invoiced-pending)/0.18)] text-[hsl(var(--st-invoiced-pending))] border-[hsl(var(--st-invoiced-pending)/0.6)]',
+  'Repaired and Received':     'bg-[hsl(var(--st-invoiced-received)/0.4)] text-[hsl(22_85%_30%)] border-[hsl(var(--st-invoiced-received))]',
+  'To Pack':                   'bg-[hsl(var(--st-topack)/0.35)] text-[hsl(220_70%_30%)] border-[hsl(var(--st-topack))]',
+  'Ready for Delivery':        'bg-[hsl(var(--st-ready)/0.18)] text-[hsl(var(--st-ready))] border-[hsl(var(--st-ready)/0.6)]',
+  'Out for Delivery':          'bg-[hsl(var(--st-delivering)/0.4)] text-[hsl(140_70%_22%)] border-[hsl(var(--st-delivering))]',
+  'Delivered':                 'bg-[hsl(var(--st-delivered)/0.18)] text-[hsl(var(--st-delivered))] border-[hsl(var(--st-delivered)/0.6)]',
+};
+
+export interface RmaItem {
+  id: string;
+  /** Source OrderItem id (for traceability) */
+  sourceItemId: string;
+  name: string;
+  quantity: number;
+  status: RmaItemStatus;
+}
 export type PaymentMethod = 'Credit Card' | 'Debit Card' | 'Boleto' | 'Pix' | 'TED' | 'Cash';
 export type Company = '' | 'Lucky Store' | 'BTech' | 'AJJ';
 export type Seller = '' | 'Alcides' | 'Lucas' | 'Pedro';
@@ -92,6 +145,10 @@ export interface Order {
   deliveryDate: string;
   status: OrderStatus;
   isRMA: boolean;
+  /** RMA-specific fields. Only present when isRMA = true. */
+  rmaNumber?: string;
+  rmaParentOrderId?: string;
+  rmaItems?: RmaItem[];
   cancelled: boolean;
   observations: string;
   /** Financial section */
@@ -247,6 +304,8 @@ interface OrderContextType {
   updateItemStatus: (orderId: string, itemId: string, status: ItemStatus) => void;
   /** Returns the next OS number as a string (auto-increment) */
   nextOS: () => string;
+  /** Returns the next sequential RMA number for a given parent OS, e.g. "14-1", "14-2" */
+  nextRmaNumber: (parentOs: string) => string;
 }
 
 const OrderContext = createContext<OrderContextType | null>(null);
@@ -267,10 +326,21 @@ export function OrderProvider({ children }: { children: React.ReactNode }) {
 
   const nextOS = useCallback(() => {
     const max = orders.reduce((m, o) => {
+      if (o.isRMA) return m;
       const n = parseInt(o.os, 10);
       return Number.isFinite(n) && n > m ? n : m;
     }, 1000);
     return String(max + 1);
+  }, [orders]);
+
+  const nextRmaNumber = useCallback((parentOs: string) => {
+    const prefix = `${parentOs}-`;
+    const max = orders.reduce((m, o) => {
+      if (!o.isRMA || !o.rmaNumber || !o.rmaNumber.startsWith(prefix)) return m;
+      const n = parseInt(o.rmaNumber.slice(prefix.length), 10);
+      return Number.isFinite(n) && n > m ? n : m;
+    }, 0);
+    return `${parentOs}-${max + 1}`;
   }, [orders]);
 
   const addOrder = useCallback((order: Order) => {
@@ -293,7 +363,7 @@ export function OrderProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   return (
-    <OrderContext.Provider value={{ orders, addOrder, updateOrder, deleteOrder, updateItemStatus, nextOS }}>
+    <OrderContext.Provider value={{ orders, addOrder, updateOrder, deleteOrder, updateItemStatus, nextOS, nextRmaNumber }}>
       {children}
     </OrderContext.Provider>
   );

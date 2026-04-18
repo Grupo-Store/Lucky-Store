@@ -24,6 +24,7 @@ import {
 import { OrderModal } from '@/components/OrderModal';
 import { ProductModal } from '@/components/ProductModal';
 import { QuoteModal } from '@/components/QuoteModal';
+import { RmaModal } from '@/components/RmaModal';
 
 const ITEM_STATUS_LABELS: Record<ItemStatus, string> = {
   'To Buy': 'A Comprar', 'Bought': 'Comprado', 'In Stock': 'Em Estoque',
@@ -130,7 +131,7 @@ type SortField = 'os' | 'deliveryDate';
 type SortDir = 'asc' | 'desc';
 
 export default function Sales() {
-  const { orders, addOrder, updateOrder, deleteOrder, updateItemStatus, nextOS } = useOrders();
+  const { orders, addOrder, updateOrder, deleteOrder, updateItemStatus, nextOS, nextRmaNumber } = useOrders();
   const { quotes, addQuote, updateQuote, deleteQuote, nextIndex } = useQuotes();
   const [tab, setTab] = useState('orders');
   const [modalOpen, setModalOpen] = useState(false);
@@ -139,6 +140,7 @@ export default function Sales() {
   const [productModalCtx, setProductModalCtx] = useState<{ order: Order; item: OrderItem } | null>(null);
   const [quoteModalOpen, setQuoteModalOpen] = useState(false);
   const [editQuote, setEditQuote] = useState<Quote | null>(null);
+  const [rmaModalOpen, setRmaModalOpen] = useState(false);
 
   /* ---------- Orders tab state ---------- */
   const [orderSearch, setOrderSearch] = useState('');
@@ -416,9 +418,14 @@ export default function Sales() {
                       ))}
                     </SelectContent>
                   </Select>
-                  <Button onClick={() => { setEditOrder(null); setModalOpen(true); }} className="bg-secondary hover:bg-secondary/90">
-                    <Plus className="h-4 w-4 mr-1" /> Adicionar Pedido
-                  </Button>
+                  <div className="flex items-center gap-2">
+                    <Button onClick={() => setRmaModalOpen(true)} variant="outline" className="border-secondary text-secondary hover:bg-secondary/10">
+                      <Plus className="h-4 w-4 mr-1" /> Adicionar RMA
+                    </Button>
+                    <Button onClick={() => { setEditOrder(null); setModalOpen(true); }} className="bg-secondary hover:bg-secondary/90">
+                      <Plus className="h-4 w-4 mr-1" /> Adicionar Pedido
+                    </Button>
+                  </div>
                 </div>
 
                 <div className="overflow-x-auto rounded-lg border">
@@ -471,7 +478,9 @@ export default function Sales() {
                                 </SelectContent>
                               </Select>
                             </TableCell>
-                            <TableCell className="text-right font-semibold">{formatBRL(calcTotal(order))}</TableCell>
+                            <TableCell className="text-right font-semibold">
+                              {order.isRMA ? <span className="text-muted-foreground">—</span> : formatBRL(calcTotal(order))}
+                            </TableCell>
                           </TableRow>
                         );
                       })}
@@ -593,6 +602,13 @@ export default function Sales() {
           onSave={q => editQuote ? updateQuote(q) : addQuote(q)}
           onDelete={deleteQuote}
           nextIndex={nextIndex}
+        />
+        <RmaModal
+          open={rmaModalOpen}
+          onClose={() => setRmaModalOpen(false)}
+          orders={orders}
+          onSave={addOrder}
+          nextRmaNumber={nextRmaNumber}
         />
       </div>
     </TooltipProvider>
