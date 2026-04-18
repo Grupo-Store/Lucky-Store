@@ -145,6 +145,10 @@ export interface Order {
   deliveryDate: string;
   status: OrderStatus;
   isRMA: boolean;
+  /** RMA-specific fields. Only present when isRMA = true. */
+  rmaNumber?: string;
+  rmaParentOrderId?: string;
+  rmaItems?: RmaItem[];
   cancelled: boolean;
   observations: string;
   /** Financial section */
