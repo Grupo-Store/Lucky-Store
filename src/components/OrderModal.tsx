@@ -583,6 +583,47 @@ export function OrderModal({ open, onClose, order, onSave, nextOS, prefill }: Pr
   );
 }
 
+/* ---------- Bidirectional %↔R$ row ---------- */
+function BiPctRow({ label, base, percent, value, onPercentChange, onValueChange }: {
+  label: string;
+  base: number;
+  percent: number;
+  value: number;
+  onPercentChange: (p: number) => void;
+  onValueChange: (v: number) => void;
+}) {
+  const [pctEditing, setPctEditing] = useState(false);
+  const [pctDraft, setPctDraft] = useState('');
+  const [valEditing, setValEditing] = useState(false);
+  const [valDraft, setValDraft] = useState('');
+  return (
+    <div>
+      <Label>{label}</Label>
+      <div className="flex gap-2">
+        <Input
+          placeholder="%"
+          className="bg-white border-border"
+          value={pctEditing ? pctDraft : (percent ? `${percent.toFixed(2).replace('.', ',')}%` : '')}
+          onFocus={() => { setPctEditing(true); setPctDraft(percent ? String(percent) : ''); }}
+          onBlur={() => { onPercentChange(parseFloat(pctDraft.replace(',', '.')) || 0); setPctEditing(false); }}
+          onChange={e => setPctDraft(e.target.value)}
+          onKeyDown={handleEnterBlur}
+        />
+        <Input
+          placeholder="R$"
+          className="bg-white border-border"
+          value={valEditing ? valDraft : toBRL(value)}
+          onFocus={() => { setValEditing(true); setValDraft(value ? String(value) : ''); }}
+          onBlur={() => { onValueChange(parseBRL(valDraft) || parseFloat(valDraft) || 0); setValEditing(false); }}
+          onChange={e => setValDraft(e.target.value)}
+          onKeyDown={handleEnterBlur}
+        />
+      </div>
+      {base > 0 ? null : <p className="text-xs text-muted-foreground mt-1">Defina o valor base para editar em R$.</p>}
+    </div>
+  );
+}
+
 /* ---------- Freight row component ---------- */
 function FreightRow({ idx, card, onChange, onRemove }: {
   idx: number; card: FreightCard;

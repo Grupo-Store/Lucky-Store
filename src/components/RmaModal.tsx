@@ -56,6 +56,7 @@ export function RmaModal({ open, onClose, orders, rma, onSave, nextRmaNumber }: 
   const [company, setCompany] = useState<Company>('');
   const [rmaItems, setRmaItems] = useState<RmaItem[]>([]);
   const [freight, setFreight] = useState<FreightCard[]>([]);
+  const [observations, setObservations] = useState('');
   const [regDateOpen, setRegDateOpen] = useState(false);
   const [delDateOpen, setDelDateOpen] = useState(false);
 
@@ -74,6 +75,7 @@ export function RmaModal({ open, onClose, orders, rma, onSave, nextRmaNumber }: 
       setCompany(rma.company);
       setRmaItems(rma.rmaItems ? rma.rmaItems.map(i => ({ ...i })) : []);
       setFreight(rma.rmaFreight ? rma.rmaFreight.map(f => ({ ...f })) : []);
+      setObservations(rma.observations || '');
     } else {
       setStep('pick-order');
       setSearch('');
@@ -85,6 +87,7 @@ export function RmaModal({ open, onClose, orders, rma, onSave, nextRmaNumber }: 
       setCompany('');
       setRmaItems([]);
       setFreight([]);
+      setObservations('');
       setRmaNumberDisplay('');
     }
   }, [open, rma, orders]);
@@ -172,7 +175,7 @@ export function RmaModal({ open, onClose, orders, rma, onSave, nextRmaNumber }: 
       rmaNumber,
       rmaParentOrderId: parent.id,
       cancelled: false,
-      observations: rma?.observations || `RMA do pedido ${parent.os}`,
+      observations: observations || `RMA do pedido ${parent.os}`,
       initialProductCost: 0, finalProductCost: 0,
       boletoCost: 0, giftCost: 0,
       creditCostPercent: 0, creditCostValue: 0,
