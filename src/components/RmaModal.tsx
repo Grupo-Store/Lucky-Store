@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { ArrowLeft, CalendarIcon, Search, ChevronRight, Plus, Trash2 } from 'lucide-react';
+import { ArrowLeft, CalendarIcon, Search, ChevronRight, Plus, Trash2, Printer } from 'lucide-react';
 import { format, addDays } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
@@ -53,6 +53,7 @@ export function RmaModal({ open, onClose, orders, rma, onSave, nextRmaNumber }: 
   const [rmaNumberDisplay, setRmaNumberDisplay] = useState('');
   const [registrationDate, setRegistrationDate] = useState(format(new Date(), 'yyyy-MM-dd'));
   const [deliveryDate, setDeliveryDate] = useState(format(addDays(new Date(), 14), 'yyyy-MM-dd'));
+  const [actualDeliveryDate, setActualDeliveryDate] = useState<string>('');
   const [seller, setSeller] = useState<Seller>('');
   const [company, setCompany] = useState<Company>('');
   const [rmaItems, setRmaItems] = useState<RmaItem[]>([]);
@@ -60,6 +61,7 @@ export function RmaModal({ open, onClose, orders, rma, onSave, nextRmaNumber }: 
   const [observations, setObservations] = useState('');
   const [regDateOpen, setRegDateOpen] = useState(false);
   const [delDateOpen, setDelDateOpen] = useState(false);
+  const [actualDelDateOpen, setActualDelDateOpen] = useState(false);
 
   // Reset on open
   useEffect(() => {
@@ -72,6 +74,7 @@ export function RmaModal({ open, onClose, orders, rma, onSave, nextRmaNumber }: 
       setRmaNumberDisplay(rma.rmaNumber || rma.os);
       setRegistrationDate(rma.orderDate);
       setDeliveryDate(rma.deliveryDate);
+      setActualDeliveryDate(rma.rmaActualDeliveryDate || '');
       setSeller(rma.seller);
       setCompany(rma.company);
       setRmaItems(rma.rmaItems ? rma.rmaItems.map(i => ({ ...i })) : []);
@@ -84,6 +87,7 @@ export function RmaModal({ open, onClose, orders, rma, onSave, nextRmaNumber }: 
       setSelectedItemIds(new Set());
       setRegistrationDate(format(new Date(), 'yyyy-MM-dd'));
       setDeliveryDate(format(addDays(new Date(), 14), 'yyyy-MM-dd'));
+      setActualDeliveryDate('');
       setSeller('');
       setCompany('');
       setRmaItems([]);
