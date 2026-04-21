@@ -536,6 +536,9 @@ export function OrderModal({ open, onClose, order, onSave, nextOS, prefill }: Pr
           </div>
         </section>
 
+        {/* ============== 3c. PAGAMENTO ============== */}
+        <PagamentoSection form={form} set={set} />
+
         {/* ============== 4. CANCELAMENTO ============== */}
         <section className="border rounded-lg p-4">
           <h3 className="text-sm font-bold text-secondary uppercase tracking-wide mb-3">Cancelamento</h3>
