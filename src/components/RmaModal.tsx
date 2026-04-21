@@ -369,6 +369,22 @@ export function RmaModal({ open, onClose, orders, rma, onSave, nextRmaNumber }: 
                   </Popover>
                 </div>
                 <div>
+                  <Label>Data de Entrega</Label>
+                  <Popover open={actualDelDateOpen} onOpenChange={setActualDelDateOpen}>
+                    <PopoverTrigger asChild>
+                      <Button variant="outline" className="w-full justify-start text-left font-normal bg-white">
+                        <CalendarIcon className="mr-2 h-4 w-4" />{actualDeliveryDate ? fmtDate(actualDeliveryDate) : 'Selecionar'}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0">
+                      <Calendar mode="single"
+                        selected={actualDeliveryDate ? new Date(actualDeliveryDate + 'T12:00:00') : undefined}
+                        onSelect={d => { setActualDeliveryDate(d ? format(d, 'yyyy-MM-dd') : ''); setActualDelDateOpen(false); }}
+                        locale={ptBR} className="p-3 pointer-events-auto" />
+                    </PopoverContent>
+                  </Popover>
+                </div>
+                <div>
                   <Label>Frete <span className="text-xs text-muted-foreground">(soma)</span></Label>
                   <Input readOnly value={toBRL(freightTotal)} className="bg-muted border-border font-semibold" />
                 </div>
@@ -458,6 +474,9 @@ export function RmaModal({ open, onClose, orders, rma, onSave, nextRmaNumber }: 
 
             <div className="flex justify-end gap-2">
               <Button variant="outline" onClick={onClose}>Cancelar</Button>
+              <Button variant="outline" onClick={() => window.print()} className="gap-1.5">
+                <Printer className="h-4 w-4" /> Imprimir
+              </Button>
               <Button onClick={handleSave} className="bg-secondary hover:bg-secondary/90">
                 {isEdit ? 'Salvar Alterações' : 'Criar RMA'}
               </Button>
