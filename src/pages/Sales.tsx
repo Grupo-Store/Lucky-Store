@@ -112,8 +112,7 @@ export default function Sales() {
   const [prodRange, setProdRange] = useState<DateRange>({});
   const [prodAlertsOnly, setProdAlertsOnly] = useState(false);
   const [prodStatusFilter, setProdStatusFilter] = useState<string>('all');
-  const [prodPage, setPagePage_unused] = useState(1);
-  const setProdPage = setPagePage_unused;
+  const [prodPage, setProdPage] = useState(1);
 
   /* ---------- Quotes tab state ---------- */
   const [quoteSearch, setQuoteSearch] = useState('');
