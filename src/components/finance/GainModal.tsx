@@ -23,6 +23,7 @@ interface Props {
   onClose: () => void;
   gain?: Gain | null;
   onSave: (g: Gain) => void;
+  onDelete?: (id: string) => void;
 }
 
 const empty = (kind: GainKind): Gain => ({
@@ -31,9 +32,10 @@ const empty = (kind: GainKind): Gain => ({
   creditCost: 0, debitCost: 0, boletoCost: 0,
 });
 
-export function GainModal({ open, onClose, gain, onSave }: Props) {
+export function GainModal({ open, onClose, gain, onSave, onDelete }: Props) {
   const [step, setStep] = useState<'pick' | 'form'>('pick');
   const [g, setG] = useState<Gain>(empty('MULTA'));
+  const [confirmDel, setConfirmDel] = useState(false);
 
   useEffect(() => {
     if (open) {
@@ -169,12 +171,41 @@ export function GainModal({ open, onClose, gain, onSave }: Props) {
           </div>
         </CardContent></Card>
 
-        <div className="flex justify-end gap-2 pt-2 print:hidden">
-          <Button variant="outline" onClick={() => window.print()} className="gap-1.5"><Printer className="h-4 w-4" /> Imprimir</Button>
-          <Button variant="outline" onClick={onClose}>Cancelar</Button>
-          <Button onClick={() => { onSave(g); onClose(); }}>Salvar</Button>
+        <div className="flex justify-between gap-2 pt-2 print:hidden">
+          <div>
+            {gain && onDelete && (
+              <Button variant="destructive" onClick={() => setConfirmDel(true)} className="gap-1.5">
+                <Trash2 className="h-4 w-4" /> Excluir
+              </Button>
+            )}
+          </div>
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={() => window.print()} className="gap-1.5"><Printer className="h-4 w-4" /> Imprimir</Button>
+            <Button variant="outline" onClick={onClose}>Cancelar</Button>
+            <Button onClick={() => { onSave(g); onClose(); }}>Salvar</Button>
+          </div>
         </div>
       </DialogContent>
+
+      <AlertDialog open={confirmDel} onOpenChange={setConfirmDel}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir ganho?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Esta ação removerá permanentemente o ganho "{g.customer || g.kind}" no valor de {BRL(g.value)}.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => { onDelete?.(g.id); setConfirmDel(false); onClose(); }}
+            >
+              Excluir
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Dialog>
   );
 }
