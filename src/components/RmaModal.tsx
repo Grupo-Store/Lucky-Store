@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { ArrowLeft, CalendarIcon, Search, ChevronRight, Plus, Trash2 } from 'lucide-react';
+import { ArrowLeft, CalendarIcon, Search, ChevronRight, Plus, Trash2, Printer } from 'lucide-react';
 import { format, addDays } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
@@ -53,6 +53,7 @@ export function RmaModal({ open, onClose, orders, rma, onSave, nextRmaNumber }: 
   const [rmaNumberDisplay, setRmaNumberDisplay] = useState('');
   const [registrationDate, setRegistrationDate] = useState(format(new Date(), 'yyyy-MM-dd'));
   const [deliveryDate, setDeliveryDate] = useState(format(addDays(new Date(), 14), 'yyyy-MM-dd'));
+  const [actualDeliveryDate, setActualDeliveryDate] = useState<string>('');
   const [seller, setSeller] = useState<Seller>('');
   const [company, setCompany] = useState<Company>('');
   const [rmaItems, setRmaItems] = useState<RmaItem[]>([]);
@@ -60,6 +61,7 @@ export function RmaModal({ open, onClose, orders, rma, onSave, nextRmaNumber }: 
   const [observations, setObservations] = useState('');
   const [regDateOpen, setRegDateOpen] = useState(false);
   const [delDateOpen, setDelDateOpen] = useState(false);
+  const [actualDelDateOpen, setActualDelDateOpen] = useState(false);
 
   // Reset on open
   useEffect(() => {
@@ -72,6 +74,7 @@ export function RmaModal({ open, onClose, orders, rma, onSave, nextRmaNumber }: 
       setRmaNumberDisplay(rma.rmaNumber || rma.os);
       setRegistrationDate(rma.orderDate);
       setDeliveryDate(rma.deliveryDate);
+      setActualDeliveryDate(rma.rmaActualDeliveryDate || '');
       setSeller(rma.seller);
       setCompany(rma.company);
       setRmaItems(rma.rmaItems ? rma.rmaItems.map(i => ({ ...i })) : []);
@@ -84,6 +87,7 @@ export function RmaModal({ open, onClose, orders, rma, onSave, nextRmaNumber }: 
       setSelectedItemIds(new Set());
       setRegistrationDate(format(new Date(), 'yyyy-MM-dd'));
       setDeliveryDate(format(addDays(new Date(), 14), 'yyyy-MM-dd'));
+      setActualDeliveryDate('');
       setSeller('');
       setCompany('');
       setRmaItems([]);
@@ -171,6 +175,7 @@ export function RmaModal({ open, onClose, orders, rma, onSave, nextRmaNumber }: 
       paymentMethods: [],
       installments: 1,
       deliveryDate,
+      rmaActualDeliveryDate: actualDeliveryDate || undefined,
       status: 'To Pack',
       isRMA: true,
       rmaNumber,
@@ -364,6 +369,22 @@ export function RmaModal({ open, onClose, orders, rma, onSave, nextRmaNumber }: 
                   </Popover>
                 </div>
                 <div>
+                  <Label>Data de Entrega</Label>
+                  <Popover open={actualDelDateOpen} onOpenChange={setActualDelDateOpen}>
+                    <PopoverTrigger asChild>
+                      <Button variant="outline" className="w-full justify-start text-left font-normal bg-white">
+                        <CalendarIcon className="mr-2 h-4 w-4" />{actualDeliveryDate ? fmtDate(actualDeliveryDate) : 'Selecionar'}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0">
+                      <Calendar mode="single"
+                        selected={actualDeliveryDate ? new Date(actualDeliveryDate + 'T12:00:00') : undefined}
+                        onSelect={d => { setActualDeliveryDate(d ? format(d, 'yyyy-MM-dd') : ''); setActualDelDateOpen(false); }}
+                        locale={ptBR} className="p-3 pointer-events-auto" />
+                    </PopoverContent>
+                  </Popover>
+                </div>
+                <div>
                   <Label>Frete <span className="text-xs text-muted-foreground">(soma)</span></Label>
                   <Input readOnly value={toBRL(freightTotal)} className="bg-muted border-border font-semibold" />
                 </div>
@@ -453,6 +474,9 @@ export function RmaModal({ open, onClose, orders, rma, onSave, nextRmaNumber }: 
 
             <div className="flex justify-end gap-2">
               <Button variant="outline" onClick={onClose}>Cancelar</Button>
+              <Button variant="outline" onClick={() => window.print()} className="gap-1.5">
+                <Printer className="h-4 w-4" /> Imprimir
+              </Button>
               <Button onClick={handleSave} className="bg-secondary hover:bg-secondary/90">
                 {isEdit ? 'Salvar Alterações' : 'Criar RMA'}
               </Button>
