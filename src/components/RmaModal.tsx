@@ -3,6 +3,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -385,10 +386,13 @@ export function RmaModal({ open, onClose, orders, rma, onSave, nextRmaNumber }: 
                         onChange={e => updateRmaItem(it.id, 'quantity', parseInt(e.target.value) || 1)} onKeyDown={handleEnterBlur} />
                     </div>
                     <div>
-                      <Label>Consertado por</Label>
-                      <Input className="bg-white border-border" value={it.repairedBy || ''}
-                        onChange={e => updateRmaItem(it.id, 'repairedBy', e.target.value)} onKeyDown={handleEnterBlur}
-                        placeholder="Técnico/Fornecedor" />
+                      <Label>Fornecedor</Label>
+                      <Input
+                        readOnly
+                        className="bg-muted border-border"
+                        value={parent.supplier || '—'}
+                        title="Herdado do pedido pai (somente leitura)"
+                      />
                     </div>
                     <div>
                       <Label>Status</Label>
@@ -433,6 +437,17 @@ export function RmaModal({ open, onClose, orders, rma, onSave, nextRmaNumber }: 
               <div className="mt-3 text-right text-sm font-semibold text-secondary">
                 Total: {toBRL(freightTotal)}
               </div>
+            </section>
+
+            {/* Observations section */}
+            <section className="border rounded-lg p-4">
+              <h3 className="text-sm font-bold text-secondary uppercase tracking-wide mb-3">Observações</h3>
+              <Textarea
+                className="bg-white border-border min-h-24"
+                value={observations}
+                onChange={e => setObservations(e.target.value)}
+                placeholder="Anotações sobre este RMA..."
+              />
             </section>
 
             <div className="flex justify-end gap-2">
