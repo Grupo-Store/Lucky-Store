@@ -16,6 +16,7 @@ import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import {
   Order, OrderItem, ItemStatus, PaymentMethod, Company, Seller, OrderStatus, FreightCard,
+  PaymentInstallment,
   ITEM_STATUS_COLORS, ORDER_STATUS_COLORS, ORDER_STATUS_LABELS,
   PAYMENT_METHODS, PAYMENT_METHOD_LABELS, SELLERS,
   calcFinalCost, calcProfit, calcFreightTotal,
@@ -33,6 +34,8 @@ const emptyOrder = (os: string): Partial<Order> => ({
   creditCostPercent: 0, creditCostValue: 0, debitCostPercent: 0, debitCostValue: 0,
   purchaseTaxPercent: 0, purchaseTaxValue: 0, salesTaxPercent: 0, salesTaxValue: 0,
   salesValue: 0, items: [], freight: [],
+  paymentDate: '', penaltyValue: 0, interestValue: 0, paymentMethod: '',
+  paymentInstallments: 1, paymentInstallmentPlan: [],
 });
 
 function toBRL(v: number): string {
