@@ -3,18 +3,20 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
-import { CalendarIcon, Trash2 } from 'lucide-react';
+import { CalendarIcon, Plus, Trash2, Printer } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
 import { Company, Seller, SELLERS } from '@/store/OrderStore';
 import {
-  Quote, QuotePhases, QuotePhaseKey, QUOTE_PHASE_COLORS, QUOTE_PHASE_LABELS, emptyPhases,
+  Quote, QuoteItem, QuotePhases, QuotePhaseKey,
+  QUOTE_PHASE_COLORS, QUOTE_PHASE_LABELS, emptyPhases,
 } from '@/store/QuoteStore';
 
 function toBRL(v: number) { return v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }); }
@@ -33,7 +35,7 @@ const emptyQuote = (index: string): Quote => ({
   id: '', index, createdAt: Date.now(), customer: '', cnpj: '',
   requestNumber: '', requestDate: format(new Date(), 'yyyy-MM-dd'),
   company: '', directBilling: false, supplier: '', seller: '',
-  value: 0, phases: emptyPhases(),
+  value: 0, items: [], observations: '', phases: emptyPhases(),
 });
 
 interface Props {
@@ -45,17 +47,40 @@ interface Props {
   nextIndex: () => string;
 }
 
+/** Currency input that lets the user type freely while focused, then formats on blur. */
+function CurrencyInput({ value, onChange, className }: {
+  value: number; onChange: (n: number) => void; className?: string;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState('');
+  return (
+    <Input
+      className={cn('bg-white border-border', className)}
+      value={editing ? draft : toBRL(value || 0)}
+      onFocus={() => { setEditing(true); setDraft(value ? String(value) : ''); }}
+      onBlur={() => { onChange(parseBRL(draft) || parseFloat(draft) || 0); setEditing(false); }}
+      onChange={e => setDraft(e.target.value)}
+      onKeyDown={handleEnterBlur}
+    />
+  );
+}
+
 export function QuoteModal({ open, onClose, quote, onSave, onDelete, nextIndex }: Props) {
   const [form, setForm] = useState<Quote>(() => emptyQuote(nextIndex()));
-  const [valueEditing, setValueEditing] = useState(false);
-  const [valueDraft, setValueDraft] = useState('');
   const [datePopover, setDatePopover] = useState<string | null>(null);
   const isEdit = !!quote;
 
   useEffect(() => {
-    if (quote) setForm({ ...quote, phases: { ...quote.phases } });
-    else setForm(emptyQuote(nextIndex()));
-    setValueEditing(false);
+    if (quote) {
+      setForm({
+        ...quote,
+        items: quote.items ? quote.items.map(i => ({ ...i })) : [],
+        observations: quote.observations || '',
+        phases: { ...quote.phases },
+      });
+    } else {
+      setForm(emptyQuote(nextIndex()));
+    }
     setDatePopover(null);
   }, [quote, open, nextIndex]);
 
@@ -64,6 +89,15 @@ export function QuoteModal({ open, onClose, quote, onSave, onDelete, nextIndex }
   const setPhase = <K extends keyof QuotePhases>(key: K, patch: Partial<QuotePhases[K]>) => {
     setForm(prev => ({ ...prev, phases: { ...prev.phases, [key]: { ...prev.phases[key], ...patch } as QuotePhases[K] } }));
   };
+
+  /* ---------- Items ---------- */
+  const addItem = () => set('items', [...(form.items || []), {
+    id: crypto.randomUUID(), name: '', quantity: 1, quoteValue: 0, closingValue: 0, supplier: '',
+  } as QuoteItem]);
+  const updateItem = (id: string, field: keyof QuoteItem, value: any) => {
+    set('items', (form.items || []).map(i => i.id === id ? { ...i, [field]: value } : i));
+  };
+  const removeItem = (id: string) => set('items', (form.items || []).filter(i => i.id !== id));
 
   const handleSave = () => {
     onSave({ ...form, id: form.id || crypto.randomUUID(), createdAt: form.createdAt || Date.now() });
@@ -107,7 +141,7 @@ export function QuoteModal({ open, onClose, quote, onSave, onDelete, nextIndex }
 
   return (
     <Dialog open={open} onOpenChange={v => !v && onClose()}>
-      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto bg-card">
+      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto bg-card print:max-w-full print:max-h-none print:shadow-none">
         <DialogHeader>
           <DialogTitle className="text-secondary text-xl">
             {isEdit ? `Editar Cotação ${form.index}` : `Nova Cotação ${form.index}`}
@@ -128,7 +162,7 @@ export function QuoteModal({ open, onClose, quote, onSave, onDelete, nextIndex }
                 onChange={e => set('customer', e.target.value)} onKeyDown={handleEnterBlur} />
             </div>
             <div>
-              <Label>CNPJ</Label>
+              <Label>CPF/CNPJ</Label>
               <Input className="bg-white border-border" value={form.cnpj}
                 onChange={e => set('cnpj', e.target.value)} onKeyDown={handleEnterBlur} />
             </div>
@@ -163,13 +197,7 @@ export function QuoteModal({ open, onClose, quote, onSave, onDelete, nextIndex }
             </div>
             <div>
               <Label>Valor (R$)</Label>
-              <Input className="bg-white border-border"
-                value={valueEditing ? valueDraft : toBRL(form.value || 0)}
-                onFocus={() => { setValueEditing(true); setValueDraft(String(form.value || '')); }}
-                onBlur={() => { set('value', parseBRL(valueDraft) || parseFloat(valueDraft) || 0); setValueEditing(false); }}
-                onChange={e => setValueDraft(e.target.value)}
-                onKeyDown={handleEnterBlur}
-              />
+              <CurrencyInput value={form.value || 0} onChange={n => set('value', n)} />
             </div>
             <div className="flex items-end">
               <label className="flex items-center gap-2 cursor-pointer pb-2">
@@ -187,7 +215,61 @@ export function QuoteModal({ open, onClose, quote, onSave, onDelete, nextIndex }
           </div>
         </section>
 
-        {/* ============== 2. FASES (PARALELAS) ============== */}
+        {/* ============== 2. ITENS DA COTAÇÃO ============== */}
+        <section className="border rounded-lg p-4">
+          <div className="flex justify-between items-center mb-3">
+            <h3 className="text-sm font-bold text-secondary uppercase tracking-wide">Itens da Cotação</h3>
+            <Button size="sm" onClick={addItem} className="bg-secondary hover:bg-secondary/90">
+              <Plus className="h-4 w-4 mr-1" /> Adicionar Item
+            </Button>
+          </div>
+          <div className="space-y-2">
+            {(form.items || []).map(item => (
+              <div key={item.id} className="grid grid-cols-12 gap-2 items-center border rounded-md p-2 bg-muted/20">
+                <Input placeholder="Nome do Item" className="col-span-3 bg-white border-border"
+                  value={item.name} onChange={e => updateItem(item.id, 'name', e.target.value)} onKeyDown={handleEnterBlur} />
+                <Input type="number" min={1} placeholder="Qtd" className="col-span-1 bg-white border-border"
+                  value={item.quantity} onChange={e => updateItem(item.id, 'quantity', parseInt(e.target.value) || 1)} onKeyDown={handleEnterBlur} />
+                <div className="col-span-2">
+                  <CurrencyInput value={item.quoteValue || 0} onChange={n => updateItem(item.id, 'quoteValue', n)} />
+                </div>
+                <div className="col-span-2">
+                  <CurrencyInput value={item.closingValue || 0} onChange={n => updateItem(item.id, 'closingValue', n)} />
+                </div>
+                <Input placeholder="Fornecedor" className="col-span-3 bg-white border-border"
+                  value={item.supplier} onChange={e => updateItem(item.id, 'supplier', e.target.value)} onKeyDown={handleEnterBlur} />
+                <Button variant="ghost" size="icon" className="col-span-1" onClick={() => removeItem(item.id)}>
+                  <Trash2 className="h-4 w-4 text-destructive" />
+                </Button>
+              </div>
+            ))}
+            {(form.items || []).length === 0 && (
+              <p className="text-sm text-muted-foreground text-center py-4">Nenhum item adicionado</p>
+            )}
+            {(form.items || []).length > 0 && (
+              <div className="grid grid-cols-12 gap-2 px-2 text-[10px] uppercase tracking-wide text-muted-foreground font-semibold">
+                <span className="col-span-3">Nome</span>
+                <span className="col-span-1">Qtd</span>
+                <span className="col-span-2">Valor Cotação</span>
+                <span className="col-span-2">Valor Fechamento</span>
+                <span className="col-span-3">Fornecedor</span>
+              </div>
+            )}
+          </div>
+        </section>
+
+        {/* ============== 3. OBSERVAÇÕES ============== */}
+        <section className="border rounded-lg p-4">
+          <h3 className="text-sm font-bold text-secondary uppercase tracking-wide mb-3">Observações</h3>
+          <Textarea
+            className="bg-white border-border min-h-24"
+            value={form.observations || ''}
+            onChange={e => set('observations', e.target.value)}
+            placeholder="Anotações sobre a cotação..."
+          />
+        </section>
+
+        {/* ============== 4. FASES (PARALELAS) ============== */}
         <section className="border rounded-lg p-4">
           <h3 className="text-sm font-bold text-secondary uppercase tracking-wide mb-3">Status (Fases Paralelas)</h3>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
@@ -199,13 +281,26 @@ export function QuoteModal({ open, onClose, quote, onSave, onDelete, nextIndex }
               </div>
             ))}
             {phaseCard('forClosing', (
-              <p className="text-xs text-muted-foreground italic">Sem campos adicionais.</p>
+              <div>
+                <Label className="text-xs">Data Prevista</Label>
+                <DateField phaseKey="forClosing" value={form.phases.forClosing.expectedDate}
+                  onChange={d => setPhase('forClosing', { expectedDate: d })} />
+              </div>
             ))}
             {phaseCard('closed', (
-              <div>
-                <Label className="text-xs">Data de Fechamento</Label>
-                <DateField phaseKey="closed" value={form.phases.closed.date}
-                  onChange={d => setPhase('closed', { date: d })} />
+              <div className="space-y-2">
+                <div>
+                  <Label className="text-xs">Data de Fechamento</Label>
+                  <DateField phaseKey="closed" value={form.phases.closed.date}
+                    onChange={d => setPhase('closed', { date: d })} />
+                </div>
+                <div>
+                  <Label className="text-xs">Valor (R$)</Label>
+                  <CurrencyInput
+                    value={form.phases.closed.value || 0}
+                    onChange={n => setPhase('closed', { value: n })}
+                  />
+                </div>
               </div>
             ))}
             {phaseCard('dropped', (
@@ -218,7 +313,7 @@ export function QuoteModal({ open, onClose, quote, onSave, onDelete, nextIndex }
           </div>
         </section>
 
-        <div className="flex justify-between items-center">
+        <div className="flex justify-between items-center print:hidden">
           <div>
             {isEdit && onDelete && (
               <Button variant="ghost" className="text-destructive hover:text-destructive"
@@ -228,6 +323,9 @@ export function QuoteModal({ open, onClose, quote, onSave, onDelete, nextIndex }
             )}
           </div>
           <div className="flex gap-2">
+            <Button variant="outline" onClick={() => window.print()}>
+              <Printer className="h-4 w-4 mr-1" /> Imprimir
+            </Button>
             <Button variant="outline" onClick={onClose}>Cancelar</Button>
             <Button onClick={handleSave} className="bg-secondary hover:bg-secondary/90">
               {isEdit ? 'Salvar Alterações' : 'Criar Cotação'}
