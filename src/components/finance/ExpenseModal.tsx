@@ -1,12 +1,16 @@
 import { useEffect, useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Card, CardContent } from '@/components/ui/card';
-import { Printer } from 'lucide-react';
+import { Printer, Trash2 } from 'lucide-react';
 import { Expense, ExpenseKind, expenseSavings, InstallmentPlan } from '@/store/FinanceStore';
 import { PAYMENT_METHODS, PAYMENT_METHOD_LABELS, PaymentMethod } from '@/store/OrderStore';
 import { DateField } from './DateField';
@@ -20,6 +24,7 @@ interface Props {
   onClose: () => void;
   expense?: Expense | null;
   onSave: (e: Expense) => void;
+  onDelete?: (id: string) => void;
 }
 
 const empty = (kind: ExpenseKind): Expense => ({
@@ -31,9 +36,10 @@ const empty = (kind: ExpenseKind): Expense => ({
   paymentMethod: '',
 });
 
-export function ExpenseModal({ open, onClose, expense, onSave }: Props) {
+export function ExpenseModal({ open, onClose, expense, onSave, onDelete }: Props) {
   const [step, setStep] = useState<'pick' | 'form'>('pick');
   const [e, setE] = useState<Expense>(empty('PREVISAO'));
+  const [confirmDel, setConfirmDel] = useState(false);
 
   useEffect(() => {
     if (open) {
@@ -197,12 +203,41 @@ export function ExpenseModal({ open, onClose, expense, onSave }: Props) {
           </CardContent></Card>
         )}
 
-        <div className="flex justify-end gap-2 pt-2 print:hidden">
-          <Button variant="outline" onClick={() => window.print()} className="gap-1.5"><Printer className="h-4 w-4" /> Imprimir</Button>
-          <Button variant="outline" onClick={onClose}>Cancelar</Button>
-          <Button onClick={() => { onSave(e); onClose(); }}>Salvar</Button>
+        <div className="flex justify-between gap-2 pt-2 print:hidden">
+          <div>
+            {expense && onDelete && (
+              <Button variant="destructive" onClick={() => setConfirmDel(true)} className="gap-1.5">
+                <Trash2 className="h-4 w-4" /> Excluir
+              </Button>
+            )}
+          </div>
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={() => window.print()} className="gap-1.5"><Printer className="h-4 w-4" /> Imprimir</Button>
+            <Button variant="outline" onClick={onClose}>Cancelar</Button>
+            <Button onClick={() => { onSave(e); onClose(); }}>Salvar</Button>
+          </div>
         </div>
       </DialogContent>
+
+      <AlertDialog open={confirmDel} onOpenChange={setConfirmDel}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir despesa?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Esta ação removerá permanentemente a despesa "{e.service || e.kind}".
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => { onDelete?.(e.id); setConfirmDel(false); onClose(); }}
+            >
+              Excluir
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Dialog>
   );
 }
