@@ -6,7 +6,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
-import { CalendarIcon, Plus, Trash2, AlertTriangle } from 'lucide-react';
+import { CalendarIcon, Plus, Trash2, AlertTriangle, Printer } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
@@ -111,7 +111,7 @@ export function ProductModal({ open, onClose, order, item, onSave }: Props) {
             <div><Label>Quantidade Total</Label><Input readOnly value={item.quantity} className="bg-muted border-border" /></div>
             <div><Label>Valor Projetado</Label><Input readOnly value={toBRL(projected)} className="bg-muted border-border" /></div>
             <div><Label>Cliente</Label><Input readOnly value={order.customer} className="bg-muted border-border" /></div>
-            <div><Label>CNPJ</Label><Input readOnly value={order.cnpj || '—'} className="bg-muted border-border" /></div>
+            <div><Label>CPF/CNPJ</Label><Input readOnly value={order.cnpj || '—'} className="bg-muted border-border" /></div>
             <div><Label>Vendedor</Label><Input readOnly value={order.seller || '—'} className="bg-muted border-border" /></div>
             <div><Label>Empresa</Label><Input readOnly value={order.company || '—'} className="bg-muted border-border" /></div>
             <div><Label>Data do Pedido</Label><Input readOnly value={fmtDate(order.orderDate)} className="bg-muted border-border" /></div>
@@ -251,7 +251,10 @@ export function ProductModal({ open, onClose, order, item, onSave }: Props) {
           </div>
         </section>
 
-        <div className="flex justify-end gap-2">
+        <div className="flex justify-end gap-2 print:hidden">
+          <Button variant="outline" onClick={() => window.print()}>
+            <Printer className="h-4 w-4 mr-1" /> Imprimir
+          </Button>
           <Button variant="outline" onClick={onClose}>Cancelar</Button>
           <Button onClick={handleSave} disabled={overQuantity} className="bg-secondary hover:bg-secondary/90">
             Salvar Alterações

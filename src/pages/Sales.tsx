@@ -23,6 +23,7 @@ import { OrderModal } from '@/components/OrderModal';
 import { ProductModal } from '@/components/ProductModal';
 import { QuoteModal } from '@/components/QuoteModal';
 import { RmaModal } from '@/components/RmaModal';
+import { AddOrderChooser, OrderPrefill } from '@/components/AddOrderChooser';
 import { DateFilter, DateRange } from '@/components/DateFilter';
 import { Pagination, PAGE_SIZE } from '@/components/Pagination';
 
@@ -90,6 +91,8 @@ export default function Sales() {
   const [editQuote, setEditQuote] = useState<Quote | null>(null);
   const [rmaModalOpen, setRmaModalOpen] = useState(false);
   const [editRma, setEditRma] = useState<Order | null>(null);
+  const [chooserOpen, setChooserOpen] = useState(false);
+  const [orderPrefill, setOrderPrefill] = useState<OrderPrefill | null>(null);
 
   /* ---------- Orders tab state ---------- */
   const [orderSearch, setOrderSearch] = useState('');
@@ -390,7 +393,7 @@ export default function Sales() {
                     ))}
                   </div>
                   <div className="flex items-center gap-2 flex-wrap">
-                    <SearchBar value={orderSearch} onChange={setOrderSearch} placeholder="OS, Cliente, CNPJ, Empresa, Vendedor..." />
+                    <SearchBar value={orderSearch} onChange={setOrderSearch} placeholder="OS, Cliente, CPF/CNPJ, Empresa, Vendedor..." />
                     <Button
                       variant={orderAlertsOnly ? 'default' : 'outline'}
                       onClick={() => setOrderAlertsOnly(v => !v)}
@@ -429,7 +432,7 @@ export default function Sales() {
                     <Button onClick={() => { setEditRma(null); setRmaModalOpen(true); }} variant="outline" className="border-secondary text-secondary hover:bg-secondary/10">
                       <Plus className="h-4 w-4 mr-1" /> Adicionar RMA
                     </Button>
-                    <Button onClick={() => { setEditOrder(null); setModalOpen(true); }} className="bg-secondary hover:bg-secondary/90">
+                    <Button onClick={() => { setEditOrder(null); setOrderPrefill(null); setChooserOpen(true); }} className="bg-secondary hover:bg-secondary/90">
                       <Plus className="h-4 w-4 mr-1" /> Adicionar Pedido
                     </Button>
                   </div>
@@ -616,13 +619,21 @@ export default function Sales() {
           </TabsContent>
         </Tabs>
 
+        <AddOrderChooser
+          open={chooserOpen}
+          onClose={() => setChooserOpen(false)}
+          quotes={quotes}
+          onChooseNew={() => { setOrderPrefill(null); setEditOrder(null); setModalOpen(true); }}
+          onChooseFromQuote={prefill => { setOrderPrefill(prefill); setEditOrder(null); setModalOpen(true); }}
+        />
         <OrderModal
           open={modalOpen}
-          onClose={() => setModalOpen(false)}
+          onClose={() => { setModalOpen(false); setOrderPrefill(null); }}
           order={editOrder}
           onSave={o => editOrder ? updateOrder(o) : addOrder(o)}
           onDelete={deleteOrder}
           nextOS={nextOS}
+          prefill={orderPrefill}
         />
         <ProductModal
           open={productModalOpen}

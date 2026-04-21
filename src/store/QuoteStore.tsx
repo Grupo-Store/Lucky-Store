@@ -23,9 +23,22 @@ export const QUOTE_PHASE_COLORS: Record<QuotePhaseKey, string> = {
 
 export interface QuotePhases {
   sent: { active: boolean; date?: string };
-  forClosing: { active: boolean };
-  closed: { active: boolean; date?: string };
+  /** "Para Fechamento" now has an Expected Date (Data Prevista) */
+  forClosing: { active: boolean; expectedDate?: string };
+  /** "Fechada" has both a date and a closing value (R$) */
+  closed: { active: boolean; date?: string; value?: number };
   dropped: { active: boolean; date?: string };
+}
+
+export interface QuoteItem {
+  id: string;
+  name: string;
+  quantity: number;
+  /** Quote value (R$) */
+  quoteValue: number;
+  /** Closing value (R$) — optional, used when quote progresses to closed */
+  closingValue: number;
+  supplier: string;
 }
 
 export interface Quote {
@@ -41,8 +54,12 @@ export interface Quote {
   directBilling: boolean;
   supplier: string;
   seller: Seller;
-  /** Quote value (R$) — entered in General Info */
+  /** Base quote value (R$) — entered in General Info */
   value: number;
+  /** Quote items */
+  items: QuoteItem[];
+  /** Free-text observations */
+  observations: string;
   phases: QuotePhases;
 }
 
@@ -62,14 +79,23 @@ export function getHighestPhase(q: Quote): QuotePhaseKey | null {
   return null;
 }
 
-/** Date associated with the highest active phase (forClosing has no date → falls back to nothing) */
+/** Date associated with the highest active phase */
 export function getPhaseDate(q: Quote): string | undefined {
   const key = getHighestPhase(q);
   if (!key) return undefined;
   if (key === 'sent') return q.phases.sent.date;
+  if (key === 'forClosing') return q.phases.forClosing.expectedDate;
   if (key === 'closed') return q.phases.closed.date;
   if (key === 'dropped') return q.phases.dropped.date;
   return undefined;
+}
+
+/** Value to display in tables: closing value (if closed phase active & filled) else base value */
+export function getDisplayValue(q: Quote): number {
+  if (q.phases.closed.active && q.phases.closed.value && q.phases.closed.value > 0) {
+    return q.phases.closed.value;
+  }
+  return q.value || 0;
 }
 
 const sampleQuotes: Quote[] = [
@@ -79,10 +105,15 @@ const sampleQuotes: Quote[] = [
     requestNumber: 'REQ-7781', requestDate: '2026-04-01',
     company: 'Lucky Store', directBilling: false, supplier: '', seller: 'Alcides',
     value: 12500,
+    items: [
+      { id: 'qi1', name: 'Notebook Lenovo ThinkPad', quantity: 2, quoteValue: 5000, closingValue: 4800, supplier: 'Distribuidora Tech' },
+      { id: 'qi2', name: 'Dock Station USB-C', quantity: 2, quoteValue: 1250, closingValue: 1200, supplier: 'Distribuidora Tech' },
+    ],
+    observations: 'Cliente solicitou entrega expressa.',
     phases: {
       sent: { active: true, date: '2026-04-02' },
-      forClosing: { active: true },
-      closed: { active: true, date: '2026-04-08' },
+      forClosing: { active: true, expectedDate: '2026-04-07' },
+      closed: { active: true, date: '2026-04-08', value: 12000 },
       dropped: { active: false },
     },
   },
@@ -91,10 +122,10 @@ const sampleQuotes: Quote[] = [
     customer: 'StartUp Hub', cnpj: '22.222.222/0001-22',
     requestNumber: 'REQ-7782', requestDate: '2026-04-05',
     company: 'BTech', directBilling: true, supplier: 'Distribuidora ABC', seller: 'Lucas',
-    value: 0,
+    value: 0, items: [], observations: '',
     phases: {
       sent: { active: true, date: '2026-04-06' },
-      forClosing: { active: true },
+      forClosing: { active: true, expectedDate: '2026-04-12' },
       closed: { active: false },
       dropped: { active: false },
     },
@@ -104,7 +135,7 @@ const sampleQuotes: Quote[] = [
     customer: 'Old Client', cnpj: '33.333.333/0001-33',
     requestNumber: 'REQ-7790', requestDate: '2026-03-28',
     company: 'AJJ', directBilling: false, supplier: '', seller: 'Pedro',
-    value: 0,
+    value: 0, items: [], observations: '',
     phases: {
       sent: { active: true, date: '2026-03-29' },
       forClosing: { active: false },
@@ -146,6 +177,7 @@ export function QuoteProvider({ children }: { children: React.ReactNode }) {
   );
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function useQuotes() {
   const ctx = useContext(QuoteContext);
   if (!ctx) throw new Error('useQuotes must be used within QuoteProvider');
