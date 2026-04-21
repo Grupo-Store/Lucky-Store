@@ -1,0 +1,475 @@
+// Orderly Hub - Refactored Database Schema (dbdiagram.io format)
+// Copy this to https://dbdiagram.io for visualization
+
+Project orderly_hub {
+  database_type: 'PostgreSQL'
+  Note: 'Refactored schema with UUIDs, audit trails, soft deletes, and materialized views'
+}
+
+// ============================================
+// USERS & AUTHENTICATION
+// ============================================
+
+Table users {
+  id uuid [pk, default: `gen_random_uuid()`]
+  email varchar [unique, not null]
+  password_hash varchar [not null]
+  full_name varchar [not null]
+  role varchar [not null, note: 'admin, manager, seller, viewer']
+  is_active boolean [default: true]
+  two_factor_secret varchar [note: 'TOTP secret']
+  last_login_at timestamp
+  created_at timestamp [default: `CURRENT_TIMESTAMP`]
+  updated_at timestamp [default: `CURRENT_TIMESTAMP`]
+  deleted_at timestamp [null]
+  
+  indexes {
+    email
+    role
+    (email, deleted_at)
+  }
+}
+
+// ============================================
+// CORE ENTITIES
+// ============================================
+
+Table lojas {
+  id uuid [pk, default: `gen_random_uuid()`]
+  nome varchar [unique, not null]
+  cnpj varchar [unique]
+  city varchar
+  state varchar
+  created_at timestamp [default: `CURRENT_TIMESTAMP`]
+  updated_at timestamp
+  deleted_at timestamp
+  
+  indexes {
+    nome
+    (deleted_at)
+  }
+}
+
+Table vendedores {
+  id uuid [pk, default: `gen_random_uuid()`]
+  id_loja uuid [not null, ref: > lojas.id]
+  nome varchar [not null]
+  email varchar
+  phone varchar
+  created_at timestamp [default: `CURRENT_TIMESTAMP`]
+  updated_at timestamp
+  deleted_at timestamp
+  
+  indexes {
+    (id_loja, nome) [unique]
+    (id_loja, deleted_at)
+  }
+}
+
+Table clientes {
+  id uuid [pk, default: `gen_random_uuid()`]
+  nome varchar [not null]
+  cnpj varchar [unique]
+  email varchar
+  phone varchar
+  address varchar
+  city varchar
+  state varchar
+  zip_code varchar
+  created_at timestamp [default: `CURRENT_TIMESTAMP`]
+  updated_at timestamp
+  deleted_at timestamp
+  
+  indexes {
+    cnpj
+    nome
+  }
+}
+
+// ============================================
+// PEDIDOS (ORDERS)
+// ============================================
+
+Table pedidos {
+  id uuid [pk, default: `gen_random_uuid()`]
+  id_loja uuid [not null, ref: > lojas.id]
+  id_vendedor uuid [not null, ref: > vendedores.id]
+  id_cliente uuid [not null, ref: > clientes.id]
+  
+  numero_os varchar [not null]
+  numero_nf varchar [not null]
+  numero_oc varchar [note: 'Customer OC/AF']
+  
+  data_pedido date [not null]
+  data_entrega date [not null]
+  
+  status varchar [not null, note: 'To Buy, Bought, Received, To Invoice, Invoiced, To Pack, Ready, Out, Delivered, Delayed, Cancelled']
+  is_rma boolean [default: false]
+  is_cancelled boolean [default: false]
+  is_direct_billing boolean [default: false]
+  
+  valor_venda decimal(12,2)
+  parcelas integer [default: 1]
+  
+  observacao text
+  fornecedor_principal text
+  nota_fiscal_fornecedor varchar
+  
+  created_by uuid [not null, ref: > users.id]
+  created_at timestamp [default: `CURRENT_TIMESTAMP`]
+  updated_at timestamp
+  deleted_at timestamp
+  
+  indexes {
+    (id_loja, numero_nf) [unique]
+    id_loja
+    id_vendedor
+    id_cliente
+    status
+    data_entrega
+    numero_os
+    (deleted_at)
+  }
+}
+
+Table pedido_forma_pagamento {
+  id uuid [pk, default: `gen_random_uuid()`]
+  id_pedido uuid [not null, ref: > pedidos.id]
+  forma varchar [not null, note: 'credito, debito, boleto, pix, ted, dinheiro']
+  
+  indexes {
+    (id_pedido, forma) [unique]
+  }
+}
+
+// ============================================
+// PRODUTOS (ORDER ITEMS)
+// ============================================
+
+Table produtos {
+  id uuid [pk, default: `gen_random_uuid()`]
+  id_pedido uuid [not null, ref: > pedidos.id]
+  id_vendedor uuid [not null, ref: > vendedores.id]
+  id_comprador uuid [ref: > vendedores.id, note: 'Can be different vendor']
+  
+  descricao text [not null]
+  quantidade integer [not null]
+  
+  valor_projetado decimal(12,2) [not null]
+  valor_compra decimal(12,2)
+  economia decimal(12,2) [note: 'valor_projetado - valor_compra']
+  
+  fornecedor text
+  data_compra date
+  prazo_entrega date
+  data_recebimento date
+  
+  status varchar [not null, note: 'Pending, To Purchase, In Stock, Received, Ready, Shipped, Delivered, Delayed, Cancelled']
+  
+  created_at timestamp [default: `CURRENT_TIMESTAMP`]
+  updated_at timestamp
+  
+  indexes {
+    id_pedido
+    status
+    data_recebimento
+  }
+}
+
+// ============================================
+// CUSTOS (ORDER COSTS)
+// ============================================
+
+Table custo_pedido {
+  id uuid [pk, default: `gen_random_uuid()`]
+  id_pedido uuid [not null, unique, ref: - pedidos.id]
+  
+  custo_produto_inicial decimal(12,2)
+  custo_produto_final decimal(12,2)
+  
+  custo_servico decimal(12,2)
+  brinde decimal(12,2)
+  
+  pct_imposto_compra decimal(5,2)
+  imposto_compra decimal(12,2)
+  
+  pct_imposto_venda decimal(5,2)
+  imposto_venda decimal(12,2)
+  
+  pct_custo_credito decimal(5,2)
+  custo_credito decimal(12,2)
+  pct_custo_debito decimal(5,2)
+  custo_debito decimal(12,2)
+  custo_boleto decimal(12,2)
+  
+  created_at timestamp [default: `CURRENT_TIMESTAMP`]
+  updated_at timestamp
+}
+
+// ============================================
+// FRETE (FREIGHT/DELIVERY)
+// ============================================
+
+Table frete {
+  id uuid [pk, default: `gen_random_uuid()`]
+  id_pedido uuid [ref: > pedidos.id, null]
+  id_rma uuid [ref: > rmas.id, null]
+  
+  valor decimal(12,2) [not null]
+  entregador varchar
+  data_frete date [not null]
+  
+  created_at timestamp [default: `CURRENT_TIMESTAMP`]
+  updated_at timestamp
+  
+  Note: 'Constraint: exactly one of id_pedido or id_rma must be non-null'
+  
+  indexes {
+    id_pedido
+    id_rma
+  }
+}
+
+// ============================================
+// RMA (RETURN MANAGEMENT)
+// ============================================
+
+Table rmas {
+  id uuid [pk, default: `gen_random_uuid()`]
+  id_pedido_origem uuid [not null, ref: > pedidos.id]
+  id_vendedor uuid [not null, ref: > vendedores.id]
+  id_loja uuid [not null, ref: > lojas.id]
+  
+  numero_rma varchar [unique, not null]
+  data_registro date [not null]
+  prazo_entrega date
+  
+  status varchar [not null, note: 'Registered, In Analysis, Approved, In Repair, Repaired, Ready, Shipped, Delivered, Cancelled, Completed']
+  
+  created_by uuid [not null, ref: > users.id]
+  created_at timestamp [default: `CURRENT_TIMESTAMP`]
+  updated_at timestamp
+  deleted_at timestamp
+  
+  indexes {
+    id_pedido_origem
+    id_vendedor
+    status
+    numero_rma
+    (deleted_at)
+  }
+}
+
+Table item_rma {
+  id uuid [pk, default: `gen_random_uuid()`]
+  id_rma uuid [not null, ref: > rmas.id]
+  id_produto_origem uuid [not null, ref: > produtos.id]
+  
+  descricao text [not null, note: 'Denormalized from produto']
+  quantidade integer [not null]
+  
+  status varchar [not null, note: 'Not Received, Received, In Repair, Repaired, Ready, Shipped, Delivered, Cancelled']
+  consertado_por varchar
+  
+  created_at timestamp [default: `CURRENT_TIMESTAMP`]
+  updated_at timestamp
+  
+  indexes {
+    (id_rma, id_produto_origem) [unique]
+    id_rma
+    status
+  }
+}
+
+// ============================================
+// COTACAO (QUOTES)
+// ============================================
+
+Table cotacoes {
+  id uuid [pk, default: `gen_random_uuid()`]
+  id_loja uuid [not null, ref: > lojas.id]
+  id_vendedor uuid [not null, ref: > vendedores.id]
+  
+  numero_requisicao varchar
+  cliente varchar [not null]
+  cnpj_cliente varchar
+  
+  data_cotacao date [not null]
+  data_validade date
+  
+  status_enviada boolean [default: false]
+  data_envio date
+  status_em_fechamento boolean [default: false]
+  status_fechada boolean [default: false]
+  data_fechamento date
+  status_caida boolean [default: false]
+  data_queda date
+  
+  is_direct_billing boolean [default: false]
+  fornecedor varchar
+  valor_total decimal(12,2)
+  
+  created_by uuid [not null, ref: > users.id]
+  created_at timestamp [default: `CURRENT_TIMESTAMP`]
+  updated_at timestamp
+  deleted_at timestamp
+  
+  indexes {
+    (id_loja, id_vendedor, data_cotacao, numero_requisicao) [unique]
+    (id_loja, deleted_at)
+    (id_vendedor, deleted_at)
+    data_cotacao
+  }
+}
+
+Table item_cotacao {
+  id uuid [pk, default: `gen_random_uuid()`]
+  id_cotacao uuid [not null, ref: > cotacoes.id]
+  
+  descricao text [not null]
+  quantidade integer [not null]
+  valor_unitario decimal(12,2) [not null]
+  valor_total decimal(12,2) [not null, note: 'Generated: quantidade * valor_unitario']
+  
+  created_at timestamp [default: `CURRENT_TIMESTAMP`]
+  
+  indexes {
+    id_cotacao
+  }
+}
+
+// ============================================
+// SALES & PURCHASES TRACKING
+// ============================================
+
+Table venda_vendedor {
+  id uuid [pk, default: `gen_random_uuid()`]
+  id_pedido uuid [not null, ref: > pedidos.id]
+  id_vendedor uuid [not null, ref: > vendedores.id]
+  
+  valor_venda decimal(12,2)
+  lucro decimal(12,2)
+  
+  created_at timestamp [default: `CURRENT_TIMESTAMP`]
+  updated_at timestamp
+  
+  indexes {
+    (id_pedido, id_vendedor) [unique]
+    id_vendedor
+  }
+}
+
+Table compra_vendedor {
+  id uuid [pk, default: `gen_random_uuid()`]
+  id_produto uuid [not null, ref: > produtos.id]
+  id_vendedor uuid [not null, ref: > vendedores.id]
+  
+  valor_compra decimal(12,2)
+  lucro decimal(12,2)
+  
+  created_at timestamp [default: `CURRENT_TIMESTAMP`]
+  updated_at timestamp
+  
+  indexes {
+    (id_produto, id_vendedor) [unique]
+    id_vendedor
+  }
+}
+
+// ============================================
+// METAS (TARGETS/GOALS)
+// ============================================
+
+Table meta_vendedor {
+  id uuid [pk, default: `gen_random_uuid()`]
+  id_vendedor uuid [not null, ref: > vendedores.id]
+  
+  ano_mes date [not null, note: 'First day of month: 2026-04-01']
+  
+  piso decimal(12,2)
+  alvo_equipe decimal(12,2)
+  alvo_individual decimal(12,2)
+  retirada_mes decimal(12,2)
+  
+  created_at timestamp [default: `CURRENT_TIMESTAMP`]
+  updated_at timestamp
+  
+  indexes {
+    (id_vendedor, ano_mes) [unique]
+    ano_mes
+  }
+}
+
+// ============================================
+// AUDIT & TRACKING
+// ============================================
+
+Table status_history {
+  id uuid [pk, default: `gen_random_uuid()`]
+  entity_type varchar [not null, note: 'pedido, produto, rma, item_rma']
+  entity_id uuid [not null]
+  
+  old_status varchar
+  new_status varchar [not null]
+  
+  changed_by uuid [not null, ref: > users.id]
+  changed_at timestamp [default: `CURRENT_TIMESTAMP`]
+  
+  reason text
+  
+  indexes {
+    (entity_type, entity_id)
+    changed_at
+  }
+}
+
+Table audit_logs {
+  id uuid [pk, default: `gen_random_uuid()`]
+  entity_type varchar [not null]
+  entity_id uuid [not null]
+  action varchar [not null, note: 'CREATE, UPDATE, DELETE, RESTORE']
+  
+  changed_by uuid [not null, ref: > users.id]
+  changed_at timestamp [default: `CURRENT_TIMESTAMP`]
+  
+  old_values jsonb [note: 'Before values']
+  new_values jsonb [note: 'After values']
+  
+  ip_address inet
+  user_agent text
+  
+  indexes {
+    (entity_type, entity_id)
+    changed_at
+    changed_by
+  }
+}
+
+// ============================================
+// NOTES & RELATIONSHIPS
+// ============================================
+
+Note {
+  "Improvements Made:"
+  "✅ UUIDs for better security & distributed systems"
+  "✅ Soft deletes (deleted_at) for compliance & recovery"
+  "✅ Audit fields (created_by, created_at, updated_at)"
+  "✅ Status history tracking for audit trail"
+  "✅ Decimal(12,2) for financial precision"
+  "✅ Explicit unique constraints"
+  "✅ Comprehensive indexes for performance"
+  "✅ JSONB audit logs for complete change tracking"
+  "✅ Views instead of tables for resultado_* (no redundancy)"
+  ""
+  "Security:"
+  "- Row-level security (RLS) can be added per user role"
+  "- Encrypt sensitive data at rest"
+  "- Audit log retention for compliance (6+ months)"
+  "- User tracking for accountability"
+  ""
+  "Performance:"
+  "- Connection pooling (PgBouncer)"
+  "- Regular VACUUM & ANALYZE"
+  "- Index on soft-delete filters"
+  "- Materialized views for reports if needed"
+}

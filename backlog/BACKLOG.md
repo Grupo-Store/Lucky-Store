@@ -5,6 +5,21 @@
 
 **Current Status:** Frontend mostly complete with mock data and local state management. Backend and API integration needed.
 
+**Team:** 4 Developers
+**Target MVP:** 8-10 weeks
+**Target Full Release:** 20-24 weeks
+
+---
+
+## Recent Updates (Database Refactoring - Phase 0)
+✅ **New Features Added:**
+- UUID-based primary keys (security & distributed systems)
+- Complete audit trail (who changed what when)
+- Soft deletes (LGPD compliance, data recovery)
+- Status history tracking (audit trail for status changes)
+- Materialized views (reports without data redundancy)
+- Enhanced constraints (business logic enforced at DB level)
+
 ---
 
 ## Phase 1: Backend Infrastructure & API (Critical)
@@ -17,37 +32,52 @@
 - [ ] **Configure environment variables** and secrets management
 - [ ] **Set up CI/CD pipeline** (GitHub Actions or similar)
 
-### 1.2 Database Schema Design
-- [ ] **Design database schema** for:
-  - Users & authentication
-  - Companies & sellers
-  - Orders & order items
-  - Quotes & quote phases
-  - RMA (returns management)
-  - Freight/delivery cards
-  - Sub-purchases
-  - Payment tracking
-  - Audit logs
-- [ ] **Create database migrations** with versioning
-- [ ] **Set up database indexes** for common queries
-- [ ] **Implement data validation constraints**
+### 1.2 Database Schema Design (REFACTORED)
+✅ **Already Designed in DATABASE_SCHEMA_REFACTORED.md**
+
+**Implementation Tasks:**
+- [ ] **Set up PostgreSQL with refactored schema**:
+  - [ ] UUID primary keys on all tables
+  - [ ] Audit fields (created_by, created_at, updated_at, deleted_at)
+  - [ ] Soft deletes on main entities
+  - [ ] Explicit DECIMAL(12,2) for financial data
+  - [ ] CHECK constraints for valid statuses
+  - [ ] Foreign key cascade settings
+- [ ] **Create database migrations** with versioning (use Alembic or Prisma)
+- [ ] **Set up optimized indexes**:
+  - [ ] Soft-delete aware indexes (WHERE deleted_at IS NULL)
+  - [ ] Composite indexes for common queries
+  - [ ] Foreign key indexes for relationships
+- [ ] **Create views for reporting**:
+  - [ ] resultado_mensal (monthly results)
+  - [ ] resultado_anual (annual results)
+- [ ] **Implement data validation constraints** at DB level
 - [ ] **Design backup & recovery procedures**
+- [ ] **Create database triggers** (optional):
+  - [ ] Auto-update updated_at on modifications
+  - [ ] Prevent deletion if dependencies exist
 
 ### 1.3 Authentication & Authorization
 - [ ] **Implement real authentication** (replace mock 2FA):
-  - [ ] Email/password registration
-  - [ ] JWT token generation & refresh tokens
-  - [ ] Real 2FA implementation (TOTP or SMS)
-  - [ ] Password reset flow
-  - [ ] Session management
+  - [ ] Email/password registration with validation
+  - [ ] JWT token generation (1 hour) & refresh tokens (7 days)
+  - [ ] Real 2FA implementation (TOTP using speakeasy)
+  - [ ] Password reset flow with email verification
+  - [ ] Session management with token expiry
+  - [ ] Logout with token blacklisting
 - [ ] **Implement role-based access control (RBAC)**:
-  - [ ] Admin (full access)
-  - [ ] Manager (read/write orders & quotes)
-  - [ ] Seller (limited access to own orders)
-  - [ ] Viewer (read-only access)
+  - [ ] Admin (full access, user management)
+  - [ ] Manager (read/write orders & quotes, analytics)
+  - [ ] Seller (limited access to own orders, commission tracking)
+  - [ ] Viewer (read-only access to reports)
 - [ ] **Secure endpoints** with proper authorization checks
-- [ ] **Implement audit logging** for user actions
+- [ ] **Implement audit logging** for user actions:
+  - [ ] Track who created/updated/deleted records
+  - [ ] Log all status changes with reason
+  - [ ] Store IP address & user agent
+  - [ ] Retention: 6+ months for compliance
 - [ ] **Set up CORS policies** for frontend communication
+- [ ] **Implement row-level security** (optional, for multi-tenant isolation)
 
 ### 1.4 Core API Endpoints
 
@@ -93,19 +123,26 @@
 - [ ] `POST /api/auth/refresh` - Refresh token
 
 ### 1.5 Data Validation & Business Logic
-- [ ] **Validate all incoming data** with schemas (Zod, Joi, or similar)
+- [ ] **Validate all incoming data** with schemas (Zod/Pydantic)
 - [ ] **Implement business logic** for:
   - [ ] Order status transitions (enforce valid workflows)
   - [ ] RMA item status transitions
   - [ ] Payment method validation
   - [ ] Financial calculations (profit, taxes, costs)
   - [ ] Delivery date validations
-  - [ ] Duplicate order prevention
+  - [ ] Duplicate order prevention (unique constraint at DB)
+  - [ ] One NF per store (unique constraint)
 - [ ] **Calculate derived fields** server-side:
-  - [ ] Item final values
-  - [ ] Order totals & profit
-  - [ ] Tax calculations
+  - [ ] Item final values (valor_projetado - valor_compra = economia)
+  - [ ] Order totals & profit margins
+  - [ ] Tax calculations (purchase & sales taxes)
   - [ ] Freight totals
+  - [ ] Payment method costs (credit/debit %)
+- [ ] **Track all changes** via audit system:
+  - [ ] Store old_values and new_values in JSONB
+  - [ ] Track user & timestamp
+  - [ ] Log reason for status changes
+  - [ ] Enable forensics & data recovery
 
 ---
 
@@ -144,6 +181,46 @@
 - [ ] **Implement WebSocket** connection for live updates
 - [ ] **Auto-refresh orders** when updated by other users
 - [ ] **Implement conflict resolution** for concurrent edits
+
+---
+
+## Phase 2.5: Audit & Compliance (NEW - Critical for LGPD)
+
+### 2.5.1 Audit Logging System
+- [ ] **Implement status_history table**:
+  - [ ] Track all status changes (pedido, produto, rma, item_rma)
+  - [ ] Store old_status, new_status, changed_by, reason
+  - [ ] Create API: GET /api/audit/status-history/:entityId
+  - [ ] Index by changed_at for performance
+- [ ] **Implement audit_logs table**:
+  - [ ] Track CREATE, UPDATE, DELETE operations
+  - [ ] Store full before/after values in JSONB
+  - [ ] Include user IP & user agent
+  - [ ] Create API: GET /api/audit/logs (admin only)
+  - [ ] Retention policy: 6+ months
+- [ ] **Audit UI features**:
+  - [ ] Show status timeline on order details
+  - [ ] Show "changed by" info (user name & timestamp)
+  - [ ] Show reason for changes
+  - [ ] Admin panel to view audit logs
+
+### 2.5.2 LGPD Compliance Features
+- [ ] **Data Export (Article 18)**:
+  - [ ] API: POST /api/gdpr/export (export all user data)
+  - [ ] Include personal data in JSON format
+  - [ ] Downloadable ZIP with all records
+- [ ] **Data Deletion (Article 17)**:
+  - [ ] API: POST /api/gdpr/delete-account (soft delete user)
+  - [ ] Remove personal data from active records
+  - [ ] Keep audit trail
+- [ ] **Consent Tracking**:
+  - [ ] Track when user consented to terms
+  - [ ] Store consent version & timestamp
+  - [ ] Ability to revoke consent
+- [ ] **Privacy Documentation**:
+  - [ ] Privacy policy page
+  - [ ] Terms of service
+  - [ ] Cookie consent banner
 
 ---
 
@@ -385,47 +462,77 @@
 
 ---
 
-## Priority Matrix
+## Priority Matrix (4 Developer Team)
 
-### P0 - Critical (Blocks MVP)
-1. Backend API setup & database schema
-2. Real authentication & authorization
-3. Core API endpoints (Orders, Quotes, RMA)
-4. Frontend-backend integration
-5. Basic testing setup
+### P0 - Critical (Blocks MVP - Weeks 1-4)
+1. ✅ **Phase 1.2**: Refactored database schema (PostgreSQL setup)
+2. ✅ **Phase 1.3**: Real authentication & authorization (JWT + 2FA)
+3. ✅ **Phase 1.4**: Core API endpoints (Orders, Quotes, RMA)
+4. ✅ **Phase 1.5**: Data validation & business logic
+5. ✅ **Phase 2**: Frontend-backend integration
+6. **Phase 2.5**: Audit logging (status_history table)
 
-### P1 - High (Essential for launch)
-1. Advanced filtering & search
-2. Error handling & validation
-3. Comprehensive testing (unit, integration, E2E)
-4. Deployment pipeline setup
-5. Security hardening
+### P1 - High (Essential for MVP Launch - Weeks 5-8)
+1. **Phase 4.1-4.2**: Testing (unit, integration, basic E2E)
+2. **Phase 5.2**: CI/CD pipeline setup
+3. **Phase 5.1**: Basic monitoring & error tracking
+4. **Phase 5.3**: Security hardening (HTTPS, headers, rate limiting)
+5. **Phase 2.5**: LGPD compliance basics (data export/deletion)
 
-### P2 - Medium (Nice to have soon)
-1. Reports & analytics enhancements
-2. Notifications & alerts
-3. Financial management features
-4. Data import/export
-5. Mobile optimization
+### P2 - Medium (Post-MVP - Weeks 9-16)
+1. **Phase 3.1-3.2**: Advanced filtering, reports, analytics views
+2. **Phase 3.3-3.6**: Enhanced features (order history, financial mgmt)
+3. **Phase 4.3-4.4**: Security & performance testing
+4. **Phase 5.4**: Complete documentation
+5. **Phase 6.1-6.4**: User management, data import/export
 
-### P3 - Low (Nice to have eventually)
-1. Advanced integrations
-2. Automation & workflows
-3. ML-based analytics
-4. Mobile app development
-5. Multi-language support
+### P3 - Lower (Nice to Have - Weeks 17-24)
+1. **Phase 7.1-7.2**: External integrations & automation
+2. **Phase 7.3**: Advanced analytics & ML
+3. **Phase 7.4**: Enhanced compliance features
+4. **Phase 6.5**: Multi-language support
+5. **Phase 6.3**: Mobile app/PWA
 
 ---
 
-## Estimated Timeline
+## Timeline Summary for 4 Developers
 
-- **Phase 1 (Backend Infrastructure):** 3-4 weeks
-- **Phase 2 (API Integration):** 2-3 weeks
-- **Phase 3 (Enhanced Features):** 4-6 weeks
-- **Phase 4 (Testing & QA):** 3-4 weeks
-- **Phase 5 (Deployment & Operations):** 2-3 weeks
-- **Phase 6 (User Features & Optimization):** 2-3 weeks
-- **Phase 7 (Advanced Features):** 4-6 weeks (parallel with maintenance)
+| Phase | Duration | Team Split | Status |
+|-------|----------|-----------|--------|
+| **Phase 1.1-1.5** | 2-3 weeks | 2 Backend, 2 Frontend | ▶️ IN PROGRESS |
+| **Phase 2.0-2.5** | 2-3 weeks | 2 Backend, 2 Frontend | ▶️ NEXT |
+| **Phase 4 (Testing)** | 1-2 weeks | All 4 | ▶️ AFTER P1 |
+| **Phase 5 (Deploy)** | 1-2 weeks | 1 DevOps + 3 support | ▶️ AFTER P1 |
+| **MVP Delivery** | **8-10 weeks** | | ✅ TARGET |
+| **Phase 3 (Features)** | 4-6 weeks | 2 Backend, 2 Frontend | ▶️ P2 |
+| **Phase 6-7 (Advanced)** | 6-8 weeks | Mixed | ▶️ P3 |
+| **Full Release** | **20-24 weeks** | | ✅ TARGET |
+
+---
+
+## Getting Started (This Week)
+
+### Backend Team (2 devs)
+- [ ] Set up PostgreSQL with refactored schema
+- [ ] Initialize backend project (FastAPI or Express)
+- [ ] Create ORM models (SQLAlchemy or Prisma)
+- [ ] Implement authentication endpoints
+- [ ] Start working on Orders API
+
+### Frontend Team (2 devs)
+- [ ] Start replacing React Context with React Query
+- [ ] Create API client with interceptors
+- [ ] Prepare modals for API integration
+- [ ] Set up error handling patterns
+
+---
+
+## Key Resources
+- **Database Schema**: DATABASE_SCHEMA_REFACTORED.md (implementation details)
+- **Database Diagram**: DATABASE_SCHEMA.dbdiagram (visualization)
+- **Refactoring Guide**: DATABASE_REFACTORING_GUIDE.md (side-by-side comparisons)
+- **Architecture**: ARCHITECTURE.md (system design)
+- **Implementation**: IMPLEMENTATION_GUIDE.md (code examples)
 
 **Total estimated time:** 20-29 weeks (5-7 months) for full feature set
 
