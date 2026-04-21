@@ -302,7 +302,7 @@ export function OrderModal({ open, onClose, order, onSave, nextOS, prefill }: Pr
               <Input className="bg-white border-border" value={form.customer || ''} onChange={e => set('customer', e.target.value)} onKeyDown={handleEnterBlur} />
             </div>
             <div>
-              <Label>CNPJ</Label>
+              <Label>CPF/CNPJ</Label>
               <Input className="bg-white border-border" value={form.cnpj || ''} onChange={e => set('cnpj', e.target.value)} onKeyDown={handleEnterBlur} />
             </div>
             <div>
