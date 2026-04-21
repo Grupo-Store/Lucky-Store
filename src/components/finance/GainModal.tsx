@@ -1,11 +1,15 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Card, CardContent } from '@/components/ui/card';
-import { Printer, Plus, Trash2 } from 'lucide-react';
+import { Printer, Trash2 } from 'lucide-react';
 import { Gain, GainKind, gainNet, InstallmentPlan } from '@/store/FinanceStore';
 import { PAYMENT_METHODS, PAYMENT_METHOD_LABELS, PaymentMethod } from '@/store/OrderStore';
 import { DateField } from './DateField';
