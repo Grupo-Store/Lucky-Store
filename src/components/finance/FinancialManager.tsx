@@ -1,18 +1,32 @@
 import { useMemo, useState } from 'react';
-import { format, startOfMonth, endOfMonth, eachDayOfInterval, addMonths, subMonths, startOfWeek, endOfWeek, isSameMonth, isSameDay } from 'date-fns';
+import {
+  format, startOfMonth, endOfMonth, eachDayOfInterval, addMonths, subMonths,
+  startOfWeek, endOfWeek, isSameMonth, isSameDay,
+} from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { ChevronLeft, ChevronRight, Plus, Printer } from 'lucide-react';
+import {
+  ChevronLeft, ChevronRight, Plus, Printer, CalendarDays, Table as TableIcon,
+} from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from '@/components/ui/select';
+import { Input } from '@/components/ui/input';
+import {
+  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
+} from '@/components/ui/table';
 import { cn } from '@/lib/utils';
-import { useFinance, expandGain, expandExpense, CalendarEntry, Gain, Expense } from '@/store/FinanceStore';
+import {
+  useFinance, expandExpense, expandOrderFinancial, CalendarEntry, Expense,
+} from '@/store/FinanceStore';
 import { useOrders, calcTotal, Order } from '@/store/OrderStore';
-import { GainModal } from './GainModal';
 import { ExpenseModal } from './ExpenseModal';
 import { OrderModal } from '@/components/OrderModal';
 
 type ViewMode = 'gains' | 'expenses' | 'all';
+type Layout = 'calendar' | 'table';
+type TypeFilter = 'all' | 'MULTA' | 'JUROS' | 'PREVISAO' | 'PAGO';
 
 const BRL = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
@@ -32,35 +46,51 @@ const TYPE_LABELS: Record<CalendarEntry['type'], string> = {
   ORDER: 'Pedido',
 };
 
+const fmtDate = (iso: string) => format(new Date(iso + 'T12:00:00'), 'dd/MM/yyyy');
+
 export function FinancialManager() {
-  const { gains, expenses, addGain, updateGain, deleteGain, addExpense, updateExpense, deleteExpense } = useFinance();
+  const { expenses, addExpense, updateExpense, deleteExpense } = useFinance();
   const { orders, updateOrder, deleteOrder, nextOS } = useOrders();
   const [view, setView] = useState<ViewMode>('all');
+  const [layout, setLayout] = useState<Layout>('calendar');
+  const [typeFilter, setTypeFilter] = useState<TypeFilter>('all');
   const [cursor, setCursor] = useState<Date>(new Date());
-  const [gainModal, setGainModal] = useState<{ open: boolean; gain: Gain | null }>({ open: false, gain: null });
   const [expModal, setExpModal] = useState<{ open: boolean; expense: Expense | null }>({ open: false, expense: null });
   const [orderModal, setOrderModal] = useState<{ open: boolean; order: Order | null }>({ open: false, order: null });
 
-  // Build calendar entries
-  const entries = useMemo<CalendarEntry[]>(() => {
+  // Build calendar entries from expenses + auto-derived gains from orders + standard orders (general)
+  const allEntries = useMemo<CalendarEntry[]>(() => {
     const out: CalendarEntry[] = [];
-    if (view === 'gains' || view === 'all') gains.forEach(g => out.push(...expandGain(g)));
-    if (view === 'expenses' || view === 'all') expenses.forEach(e => out.push(...expandExpense(e)));
-    if (view === 'all') {
-      orders.filter(o => !o.isRMA && !o.cancelled && o.deliveryDate).forEach(o => {
-        out.push({
-          id: `o-${o.id}`,
-          date: o.deliveryDate,
-          value: calcTotal(o),
-          type: 'ORDER',
-          title: `OS ${o.os} ${o.customer}`.trim(),
-          refId: o.id,
-          refKind: 'order',
-        });
+    // Auto-gains from orders
+    orders.filter(o => !o.isRMA && !o.cancelled).forEach(o => {
+      out.push(...expandOrderFinancial(o));
+    });
+    expenses.forEach(e => out.push(...expandExpense(e)));
+    // Visão geral: also display sales orders by deliveryDate
+    orders.filter(o => !o.isRMA && !o.cancelled && o.deliveryDate).forEach(o => {
+      out.push({
+        id: `o-${o.id}`,
+        date: o.deliveryDate,
+        value: calcTotal(o),
+        type: 'ORDER',
+        title: `OS ${o.os} ${o.customer}`.trim(),
+        refId: o.id,
+        refKind: 'order',
       });
-    }
+    });
     return out;
-  }, [gains, expenses, orders, view]);
+  }, [expenses, orders]);
+
+  const entries = useMemo(() => {
+    return allEntries.filter(e => {
+      if (view === 'gains' && !(e.type === 'MULTA' || e.type === 'JUROS')) return false;
+      if (view === 'expenses' && !(e.type === 'PREVISAO' || e.type === 'PAGO')) return false;
+      // 'all' includes ORDER type
+      if (view !== 'all' && e.type === 'ORDER') return false;
+      if (typeFilter !== 'all' && e.type !== typeFilter) return false;
+      return true;
+    });
+  }, [allEntries, view, typeFilter]);
 
   // Group by date
   const byDate = useMemo(() => {
@@ -72,14 +102,12 @@ export function FinancialManager() {
     return m;
   }, [entries]);
 
-  // Calendar grid
   const monthStart = startOfMonth(cursor);
   const monthEnd = endOfMonth(cursor);
   const gridStart = startOfWeek(monthStart, { weekStartsOn: 0 });
   const gridEnd = endOfWeek(monthEnd, { weekStartsOn: 0 });
   const days = eachDayOfInterval({ start: gridStart, end: gridEnd });
 
-  // Monthly summary
   const monthSummary = useMemo(() => {
     let receitas = 0, despesas = 0;
     entries.forEach(e => {
@@ -102,42 +130,63 @@ export function FinancialManager() {
   };
 
   const handleEntryClick = (e: CalendarEntry) => {
-    if (e.refKind === 'gain') {
-      const g = gains.find(x => x.id === e.refId);
-      if (g) setGainModal({ open: true, gain: g });
-    } else if (e.refKind === 'expense') {
+    if (e.refKind === 'expense') {
       const ex = expenses.find(x => x.id === e.refId);
       if (ex) setExpModal({ open: true, expense: ex });
-    } else if (e.refKind === 'order') {
+    } else if (e.refKind === 'order' || e.refKind === 'order-penalty' || e.refKind === 'order-interest') {
       const o = orders.find(x => x.id === e.refId);
       if (o) setOrderModal({ open: true, order: o });
     }
   };
+
+  /* ---------- Table view ---------- */
+  const tableSearch = useState('')[0]; // not used UI-wise for brevity
+  const sortedEntries = useMemo(() => {
+    return [...entries].sort((a, b) => b.date.localeCompare(a.date));
+  }, [entries]);
 
   return (
     <div className="space-y-4">
       {/* Toolbar */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div className="flex items-center gap-2">
-          <Button variant="outline" size="icon" onClick={() => setCursor(subMonths(cursor, 1))}><ChevronLeft className="h-4 w-4" /></Button>
-          <h2 className="text-xl font-bold capitalize text-secondary min-w-[200px] text-center">
-            {format(cursor, "MMMM 'de' yyyy", { locale: ptBR })}
-          </h2>
-          <Button variant="outline" size="icon" onClick={() => setCursor(addMonths(cursor, 1))}><ChevronRight className="h-4 w-4" /></Button>
-          <Button variant="ghost" onClick={() => setCursor(new Date())}>Hoje</Button>
+          {layout === 'calendar' && (
+            <>
+              <Button variant="outline" size="icon" onClick={() => setCursor(subMonths(cursor, 1))}><ChevronLeft className="h-4 w-4" /></Button>
+              <h2 className="text-xl font-bold capitalize text-secondary min-w-[200px] text-center">
+                {format(cursor, "MMMM 'de' yyyy", { locale: ptBR })}
+              </h2>
+              <Button variant="outline" size="icon" onClick={() => setCursor(addMonths(cursor, 1))}><ChevronRight className="h-4 w-4" /></Button>
+              <Button variant="ghost" onClick={() => setCursor(new Date())}>Hoje</Button>
+            </>
+          )}
+          {layout === 'table' && (
+            <h2 className="text-xl font-bold text-secondary">Lançamentos Financeiros</h2>
+          )}
         </div>
 
-        <div className="flex items-center gap-2">
-          {(view === 'gains' || view === 'all') && (
-            <Button onClick={() => setGainModal({ open: true, gain: null })} className="gap-1.5">
-              <Plus className="h-4 w-4" /> Adicionar Ganho
-            </Button>
-          )}
+        <div className="flex items-center gap-2 flex-wrap">
           {(view === 'expenses' || view === 'all') && (
             <Button onClick={() => setExpModal({ open: true, expense: null })} variant="secondary" className="gap-1.5">
               <Plus className="h-4 w-4" /> Adicionar Despesa
             </Button>
           )}
+          <div className="flex bg-muted rounded-md p-0.5">
+            <button
+              onClick={() => setLayout('calendar')}
+              className={cn('px-3 py-1.5 text-sm rounded flex items-center gap-1.5',
+                layout === 'calendar' ? 'bg-card shadow-sm font-medium' : 'text-muted-foreground')}
+            >
+              <CalendarDays className="h-4 w-4" /> Calendário
+            </button>
+            <button
+              onClick={() => setLayout('table')}
+              className={cn('px-3 py-1.5 text-sm rounded flex items-center gap-1.5',
+                layout === 'table' ? 'bg-card shadow-sm font-medium' : 'text-muted-foreground')}
+            >
+              <TableIcon className="h-4 w-4" /> Tabela
+            </button>
+          </div>
           <Button variant="outline" onClick={() => window.print()} className="gap-1.5 print:hidden">
             <Printer className="h-4 w-4" /> Imprimir
           </Button>
@@ -153,11 +202,13 @@ export function FinancialManager() {
       </div>
 
       {/* Monthly summary */}
-      <div className="grid grid-cols-3 gap-3">
-        <Card><CardContent className="pt-4"><p className="text-xs text-muted-foreground">Total Receitas</p><p className="text-xl font-bold text-green-700">{BRL(monthSummary.receitas)}</p></CardContent></Card>
-        <Card><CardContent className="pt-4"><p className="text-xs text-muted-foreground">Total Despesas</p><p className="text-xl font-bold text-red-600">{BRL(monthSummary.despesas)}</p></CardContent></Card>
-        <Card><CardContent className="pt-4"><p className="text-xs text-muted-foreground">Total Lucro</p><p className={cn('text-xl font-bold', monthSummary.lucro >= 0 ? 'text-green-700' : 'text-red-600')}>{BRL(monthSummary.lucro)}</p></CardContent></Card>
-      </div>
+      {layout === 'calendar' && (
+        <div className="grid grid-cols-3 gap-3">
+          <Card><CardContent className="pt-4"><p className="text-xs text-muted-foreground">Total Receitas</p><p className="text-xl font-bold text-green-700">{BRL(monthSummary.receitas)}</p></CardContent></Card>
+          <Card><CardContent className="pt-4"><p className="text-xs text-muted-foreground">Total Despesas</p><p className="text-xl font-bold text-red-600">{BRL(monthSummary.despesas)}</p></CardContent></Card>
+          <Card><CardContent className="pt-4"><p className="text-xs text-muted-foreground">Total Lucro</p><p className={cn('text-xl font-bold', monthSummary.lucro >= 0 ? 'text-green-700' : 'text-red-600')}>{BRL(monthSummary.lucro)}</p></CardContent></Card>
+        </div>
+      )}
 
       {/* Legend */}
       <div className="flex items-center gap-3 text-xs flex-wrap">
@@ -169,73 +220,129 @@ export function FinancialManager() {
         {view === 'all' && <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-secondary" /> Pedido</span>}
       </div>
 
-      {/* Calendar grid */}
-      <Card>
-        <CardContent className="p-2">
-          <div className="grid grid-cols-7 gap-1 mb-1">
-            {['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'].map(d => (
-              <div key={d} className="text-xs font-semibold text-center text-muted-foreground py-1">{d}</div>
-            ))}
-          </div>
-          <div className="grid grid-cols-7 gap-1">
-            {days.map(day => {
-              const iso = format(day, 'yyyy-MM-dd');
-              const inMonth = isSameMonth(day, cursor);
-              const isToday = isSameDay(day, new Date());
-              const cellEntries = byDate.get(iso) || [];
-              const sum = dailySummary(iso);
+      {/* CALENDAR */}
+      {layout === 'calendar' && (
+        <Card>
+          <CardContent className="p-2">
+            <div className="grid grid-cols-7 gap-1 mb-1">
+              {['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'].map(d => (
+                <div key={d} className="text-xs font-semibold text-center text-muted-foreground py-1">{d}</div>
+              ))}
+            </div>
+            <div className="grid grid-cols-7 gap-1">
+              {days.map(day => {
+                const iso = format(day, 'yyyy-MM-dd');
+                const inMonth = isSameMonth(day, cursor);
+                const isToday = isSameDay(day, new Date());
+                const cellEntries = byDate.get(iso) || [];
+                const sum = dailySummary(iso);
 
-              return (
-                <div
-                  key={iso}
-                  className={cn(
-                    'min-h-[120px] border rounded p-1 flex flex-col',
-                    inMonth ? 'bg-card' : 'bg-muted/40 opacity-60',
-                    isToday && 'ring-2 ring-primary'
-                  )}
-                >
-                  <div className="flex items-center justify-between text-xs font-medium mb-1">
-                    <span className={cn(isToday && 'text-primary font-bold')}>{format(day, 'd')}</span>
-                  </div>
-                  <div className="flex-1 space-y-0.5 overflow-hidden">
-                    {cellEntries.slice(0, 3).map(e => (
-                      <button
-                        key={e.id}
-                        onClick={() => handleEntryClick(e)}
-                        className={cn(
-                          'w-full text-left text-[10px] leading-tight px-1.5 py-0.5 rounded truncate',
-                          TYPE_STYLES[e.type]
-                        )}
-                        title={`${TYPE_LABELS[e.type]}: ${e.title} — ${BRL(e.value)}`}
-                      >
-                        {e.title} · {BRL(e.value)}
-                      </button>
-                    ))}
-                    {cellEntries.length > 3 && (
-                      <div className="text-[10px] text-muted-foreground px-1">+{cellEntries.length - 3} mais</div>
+                return (
+                  <div
+                    key={iso}
+                    className={cn(
+                      'min-h-[120px] border rounded p-1 flex flex-col',
+                      inMonth ? 'bg-card' : 'bg-muted/40 opacity-60',
+                      isToday && 'ring-2 ring-primary'
+                    )}
+                  >
+                    <div className="flex items-center justify-between text-xs font-medium mb-1">
+                      <span className={cn(isToday && 'text-primary font-bold')}>{format(day, 'd')}</span>
+                    </div>
+                    <div className="flex-1 space-y-0.5 overflow-hidden">
+                      {cellEntries.slice(0, 3).map(e => (
+                        <button
+                          key={e.id}
+                          onClick={() => handleEntryClick(e)}
+                          className={cn(
+                            'w-full text-left text-[10px] leading-tight px-1.5 py-0.5 rounded truncate',
+                            TYPE_STYLES[e.type]
+                          )}
+                          title={`${TYPE_LABELS[e.type]}: ${e.title} — ${BRL(e.value)}`}
+                        >
+                          {e.title} · {BRL(e.value)}
+                        </button>
+                      ))}
+                      {cellEntries.length > 3 && (
+                        <div className="text-[10px] text-muted-foreground px-1">+{cellEntries.length - 3} mais</div>
+                      )}
+                    </div>
+                    {(sum.receitas > 0 || sum.despesas > 0) && (
+                      <div className="mt-1 pt-1 border-t text-[9px] space-y-0.5">
+                        {sum.receitas > 0 && <div className="text-green-700">R: {BRL(sum.receitas)}</div>}
+                        {sum.despesas > 0 && <div className="text-red-600">D: {BRL(sum.despesas)}</div>}
+                        <div className={cn('font-semibold', sum.lucro >= 0 ? 'text-green-700' : 'text-red-600')}>L: {BRL(sum.lucro)}</div>
+                      </div>
                     )}
                   </div>
-                  {(sum.receitas > 0 || sum.despesas > 0) && (
-                    <div className="mt-1 pt-1 border-t text-[9px] space-y-0.5">
-                      {sum.receitas > 0 && <div className="text-green-700">R: {BRL(sum.receitas)}</div>}
-                      {sum.despesas > 0 && <div className="text-red-600">D: {BRL(sum.despesas)}</div>}
-                      <div className={cn('font-semibold', sum.lucro >= 0 ? 'text-green-700' : 'text-red-600')}>L: {BRL(sum.lucro)}</div>
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        </CardContent>
-      </Card>
+                );
+              })}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
-      <GainModal
-        open={gainModal.open}
-        gain={gainModal.gain}
-        onClose={() => setGainModal({ open: false, gain: null })}
-        onSave={g => gainModal.gain ? updateGain(g) : addGain(g)}
-        onDelete={deleteGain}
-      />
+      {/* TABLE */}
+      {layout === 'table' && (
+        <Card>
+          <CardContent className="p-4 space-y-3">
+            <div className="flex items-center gap-3 flex-wrap">
+              <span className="text-sm font-medium">Filtrar tipo:</span>
+              {(['all', 'MULTA', 'JUROS', 'PREVISAO', 'PAGO'] as TypeFilter[]).map(t => (
+                <button
+                  key={t}
+                  onClick={() => setTypeFilter(t)}
+                  className={cn(
+                    'px-3 py-1 rounded-full text-xs font-medium border',
+                    typeFilter === t ? 'bg-secondary text-secondary-foreground border-secondary' : 'bg-card text-muted-foreground'
+                  )}
+                >
+                  {t === 'all' ? 'Todos' : TYPE_LABELS[t as CalendarEntry['type']]}
+                </button>
+              ))}
+            </div>
+
+            <div className="overflow-x-auto rounded-lg border">
+              <Table>
+                <TableHeader>
+                  <TableRow className="bg-secondary/10">
+                    <TableHead>Tipo</TableHead>
+                    <TableHead>Origem / Serviço</TableHead>
+                    <TableHead>Data</TableHead>
+                    <TableHead className="text-right">Valor</TableHead>
+                    <TableHead>Status</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {sortedEntries.filter(e => e.type !== 'ORDER').map(e => {
+                    const status = e.type === 'PAGO' ? 'Pago'
+                      : e.type === 'PREVISAO' ? 'Previsto'
+                      : e.type === 'MULTA' ? 'Multa Recebida'
+                      : 'Juros Recebidos';
+                    return (
+                      <TableRow key={e.id} className="cursor-pointer hover:bg-muted/50" onClick={() => handleEntryClick(e)}>
+                        <TableCell>
+                          <span className={cn('px-2 py-0.5 rounded text-xs font-semibold', TYPE_STYLES[e.type])}>
+                            {TYPE_LABELS[e.type]}
+                          </span>
+                        </TableCell>
+                        <TableCell>{e.title}</TableCell>
+                        <TableCell>{fmtDate(e.date)}</TableCell>
+                        <TableCell className="text-right font-semibold">{BRL(e.value)}</TableCell>
+                        <TableCell className="text-xs text-muted-foreground">{status}</TableCell>
+                      </TableRow>
+                    );
+                  })}
+                  {sortedEntries.filter(e => e.type !== 'ORDER').length === 0 && (
+                    <TableRow><TableCell colSpan={5} className="text-center py-8 text-muted-foreground">Nenhum lançamento encontrado</TableCell></TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       <ExpenseModal
         open={expModal.open}
         expense={expModal.expense}

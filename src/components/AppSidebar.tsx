@@ -1,4 +1,4 @@
-import { ShoppingCart, LayoutDashboard, LogOut } from 'lucide-react';
+import { ShoppingCart, LayoutDashboard, LogOut, Wallet } from 'lucide-react';
 import { NavLink } from '@/components/NavLink';
 import { useAuth } from '@/store/AuthStore';
 import {
@@ -9,6 +9,7 @@ import logo from '@/assets/logo.png';
 
 const navItems = [
   { title: 'Vendas', url: '/', icon: ShoppingCart },
+  { title: 'Financeiro', url: '/financial', icon: Wallet },
   { title: 'Dashboard', url: '/dashboard', icon: LayoutDashboard },
 ];
 

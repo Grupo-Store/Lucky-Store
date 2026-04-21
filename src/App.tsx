@@ -10,6 +10,7 @@ import { FinanceProvider } from "@/store/FinanceStore";
 import { LoginScreen } from "@/components/LoginScreen";
 import { AppLayout } from "@/components/AppLayout";
 import Sales from "@/pages/Sales";
+import Financial from "@/pages/Financial";
 import Dashboard from "@/pages/Dashboard";
 import NotFound from "./pages/NotFound.tsx";
 
@@ -27,6 +28,7 @@ function AuthGate() {
           <Routes>
             <Route element={<AppLayout />}>
               <Route path="/" element={<Sales />} />
+              <Route path="/financial" element={<Financial />} />
               <Route path="/dashboard" element={<Dashboard />} />
             </Route>
             <Route path="*" element={<NotFound />} />

@@ -16,6 +16,7 @@ import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import {
   Order, OrderItem, ItemStatus, PaymentMethod, Company, Seller, OrderStatus, FreightCard,
+  PaymentInstallment,
   ITEM_STATUS_COLORS, ORDER_STATUS_COLORS, ORDER_STATUS_LABELS,
   PAYMENT_METHODS, PAYMENT_METHOD_LABELS, SELLERS,
   calcFinalCost, calcProfit, calcFreightTotal,
@@ -33,6 +34,8 @@ const emptyOrder = (os: string): Partial<Order> => ({
   creditCostPercent: 0, creditCostValue: 0, debitCostPercent: 0, debitCostValue: 0,
   purchaseTaxPercent: 0, purchaseTaxValue: 0, salesTaxPercent: 0, salesTaxValue: 0,
   salesValue: 0, items: [], freight: [],
+  paymentDate: '', penaltyValue: 0, interestValue: 0, paymentMethod: '',
+  paymentInstallments: 1, paymentInstallmentPlan: [],
 });
 
 function toBRL(v: number): string {
@@ -205,6 +208,12 @@ export function OrderModal({ open, onClose, order, onSave, nextOS, prefill }: Pr
       salesValue: form.salesValue || 0,
       items: form.items || [],
       freight: form.freight || [],
+      paymentDate: form.paymentDate || '',
+      penaltyValue: form.penaltyValue || 0,
+      interestValue: form.interestValue || 0,
+      paymentMethod: (form.paymentMethod || '') as PaymentMethod | '',
+      paymentInstallments: form.paymentInstallments || 1,
+      paymentInstallmentPlan: form.paymentInstallmentPlan || [],
     };
     onSave(o);
     onClose();
@@ -527,6 +536,9 @@ export function OrderModal({ open, onClose, order, onSave, nextOS, prefill }: Pr
           </div>
         </section>
 
+        {/* ============== 3c. PAGAMENTO ============== */}
+        <PagamentoSection form={form} set={set} />
+
         {/* ============== 4. CANCELAMENTO ============== */}
         <section className="border rounded-lg p-4">
           <h3 className="text-sm font-bold text-secondary uppercase tracking-wide mb-3">Cancelamento</h3>
@@ -668,3 +680,107 @@ function FreightRow({ idx, card, onChange, onRemove }: {
     </div>
   );
 }
+
+/* ---------- Pagamento section ---------- */
+function PagamentoSection({ form, set }: { form: Partial<Order>; set: (k: keyof Order, v: any) => void }) {
+  const [payDateOpen, setPayDateOpen] = useState(false);
+  const isCredit = form.paymentMethod === 'Credit Card';
+  const n = form.paymentInstallments || 0;
+  const plan = form.paymentInstallmentPlan || [];
+  const baseValue = form.salesValue || 0;
+
+  useEffect(() => {
+    if (!isCredit) return;
+    if (plan.length === n) return;
+    const valuePer = n > 0 ? +(baseValue / n).toFixed(2) : 0;
+    const next: PaymentInstallment[] = Array.from({ length: n }, (_, i) =>
+      plan[i] || { date: '', value: valuePer }
+    );
+    set('paymentInstallmentPlan', next);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [n, isCredit]);
+
+  const setInst = (i: number, patch: Partial<PaymentInstallment>) => {
+    const next = plan.map((p, idx) => idx === i ? { ...p, ...patch } : p);
+    set('paymentInstallmentPlan', next);
+  };
+
+  return (
+    <section className="border rounded-lg p-4">
+      <h3 className="text-sm font-bold text-secondary uppercase tracking-wide mb-3">Pagamento</h3>
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div>
+          <Label>Data Pagamento</Label>
+          <Popover open={payDateOpen} onOpenChange={setPayDateOpen}>
+            <PopoverTrigger asChild>
+              <Button variant="outline" className="w-full justify-start text-left font-normal bg-white">
+                <CalendarIcon className="mr-2 h-4 w-4" />
+                {form.paymentDate ? format(new Date(form.paymentDate + 'T12:00:00'), 'dd/MM/yyyy') : 'Selecionar'}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-0">
+              <Calendar mode="single"
+                selected={form.paymentDate ? new Date(form.paymentDate + 'T12:00:00') : undefined}
+                onSelect={d => { if (d) set('paymentDate', format(d, 'yyyy-MM-dd')); setPayDateOpen(false); }}
+                locale={ptBR} className="p-3 pointer-events-auto" />
+            </PopoverContent>
+          </Popover>
+        </div>
+        <div>
+          <Label>Multa (R$)</Label>
+          <Input type="number" step="0.01" className="bg-white border-border"
+            value={form.penaltyValue || ''} onChange={e => set('penaltyValue', parseFloat(e.target.value) || 0)} onKeyDown={handleEnterBlur} />
+        </div>
+        <div>
+          <Label>Juros (R$)</Label>
+          <Input type="number" step="0.01" className="bg-white border-border"
+            value={form.interestValue || ''} onChange={e => set('interestValue', parseFloat(e.target.value) || 0)} onKeyDown={handleEnterBlur} />
+        </div>
+        <div>
+          <Label>Forma de Pagamento</Label>
+          <Select value={form.paymentMethod || ''} onValueChange={v => set('paymentMethod', v)}>
+            <SelectTrigger className="bg-white border-border"><SelectValue placeholder="Selecionar" /></SelectTrigger>
+            <SelectContent>
+              {PAYMENT_METHODS.map(m => <SelectItem key={m} value={m}>{PAYMENT_METHOD_LABELS[m]}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </div>
+        {isCredit && (
+          <div>
+            <Label>Parcelas</Label>
+            <Input type="number" min={1} className="bg-white border-border"
+              value={form.paymentInstallments || ''} onChange={e => set('paymentInstallments', parseInt(e.target.value) || 1)} onKeyDown={handleEnterBlur} />
+          </div>
+        )}
+      </div>
+
+      {isCredit && plan.length > 0 && (
+        <div className="mt-4 space-y-2">
+          <Label>Datas e valores das parcelas</Label>
+          {plan.map((p, i) => (
+            <div key={i} className="grid grid-cols-[60px_1fr_1fr] gap-2 items-center">
+              <span className="text-sm font-medium">{i + 1}ª</span>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button variant="outline" className="w-full justify-start text-left font-normal bg-white">
+                    <CalendarIcon className="mr-2 h-4 w-4" />
+                    {p.date ? format(new Date(p.date + 'T12:00:00'), 'dd/MM/yyyy') : 'Data'}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0">
+                  <Calendar mode="single"
+                    selected={p.date ? new Date(p.date + 'T12:00:00') : undefined}
+                    onSelect={d => setInst(i, { date: d ? format(d, 'yyyy-MM-dd') : '' })}
+                    locale={ptBR} className="p-3 pointer-events-auto" />
+                </PopoverContent>
+              </Popover>
+              <Input type="number" step="0.01" placeholder="Valor da parcela"
+                value={p.value || ''} onChange={e => setInst(i, { value: parseFloat(e.target.value) || 0 })} onKeyDown={handleEnterBlur} />
+            </div>
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}
+

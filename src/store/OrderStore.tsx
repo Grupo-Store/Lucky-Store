@@ -138,6 +138,12 @@ export function calcItemLatestDelivery(item: OrderItem): string | undefined {
   return dates.sort().slice(-1)[0];
 }
 
+/** Installment plan (date + value) used in the Pagamento section */
+export interface PaymentInstallment {
+  date: string;
+  value: number;
+}
+
 export interface Order {
   id: string;
   os: string;
@@ -158,6 +164,13 @@ export interface Order {
   deliveryDate: string;
   status: OrderStatus;
   isRMA: boolean;
+  /** Pagamento section */
+  paymentDate?: string;
+  penaltyValue?: number;
+  interestValue?: number;
+  paymentMethod?: PaymentMethod | '';
+  paymentInstallments?: number;
+  paymentInstallmentPlan?: PaymentInstallment[];
   /** RMA-specific fields. Only present when isRMA = true. */
   rmaNumber?: string;
   rmaParentOrderId?: string;
