@@ -7,6 +7,9 @@ import { Label } from '@/components/ui/label';
 import { InputOTP, InputOTPGroup, InputOTPSlot } from '@/components/ui/input-otp';
 import { Mail, ShieldCheck, ArrowLeft } from 'lucide-react';
 import { toast } from 'sonner';
+import logoLuckyStore from '@/assets/logo-lucky-store.png';
+import logoBTech from '@/assets/logo-btech.png';
+import logoAJJ from '@/assets/logo-ajj.png';
 
 /* -------------------- BRAND HEADER -------------------- */
 const BrandHeader = () => (
@@ -14,20 +17,14 @@ const BrandHeader = () => (
     <h1 className="text-3xl md:text-4xl font-bold text-secondary tracking-tight">
       Bem vindo ao <span className="text-primary">Grupo Lucky</span>
     </h1>
-    <div className="mt-5 flex items-center justify-center gap-3 flex-wrap">
-      <BrandChip label="Lucky Store" />
-      <span className="text-secondary/30">·</span>
-      <BrandChip label="BTech" />
-      <span className="text-secondary/30">·</span>
-      <BrandChip label="AJJ" />
+    <div className="mt-6 flex items-center justify-center gap-6 flex-wrap bg-card/95 rounded-xl px-5 py-4 shadow-sm border border-secondary/10">
+      <img src={logoLuckyStore} alt="Lucky Store" className="h-12 w-auto object-contain" />
+      <span className="h-10 w-px bg-secondary/20" aria-hidden />
+      <img src={logoBTech} alt="BTech" className="h-12 w-auto object-contain" />
+      <span className="h-10 w-px bg-secondary/20" aria-hidden />
+      <img src={logoAJJ} alt="AJJ" className="h-12 w-auto object-contain" />
     </div>
   </div>
-);
-
-const BrandChip = ({ label }: { label: string }) => (
-  <span className="px-3 py-1 rounded-full border border-secondary/30 bg-card text-secondary text-sm font-semibold tracking-wide shadow-sm">
-    {label}
-  </span>
 );
 
 /* -------------------- LOGIN STAGE -------------------- */

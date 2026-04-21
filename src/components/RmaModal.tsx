@@ -386,12 +386,13 @@ export function RmaModal({ open, onClose, orders, rma, onSave, nextRmaNumber }: 
                         onChange={e => updateRmaItem(it.id, 'quantity', parseInt(e.target.value) || 1)} onKeyDown={handleEnterBlur} />
                     </div>
                     <div>
-                      <Label>Fornecedor</Label>
+                      <Label>Reparado por</Label>
                       <Input
-                        readOnly
-                        className="bg-muted border-border"
-                        value={parent.supplier || '—'}
-                        title="Herdado do pedido pai (somente leitura)"
+                        className="bg-white border-border"
+                        value={it.repairedBy || ''}
+                        onChange={e => updateRmaItem(it.id, 'repairedBy', e.target.value)}
+                        onKeyDown={handleEnterBlur}
+                        placeholder="Fornecedor / técnico"
                       />
                     </div>
                     <div>
