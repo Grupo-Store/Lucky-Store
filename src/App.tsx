@@ -6,6 +6,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider, useAuth } from "@/store/AuthStore";
 import { OrderProvider } from "@/store/OrderStore";
 import { QuoteProvider } from "@/store/QuoteStore";
+import { FinanceProvider } from "@/store/FinanceStore";
 import { LoginScreen } from "@/components/LoginScreen";
 import { AppLayout } from "@/components/AppLayout";
 import Sales from "@/pages/Sales";
@@ -21,6 +22,7 @@ function AuthGate() {
   return (
     <OrderProvider>
       <QuoteProvider>
+        <FinanceProvider>
         <BrowserRouter>
           <Routes>
             <Route element={<AppLayout />}>
@@ -30,6 +32,7 @@ function AuthGate() {
             <Route path="*" element={<NotFound />} />
           </Routes>
         </BrowserRouter>
+        </FinanceProvider>
       </QuoteProvider>
     </OrderProvider>
   );
