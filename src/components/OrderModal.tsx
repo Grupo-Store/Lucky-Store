@@ -208,6 +208,12 @@ export function OrderModal({ open, onClose, order, onSave, nextOS, prefill }: Pr
       salesValue: form.salesValue || 0,
       items: form.items || [],
       freight: form.freight || [],
+      paymentDate: form.paymentDate || '',
+      penaltyValue: form.penaltyValue || 0,
+      interestValue: form.interestValue || 0,
+      paymentMethod: (form.paymentMethod || '') as PaymentMethod | '',
+      paymentInstallments: form.paymentInstallments || 1,
+      paymentInstallmentPlan: form.paymentInstallmentPlan || [],
     };
     onSave(o);
     onClose();
