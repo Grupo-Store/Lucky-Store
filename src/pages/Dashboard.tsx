@@ -1,9 +1,10 @@
 import { useState, useMemo } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { useOrders, OrderStatus, ORDER_STATUS_COLORS, calcTotal, isOpenOrder, Company } from '@/store/OrderStore';
+import { useOrders, OrderStatus, calcTotal, isOpenOrder } from '@/store/OrderStore';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line, CartesianGrid, Legend } from 'recharts';
 import { cn } from '@/lib/utils';
+import { FinancialManager } from '@/components/finance/FinancialManager';
 
 const PIE_COLORS = ['#facc15', '#38bdf8', '#a78bfa', '#34d399', '#fb923c', '#22c55e', '#ef4444'];
 const STATUS_KEYS: OrderStatus[] = ['To Buy', 'Bought', 'Received', 'Ready for Delivery', 'Out for Delivery', 'Delivered', 'Delayed'];
@@ -18,7 +19,7 @@ function formatBRL(v: number) {
   return v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 }
 
-export default function Dashboard() {
+function ChartsView() {
   const { orders } = useOrders();
   const [companyFilter, setCompanyFilter] = useState('all');
 
@@ -52,7 +53,6 @@ export default function Dashboard() {
 
   return (
     <div>
-      {/* Company filter */}
       <div className="flex items-center gap-4 mb-4">
         <span className="text-sm font-medium text-muted-foreground">Empresa:</span>
         <div className="flex items-center gap-1 bg-muted rounded-full p-1">
@@ -62,9 +62,7 @@ export default function Dashboard() {
               onClick={() => setCompanyFilter(opt.value)}
               className={cn(
                 'px-4 py-1.5 rounded-full text-sm font-medium transition-all',
-                companyFilter === opt.value
-                  ? 'bg-secondary text-secondary-foreground shadow-sm'
-                  : 'text-muted-foreground hover:text-foreground'
+                companyFilter === opt.value ? 'bg-secondary text-secondary-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
               )}
             >
               {opt.label}
@@ -171,5 +169,28 @@ export default function Dashboard() {
         </TabsContent>
       </Tabs>
     </div>
+  );
+}
+
+export default function Dashboard() {
+  return (
+    <Tabs defaultValue="finance" className="w-full">
+      <TabsList className="bg-card mb-4">
+        <TabsTrigger value="finance" className="data-[state=active]:bg-secondary data-[state=active]:text-secondary-foreground">
+          Gerenciador Financeiro
+        </TabsTrigger>
+        <TabsTrigger value="charts" className="data-[state=active]:bg-secondary data-[state=active]:text-secondary-foreground">
+          Gráficos
+        </TabsTrigger>
+      </TabsList>
+
+      <TabsContent value="finance">
+        <FinancialManager />
+      </TabsContent>
+
+      <TabsContent value="charts">
+        <ChartsView />
+      </TabsContent>
+    </Tabs>
   );
 }
