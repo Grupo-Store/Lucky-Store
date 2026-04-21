@@ -401,48 +401,52 @@ export function OrderModal({ open, onClose, order, onSave, nextOS, prefill }: Pr
             {renderCurrencyInput('giftCost', 'Brinde')}
           </div>
 
-          {/* Percentage → R$ rows */}
+          {/* Bidirectional %↔R$ rows */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
-            <div>
-              <Label>Custo Crédito (%) — sobre Valor de Venda</Label>
-              <div className="flex gap-2">
-                <Input type="number" step="0.01" placeholder="%" className="bg-white border-border"
-                  value={form.creditCostPercent || ''}
-                  onChange={e => set('creditCostPercent', parseFloat(e.target.value) || 0)}
-                  onKeyDown={handleEnterBlur} />
-                <Input readOnly value={toBRL(computed.creditCostValue)} className="bg-muted border-border" />
-              </div>
-            </div>
-            <div>
-              <Label>Custo Débito (%) — sobre Valor de Venda</Label>
-              <div className="flex gap-2">
-                <Input type="number" step="0.01" placeholder="%" className="bg-white border-border"
-                  value={form.debitCostPercent || ''}
-                  onChange={e => set('debitCostPercent', parseFloat(e.target.value) || 0)}
-                  onKeyDown={handleEnterBlur} />
-                <Input readOnly value={toBRL(computed.debitCostValue)} className="bg-muted border-border" />
-              </div>
-            </div>
-            <div>
-              <Label>Imposto Compra (%) — sobre Custo Final Produto</Label>
-              <div className="flex gap-2">
-                <Input type="number" step="0.01" placeholder="%" className="bg-white border-border"
-                  value={form.purchaseTaxPercent || ''}
-                  onChange={e => set('purchaseTaxPercent', parseFloat(e.target.value) || 0)}
-                  onKeyDown={handleEnterBlur} />
-                <Input readOnly value={toBRL(computed.purchaseTaxValue)} className="bg-muted border-border" />
-              </div>
-            </div>
-            <div>
-              <Label>Imposto Venda (%) — sobre Valor de Venda</Label>
-              <div className="flex gap-2">
-                <Input type="number" step="0.01" placeholder="%" className="bg-white border-border"
-                  value={form.salesTaxPercent || ''}
-                  onChange={e => set('salesTaxPercent', parseFloat(e.target.value) || 0)}
-                  onKeyDown={handleEnterBlur} />
-                <Input readOnly value={toBRL(computed.salesTaxValue)} className="bg-muted border-border" />
-              </div>
-            </div>
+            <BiPctRow
+              label="Custo Crédito — sobre Valor de Venda"
+              base={form.salesValue || 0}
+              percent={form.creditCostPercent || 0}
+              value={computed.creditCostValue}
+              onPercentChange={p => set('creditCostPercent', p)}
+              onValueChange={v => {
+                const base = form.salesValue || 0;
+                set('creditCostPercent', base > 0 ? (v / base) * 100 : 0);
+              }}
+            />
+            <BiPctRow
+              label="Custo Débito — sobre Valor de Venda"
+              base={form.salesValue || 0}
+              percent={form.debitCostPercent || 0}
+              value={computed.debitCostValue}
+              onPercentChange={p => set('debitCostPercent', p)}
+              onValueChange={v => {
+                const base = form.salesValue || 0;
+                set('debitCostPercent', base > 0 ? (v / base) * 100 : 0);
+              }}
+            />
+            <BiPctRow
+              label="Imposto Compra — sobre Custo Final Produto"
+              base={derivedFinalProductCost}
+              percent={form.purchaseTaxPercent || 0}
+              value={computed.purchaseTaxValue}
+              onPercentChange={p => set('purchaseTaxPercent', p)}
+              onValueChange={v => {
+                const base = derivedFinalProductCost;
+                set('purchaseTaxPercent', base > 0 ? (v / base) * 100 : 0);
+              }}
+            />
+            <BiPctRow
+              label="Imposto Venda — sobre Valor de Venda"
+              base={form.salesValue || 0}
+              percent={form.salesTaxPercent || 0}
+              value={computed.salesTaxValue}
+              onPercentChange={p => set('salesTaxPercent', p)}
+              onValueChange={v => {
+                const base = form.salesValue || 0;
+                set('salesTaxPercent', base > 0 ? (v / base) * 100 : 0);
+              }}
+            />
           </div>
         </section>
 
@@ -576,6 +580,47 @@ export function OrderModal({ open, onClose, order, onSave, nextOS, prefill }: Pr
         </div>
       </DialogContent>
     </Dialog>
+  );
+}
+
+/* ---------- Bidirectional %↔R$ row ---------- */
+function BiPctRow({ label, base, percent, value, onPercentChange, onValueChange }: {
+  label: string;
+  base: number;
+  percent: number;
+  value: number;
+  onPercentChange: (p: number) => void;
+  onValueChange: (v: number) => void;
+}) {
+  const [pctEditing, setPctEditing] = useState(false);
+  const [pctDraft, setPctDraft] = useState('');
+  const [valEditing, setValEditing] = useState(false);
+  const [valDraft, setValDraft] = useState('');
+  return (
+    <div>
+      <Label>{label}</Label>
+      <div className="flex gap-2">
+        <Input
+          placeholder="%"
+          className="bg-white border-border"
+          value={pctEditing ? pctDraft : (percent ? `${percent.toFixed(2).replace('.', ',')}%` : '')}
+          onFocus={() => { setPctEditing(true); setPctDraft(percent ? String(percent) : ''); }}
+          onBlur={() => { onPercentChange(parseFloat(pctDraft.replace(',', '.')) || 0); setPctEditing(false); }}
+          onChange={e => setPctDraft(e.target.value)}
+          onKeyDown={handleEnterBlur}
+        />
+        <Input
+          placeholder="R$"
+          className="bg-white border-border"
+          value={valEditing ? valDraft : toBRL(value)}
+          onFocus={() => { setValEditing(true); setValDraft(value ? String(value) : ''); }}
+          onBlur={() => { onValueChange(parseBRL(valDraft) || parseFloat(valDraft) || 0); setValEditing(false); }}
+          onChange={e => setValDraft(e.target.value)}
+          onKeyDown={handleEnterBlur}
+        />
+      </div>
+      {base > 0 ? null : <p className="text-xs text-muted-foreground mt-1">Defina o valor base para editar em R$.</p>}
+    </div>
   );
 }
 
