@@ -13,7 +13,7 @@ import {
   useOrders, Order, OrderItem, OrderStatus, ItemStatus,
   ORDER_STATUS_COLORS, ORDER_STATUS_LABELS, ITEM_STATUS_COLORS,
   WARN_STATUSES, isOpenOrder, calcTotal, calcItemLatestDelivery,
-  RMA_STATUS_LABELS, RMA_STATUS_COLORS, calcRmaParentStatus,
+  RMA_STATUS_LABELS, RMA_STATUS_COLORS, RMA_ITEM_STATUSES, calcRmaParentStatus,
 } from '@/store/OrderStore';
 import {
   useQuotes, Quote, QuotePhaseKey, QUOTE_PHASE_LABELS, QUOTE_PHASE_COLORS,
@@ -107,11 +107,13 @@ export default function Sales() {
 
   /* ---------- Products tab state ---------- */
   const [prodSearch, setProdSearch] = useState('');
+  const [prodView, setProdView] = useState<'all' | 'open'>('open');
   const [prodDateField, setProdDateField] = useState<'order' | 'product'>('order');
   const [prodRange, setProdRange] = useState<DateRange>({});
   const [prodAlertsOnly, setProdAlertsOnly] = useState(false);
   const [prodStatusFilter, setProdStatusFilter] = useState<string>('all');
-  const [prodPage, setProdPage] = useState(1);
+  const [prodPage, setPagePage_unused] = useState(1);
+  const setProdPage = setPagePage_unused;
 
   /* ---------- Quotes tab state ---------- */
   const [quoteSearch, setQuoteSearch] = useState('');
