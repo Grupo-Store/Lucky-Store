@@ -164,6 +164,8 @@ export interface Order {
   rmaItems?: RmaItem[];
   /** Freight cards for RMA orders */
   rmaFreight?: FreightCard[];
+  /** RMA actual delivery date (returned/closed) */
+  rmaActualDeliveryDate?: string;
   cancelled: boolean;
   observations: string;
   /** Financial section */
