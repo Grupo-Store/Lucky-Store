@@ -196,8 +196,8 @@ export default function Sales() {
   /* ---------- Products ---------- */
   const products = useMemo(() => {
     const q = prodSearch.toLowerCase().trim();
-    const list = orders
-      .filter(o => isOpenOrder(o.status))
+    const sourceOrders = orders.filter(o => !o.isRMA && (prodView === 'all' || isOpenOrder(o.status)));
+    const list = sourceOrders
       .flatMap(o => o.items.map(item => ({
         ...item,
         orderId: o.id,
@@ -227,7 +227,7 @@ export default function Sales() {
       });
     list.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
     return list;
-  }, [orders, prodSearch, prodDateField, prodRange, prodStatusFilter, prodAlertsOnly]);
+  }, [orders, prodSearch, prodView, prodDateField, prodRange, prodStatusFilter, prodAlertsOnly]);
 
   const prodPageCount = Math.max(1, Math.ceil(products.length / PAGE_SIZE));
   const pagedProducts = useMemo(
@@ -422,11 +422,17 @@ export default function Sales() {
                     <SelectTrigger className="w-64 bg-white"><SelectValue placeholder="Filtrar por Status" /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="all">Todos os Status</SelectItem>
-                      {ALL_STATUSES.map(s => (
-                        <SelectItem key={s} value={s}>
-                          <span className={cn('px-2 py-0.5 rounded text-xs font-medium', ORDER_STATUS_COLORS[s])}>{ORDER_STATUS_LABELS[s]}</span>
-                        </SelectItem>
-                      ))}
+                      {orderView === 'rma'
+                        ? RMA_ITEM_STATUSES.map(s => (
+                            <SelectItem key={s} value={s}>
+                              <span className={cn('px-2 py-0.5 rounded text-xs font-medium', RMA_STATUS_COLORS[s])}>{RMA_STATUS_LABELS[s]}</span>
+                            </SelectItem>
+                          ))
+                        : ALL_STATUSES.map(s => (
+                            <SelectItem key={s} value={s}>
+                              <span className={cn('px-2 py-0.5 rounded text-xs font-medium', ORDER_STATUS_COLORS[s])}>{ORDER_STATUS_LABELS[s]}</span>
+                            </SelectItem>
+                          ))}
                     </SelectContent>
                   </Select>
                   <div className="flex items-center gap-2">
