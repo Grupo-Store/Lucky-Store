@@ -135,7 +135,13 @@ export default function Sales() {
     else if (orderView === 'all') {
       // 'all' shows everything (including RMAs)
     }
-    if (orderStatusFilter !== 'all') list = list.filter(o => o.status === orderStatusFilter);
+    if (orderStatusFilter !== 'all') {
+      if (orderView === 'rma') {
+        list = list.filter(o => calcRmaParentStatus(o.rmaItems) === orderStatusFilter);
+      } else {
+        list = list.filter(o => o.status === orderStatusFilter);
+      }
+    }
     if (orderAlertsOnly) list = list.filter(o => shouldWarnDelivery(o));
     if (q) list = list.filter(o =>
       o.os.toLowerCase().includes(q) ||
@@ -385,7 +391,7 @@ export default function Sales() {
                     ] as const).map(opt => (
                       <button
                         key={opt.v}
-                        onClick={() => setOrderView(opt.v)}
+                        onClick={() => { setOrderView(opt.v); setOrderStatusFilter('all'); }}
                         className={cn(
                           'px-4 py-1.5 rounded-full text-sm font-medium transition-all',
                           orderView === opt.v ? 'bg-secondary text-secondary-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
@@ -526,7 +532,24 @@ export default function Sales() {
             <Card>
               <CardContent className="p-4">
                 <div className="flex flex-wrap justify-between items-center gap-3 mb-4">
-                  <h2 className="text-lg font-semibold text-secondary">Produtos (Pedidos Abertos)</h2>
+                  <div className="flex items-center gap-3 flex-wrap">
+                    <h2 className="text-lg font-semibold text-secondary">Produtos</h2>
+                    <div className="flex items-center gap-1 bg-muted rounded-full p-1">
+                      {([
+                        { v: 'all', l: 'Todos os Produtos' },
+                        { v: 'open', l: 'Pedidos em Aberto' },
+                      ] as const).map(opt => (
+                        <button
+                          key={opt.v}
+                          onClick={() => setProdView(opt.v)}
+                          className={cn(
+                            'px-3 py-1 rounded-full text-xs font-medium transition-all',
+                            prodView === opt.v ? 'bg-secondary text-secondary-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
+                          )}
+                        >{opt.l}</button>
+                      ))}
+                    </div>
+                  </div>
                   <div className="flex items-center gap-2 flex-wrap">
                     <SearchBar value={prodSearch} onChange={setProdSearch} placeholder="OS, Cliente, Empresa, Vendedor, Produto..." />
                     <Button
