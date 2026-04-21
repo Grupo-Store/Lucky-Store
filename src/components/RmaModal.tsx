@@ -175,6 +175,7 @@ export function RmaModal({ open, onClose, orders, rma, onSave, nextRmaNumber }: 
       paymentMethods: [],
       installments: 1,
       deliveryDate,
+      rmaActualDeliveryDate: actualDeliveryDate || undefined,
       status: 'To Pack',
       isRMA: true,
       rmaNumber,
