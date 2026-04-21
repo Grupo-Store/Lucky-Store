@@ -20,6 +20,7 @@ import {
   PAYMENT_METHODS, PAYMENT_METHOD_LABELS, SELLERS,
   calcFinalCost, calcProfit, calcFreightTotal,
 } from '@/store/OrderStore';
+import type { OrderPrefill } from '@/components/AddOrderChooser';
 
 const emptyOrder = (os: string): Partial<Order> => ({
   os, createdAt: Date.now(),
@@ -52,9 +53,11 @@ interface Props {
   onSave: (order: Order) => void;
   onDelete?: (id: string) => void;
   nextOS?: () => string;
+  /** Optional pre-fill data when creating from a quote */
+  prefill?: OrderPrefill | null;
 }
 
-export function OrderModal({ open, onClose, order, onSave, nextOS }: Props) {
+export function OrderModal({ open, onClose, order, onSave, nextOS, prefill }: Props) {
   const [form, setForm] = useState<Partial<Order>>(() => emptyOrder(nextOS?.() || ''));
   const isEdit = !!order;
 
@@ -64,10 +67,26 @@ export function OrderModal({ open, onClose, order, onSave, nextOS }: Props) {
   const [deliveryDateOpen, setDeliveryDateOpen] = useState(false);
 
   useEffect(() => {
-    if (order) setForm({ ...order, freight: order.freight || [] });
-    else setForm(emptyOrder(nextOS?.() || ''));
+    if (order) {
+      setForm({ ...order, freight: order.freight || [] });
+    } else if (prefill) {
+      setForm({
+        ...emptyOrder(nextOS?.() || ''),
+        customer: prefill.customer,
+        cnpj: prefill.cnpj,
+        company: prefill.company,
+        seller: prefill.seller,
+        salesValue: prefill.salesValue,
+        items: prefill.items.map(i => ({
+          id: i.id, name: i.name, quantity: i.quantity, status: 'To Buy' as ItemStatus,
+          projectedValue: i.projectedValue, purchaseValue: 0,
+        })),
+      });
+    } else {
+      setForm(emptyOrder(nextOS?.() || ''));
+    }
     setEditingField(null);
-  }, [order, open, nextOS]);
+  }, [order, open, nextOS, prefill]);
 
   const set = (k: keyof Order, v: any) => setForm(prev => ({ ...prev, [k]: v }));
 
