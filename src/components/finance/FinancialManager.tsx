@@ -7,9 +7,10 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
 import { useFinance, expandGain, expandExpense, CalendarEntry, Gain, Expense } from '@/store/FinanceStore';
-import { useOrders, calcTotal } from '@/store/OrderStore';
+import { useOrders, calcTotal, Order } from '@/store/OrderStore';
 import { GainModal } from './GainModal';
 import { ExpenseModal } from './ExpenseModal';
+import { OrderModal } from '@/components/OrderModal';
 
 type ViewMode = 'gains' | 'expenses' | 'all';
 
@@ -32,12 +33,13 @@ const TYPE_LABELS: Record<CalendarEntry['type'], string> = {
 };
 
 export function FinancialManager() {
-  const { gains, expenses, addGain, updateGain, addExpense, updateExpense } = useFinance();
-  const { orders } = useOrders();
+  const { gains, expenses, addGain, updateGain, deleteGain, addExpense, updateExpense, deleteExpense } = useFinance();
+  const { orders, updateOrder, deleteOrder, nextOS } = useOrders();
   const [view, setView] = useState<ViewMode>('all');
   const [cursor, setCursor] = useState<Date>(new Date());
   const [gainModal, setGainModal] = useState<{ open: boolean; gain: Gain | null }>({ open: false, gain: null });
   const [expModal, setExpModal] = useState<{ open: boolean; expense: Expense | null }>({ open: false, expense: null });
+  const [orderModal, setOrderModal] = useState<{ open: boolean; order: Order | null }>({ open: false, order: null });
 
   // Build calendar entries
   const entries = useMemo<CalendarEntry[]>(() => {
@@ -106,6 +108,9 @@ export function FinancialManager() {
     } else if (e.refKind === 'expense') {
       const ex = expenses.find(x => x.id === e.refId);
       if (ex) setExpModal({ open: true, expense: ex });
+    } else if (e.refKind === 'order') {
+      const o = orders.find(x => x.id === e.refId);
+      if (o) setOrderModal({ open: true, order: o });
     }
   };
 
@@ -229,12 +234,22 @@ export function FinancialManager() {
         gain={gainModal.gain}
         onClose={() => setGainModal({ open: false, gain: null })}
         onSave={g => gainModal.gain ? updateGain(g) : addGain(g)}
+        onDelete={deleteGain}
       />
       <ExpenseModal
         open={expModal.open}
         expense={expModal.expense}
         onClose={() => setExpModal({ open: false, expense: null })}
         onSave={e => expModal.expense ? updateExpense(e) : addExpense(e)}
+        onDelete={deleteExpense}
+      />
+      <OrderModal
+        open={orderModal.open}
+        order={orderModal.order}
+        onClose={() => setOrderModal({ open: false, order: null })}
+        onSave={updateOrder}
+        onDelete={deleteOrder}
+        nextOS={nextOS}
       />
     </div>
   );
