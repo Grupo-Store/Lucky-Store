@@ -226,7 +226,7 @@ export function RmaModal({ open, onClose, orders, rma, onSave, nextRmaNumber }: 
                   <TableRow className="bg-secondary/10">
                     <TableHead>OS</TableHead>
                     <TableHead>Cliente</TableHead>
-                    <TableHead>CNPJ</TableHead>
+                    <TableHead>CPF/CNPJ</TableHead>
                     <TableHead>Empresa</TableHead>
                     <TableHead>Data Entrega</TableHead>
                     <TableHead className="w-10"></TableHead>
@@ -261,7 +261,7 @@ export function RmaModal({ open, onClose, orders, rma, onSave, nextRmaNumber }: 
           <>
             <p className="text-sm text-muted-foreground">
               Cliente: <span className="font-medium text-foreground">{parent.customer}</span>
-              {' · '}CNPJ: <span className="font-medium text-foreground">{parent.cnpj || '—'}</span>
+              {' · '}CPF/CNPJ: <span className="font-medium text-foreground">{parent.cnpj || '—'}</span>
             </p>
             <div className="overflow-x-auto rounded-lg border">
               <Table>
@@ -306,7 +306,7 @@ export function RmaModal({ open, onClose, orders, rma, onSave, nextRmaNumber }: 
                   <Input readOnly className="bg-muted border-border font-semibold" value={rmaNumberDisplay} />
                 </div>
                 <div><Label>Cliente</Label><Input readOnly value={parent.customer} className="bg-muted border-border" /></div>
-                <div><Label>CNPJ</Label><Input readOnly value={parent.cnpj || '—'} className="bg-muted border-border" /></div>
+                <div><Label>CPF/CNPJ</Label><Input readOnly value={parent.cnpj || '—'} className="bg-muted border-border" /></div>
                 <div>
                   <Label>Data de Registro *</Label>
                   <Popover open={regDateOpen} onOpenChange={setRegDateOpen}>

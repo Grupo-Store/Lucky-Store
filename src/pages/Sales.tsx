@@ -390,7 +390,7 @@ export default function Sales() {
                     ))}
                   </div>
                   <div className="flex items-center gap-2 flex-wrap">
-                    <SearchBar value={orderSearch} onChange={setOrderSearch} placeholder="OS, Cliente, CNPJ, Empresa, Vendedor..." />
+                    <SearchBar value={orderSearch} onChange={setOrderSearch} placeholder="OS, Cliente, CPF/CNPJ, Empresa, Vendedor..." />
                     <Button
                       variant={orderAlertsOnly ? 'default' : 'outline'}
                       onClick={() => setOrderAlertsOnly(v => !v)}
