@@ -159,13 +159,23 @@ interface FinanceContextType {
   deleteGoal: (key: string) => void;
 }
 
+export type GoalScopeType = 'company' | 'seller';
+
 export interface Goal {
-  /** key = `${year}-${month}` (month 1-12) */
+  /** key = `${year}-${month}-${scopeType}-${scopeId}` (month 1-12) */
   key: string;
   year: number;
   month: number;
+  /** 'company' = overall/per-store target; 'seller' = per-seller target */
+  scopeType: GoalScopeType;
+  /** For company: 'all' | 'Lucky Store' | 'BTech' | 'AJJ'. For seller: seller name. */
+  scopeId: string;
   target: number;
   floor: number;
+}
+
+export function goalKey(year: number, month: number, scopeType: GoalScopeType, scopeId: string) {
+  return `${year}-${month}-${scopeType}-${scopeId}`;
 }
 
 const FinanceContext = createContext<FinanceContextType | null>(null);
