@@ -19,14 +19,13 @@ const BrandHeader = () => (
       Bem vindo ao Grupo Lucky
     </h1>
     <div
-      className="mt-6 flex items-center justify-center gap-4 flex-wrap bg-card/95 rounded-xl px-5 py-4 shadow-sm border border-secondary/10 text-lg md:text-xl font-bold tracking-wide"
-      style={{ color: NAVY }}
+      className="mt-6 flex items-center justify-center gap-5 flex-wrap bg-card/95 rounded-xl px-5 py-4 shadow-sm border border-secondary/10"
     >
-      <span>Lucky Store</span>
-      <span style={{ color: NAVY, opacity: 0.4 }}>|</span>
-      <span>BTech</span>
-      <span style={{ color: NAVY, opacity: 0.4 }}>|</span>
-      <span>AJJ</span>
+      <img src={logoLuckyStore} alt="Lucky Store" className="h-12 md:h-14 object-contain" />
+      <span style={{ color: NAVY, opacity: 0.4 }} className="text-xl font-bold">|</span>
+      <img src={logoBTech} alt="BTech Store" className="h-12 md:h-14 object-contain" />
+      <span style={{ color: NAVY, opacity: 0.4 }} className="text-xl font-bold">|</span>
+      <img src={logoAJJ} alt="AJJ" className="h-12 md:h-14 object-contain" />
     </div>
   </div>
 );
