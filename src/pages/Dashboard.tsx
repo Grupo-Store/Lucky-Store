@@ -480,38 +480,103 @@ export default function Dashboard() {
         <>
           <h3 className="text-lg font-semibold text-secondary">Performance por Vendedor</h3>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {perSeller.map(s => (
-              <Card key={s.seller} className="border-2">
-                <CardHeader><CardTitle className="text-secondary">{s.seller}</CardTitle></CardHeader>
-                <CardContent className="space-y-3">
-                  <div className="grid grid-cols-2 gap-2 text-sm">
-                    <div><p className="text-xs text-muted-foreground">Lucro</p><p className={cn('font-bold', s.profit >= 0 ? 'text-green-700' : 'text-red-600')}>{BRL(s.profit)}</p></div>
-                    <div><p className="text-xs text-muted-foreground">Vendas</p><p className="font-bold">{s.salesCount}</p></div>
-                    <div><p className="text-xs text-muted-foreground">Valor das Vendas</p><p className="font-bold">{BRL(s.revenue)}</p></div>
-                    <div><p className="text-xs text-muted-foreground">Meta Diária</p><p className="font-bold text-blue-700">{BRL(s.dailyTarget)}</p></div>
-                    <div><p className="text-xs text-muted-foreground">Ticket Médio</p><p className="font-bold">{BRL(s.ticketSale)}</p></div>
-                    <div><p className="text-xs text-muted-foreground">Projeção Mês</p><p className="font-bold">{BRL(s.projection)}</p></div>
-                  </div>
-                  <div className="border-t pt-2 grid grid-cols-3 gap-2 text-xs text-center">
-                    <div><p className="text-muted-foreground">Méd. Custo</p><p className="font-semibold">{BRL(s.avgPurchase)}</p></div>
-                    <div><p className="text-muted-foreground">Méd. Venda</p><p className="font-semibold">{BRL(s.ticketSale)}</p></div>
-                    <div><p className="text-muted-foreground">Méd. Lucro</p><p className="font-semibold">{BRL(s.ticketProfit)}</p></div>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
+            {perSeller.map(s => {
+              const hasGoal = s.target > 0;
+              const hitFloor = hasGoal && s.revenue >= (perSeller.find(p => p.seller === s.seller)?.target ?? 0) * 0; // placeholder, replaced below
+              const sellerGoal = goals.find(g =>
+                g.year === filters.year && g.month === filters.month + 1 &&
+                g.scopeType === 'seller' && g.scopeId === s.seller
+              );
+              const floor = sellerGoal?.floor ?? 0;
+              const aboveFloor = floor > 0 && s.revenue >= floor;
+              const aboveTarget = hasGoal && s.revenue >= s.target;
+              return (
+                <Card key={s.seller} className="border-2">
+                  <CardHeader>
+                    <CardTitle className="text-secondary flex items-center justify-between">
+                      <span>{s.seller}</span>
+                      {hasGoal && (
+                        <span className={cn(
+                          'text-xs font-semibold px-2 py-0.5 rounded-full',
+                          aboveTarget ? 'bg-green-100 text-green-700'
+                            : aboveFloor ? 'bg-amber-100 text-amber-700'
+                            : 'bg-red-100 text-red-700'
+                        )}>
+                          {PCT(s.pctTarget)}
+                        </span>
+                      )}
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    {hasGoal && (
+                      <div className="space-y-1">
+                        <div className="flex justify-between text-xs text-muted-foreground">
+                          <span>Meta: {BRL(s.target)}</span>
+                          {floor > 0 && <span>Piso: {BRL(floor)}</span>}
+                        </div>
+                        <div className="h-2 rounded-full bg-muted overflow-hidden relative">
+                          <div
+                            className={cn('h-full transition-all',
+                              aboveTarget ? 'bg-green-500'
+                                : aboveFloor ? 'bg-amber-500'
+                                : 'bg-red-500')}
+                            style={{ width: `${Math.min(100, s.pctTarget * 100)}%` }}
+                          />
+                          {floor > 0 && s.target > 0 && (
+                            <div
+                              className="absolute top-0 bottom-0 w-0.5 bg-foreground/60"
+                              style={{ left: `${Math.min(100, (floor / s.target) * 100)}%` }}
+                              title={`Piso: ${BRL(floor)}`}
+                            />
+                          )}
+                        </div>
+                      </div>
+                    )}
+                    <div className="grid grid-cols-2 gap-2 text-sm">
+                      <div><p className="text-xs text-muted-foreground">Lucro</p><p className={cn('font-bold', s.profit >= 0 ? 'text-green-700' : 'text-red-600')}>{BRL(s.profit)}</p></div>
+                      <div><p className="text-xs text-muted-foreground">Vendas</p><p className="font-bold">{s.salesCount}</p></div>
+                      <div><p className="text-xs text-muted-foreground">Valor das Vendas</p><p className="font-bold">{BRL(s.revenue)}</p></div>
+                      <div><p className="text-xs text-muted-foreground">Meta Diária</p><p className="font-bold text-blue-700">{hasGoal ? BRL(s.dailyTarget) : '—'}</p></div>
+                      <div><p className="text-xs text-muted-foreground">Gap p/ Meta</p><p className="font-bold text-orange-600">{hasGoal ? BRL(s.gap) : '—'}</p></div>
+                      <div><p className="text-xs text-muted-foreground">Projeção Mês</p><p className="font-bold">{BRL(s.projection)}</p></div>
+                    </div>
+                    <div className="border-t pt-2 grid grid-cols-3 gap-2 text-xs text-center">
+                      <div><p className="text-muted-foreground">Méd. Custo</p><p className="font-semibold">{BRL(s.avgPurchase)}</p></div>
+                      <div><p className="text-muted-foreground">Méd. Venda</p><p className="font-semibold">{BRL(s.ticketSale)}</p></div>
+                      <div><p className="text-muted-foreground">Méd. Lucro</p><p className="font-semibold">{BRL(s.ticketProfit)}</p></div>
+                    </div>
+                    {!hasGoal && (
+                      <p className="text-xs text-muted-foreground italic text-center">
+                        Sem meta cadastrada para este vendedor.
+                      </p>
+                    )}
+                  </CardContent>
+                </Card>
+              );
+            })}
           </div>
 
           <Card>
-            <CardHeader><CardTitle className="text-secondary">Vendas por Vendedor</CardTitle></CardHeader>
+            <CardHeader><CardTitle className="text-secondary">Vendas vs Meta por Vendedor</CardTitle></CardHeader>
             <CardContent>
               <ResponsiveContainer width="100%" height={300}>
-                <BarChart data={perSeller.map(s => ({ name: s.seller, Vendas: s.revenue, Lucro: s.profit }))}>
+                <BarChart data={perSeller.map(s => ({
+                  name: s.seller,
+                  Vendas: s.revenue,
+                  Lucro: s.profit,
+                  Meta: s.target,
+                  Piso: goals.find(g =>
+                    g.year === filters.year && g.month === filters.month + 1 &&
+                    g.scopeType === 'seller' && g.scopeId === s.seller
+                  )?.floor ?? 0,
+                }))}>
                   <XAxis dataKey="name" /><YAxis />
                   <Tooltip formatter={(v: number) => BRL(v)} />
                   <Legend />
                   <Bar dataKey="Vendas" fill="hsl(192, 76%, 29%)" radius={[4, 4, 0, 0]} />
                   <Bar dataKey="Lucro" fill="hsl(140, 70%, 40%)" radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="Meta" fill="hsl(35, 90%, 55%)" radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="Piso" fill="hsl(0, 70%, 60%)" radius={[4, 4, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             </CardContent>
