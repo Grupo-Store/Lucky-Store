@@ -9,7 +9,6 @@ import { Mail, ShieldCheck, ArrowLeft } from 'lucide-react';
 import { toast } from 'sonner';
 import logoLuckyStore from '@/assets/logo-lucky-store.png';
 import logoBTech from '@/assets/logo-btech.png';
-import logoAJJ from '@/assets/logo-ajj.png';
 
 /* -------------------- BRAND HEADER -------------------- */
 const NAVY = '#001F5B';
@@ -24,8 +23,6 @@ const BrandHeader = () => (
       <img src={logoLuckyStore} alt="Lucky Store" className="h-12 md:h-14 object-contain" />
       <span style={{ color: NAVY, opacity: 0.4 }} className="text-xl font-bold">|</span>
       <img src={logoBTech} alt="BTech Store" className="h-12 md:h-14 object-contain" />
-      <span style={{ color: NAVY, opacity: 0.4 }} className="text-xl font-bold">|</span>
-      <img src={logoAJJ} alt="AJJ" className="h-12 md:h-14 object-contain" />
     </div>
   </div>
 );
