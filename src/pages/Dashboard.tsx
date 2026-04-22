@@ -109,15 +109,18 @@ function computeStats(orders: Order[], all: Order[], f: Filters, goal?: Goal) {
   const todayRevenue = orders.filter(o => o.orderDate === format(today, 'yyyy-MM-dd')).reduce((s, o) => s + calcTotal(o), 0);
 
   const target = goal?.target || 0;
+  const floor = goal?.floor || 0;
   const pctTarget = target > 0 ? revenue / target : 0;
   const gap = Math.max(0, target - revenue);
+  const gapFloor = Math.max(0, floor - revenue);
   const elapsed = elapsedBusinessDays(f.year, f.month);
   const remaining = remainingBusinessDays(f.year, f.month);
   const dailyAvg = elapsed > 0 ? revenue / elapsed : 0;
   const projection = elapsed > 0
     ? dailyAvg * (elapsed + remaining)
     : revenue;
-  const dailyTarget = remaining > 0 && target > 0 ? gap / remaining : 0;
+  // Daily target tracks the FLOOR (minimum to hit), not the ceiling target
+  const dailyTarget = remaining > 0 && floor > 0 ? gapFloor / remaining : 0;
 
   // Tax breakdown
   const totalTax = orders.reduce((s, o) => s + (o.purchaseTaxValue || 0) + (o.salesTaxValue || 0), 0);
