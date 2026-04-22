@@ -7,7 +7,7 @@ import { Label } from '@/components/ui/label';
 import { InputOTP, InputOTPGroup, InputOTPSlot } from '@/components/ui/input-otp';
 import { Mail, ShieldCheck, ArrowLeft } from 'lucide-react';
 import { toast } from 'sonner';
-import logoLuckyStore from '@/assets/logo-lucky-store.png';
+import logoLuckyStore from '@/assets/logo-lucky-store.jpeg';
 import logoBTech from '@/assets/logo-btech.png';
 
 /* -------------------- BRAND HEADER -------------------- */
@@ -15,7 +15,7 @@ const NAVY = '#001F5B';
 const BrandHeader = () => (
   <div className="text-center mb-8">
     <h1 className="text-3xl md:text-4xl font-bold text-secondary tracking-tight">
-      Bem vindo ao Grupo Store
+      Bem vindo ao Grupo Store!
     </h1>
     <div
       className="mt-6 flex items-center justify-center gap-5 flex-wrap bg-card/95 rounded-xl px-5 py-4 shadow-sm border border-secondary/10"
