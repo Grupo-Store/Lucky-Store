@@ -405,7 +405,7 @@ export default function Dashboard() {
             <KpiCard label="Gap para Meta" value={BRL(stats.gap)} accent="text-orange-600" />
             <KpiCard label="Quantidade Vendas" value={String(stats.salesCount)} />
             <KpiCard label="Cancelamentos" value={String(stats.cancCount)} sub={`Perda: ${BRL(stats.cancValue)}`} accent="text-red-600" />
-            <KpiCard label="Meta Diária Dinâmica" value={BRL(stats.dailyTarget)} sub="Para atingir a meta" accent="text-blue-700" />
+            <KpiCard label="Meta Diária Dinâmica" value={BRL(stats.dailyTarget)} sub="Para atingir o piso" accent="text-blue-700" />
           </div>
 
           {/* Charts */}
