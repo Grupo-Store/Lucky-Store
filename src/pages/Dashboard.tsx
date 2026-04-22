@@ -273,30 +273,43 @@ export default function Dashboard() {
   const [rangeOpen, setRangeOpen] = useState(false);
 
   const filtered = useMemo(() => applyFilters(orders, filters), [orders, filters]);
+
+  // Goal for the current top-level company filter (overall view at top)
   const goal = useMemo(
-    () => goals.find(g => g.year === filters.year && g.month === filters.month + 1),
-    [goals, filters.year, filters.month]
+    () => goals.find(g =>
+      g.year === filters.year && g.month === filters.month + 1 &&
+      g.scopeType === 'company' && g.scopeId === filters.company
+    ),
+    [goals, filters.year, filters.month, filters.company]
   );
   const stats = useMemo(() => computeStats(filtered, orders, filters, goal), [filtered, orders, filters, goal]);
 
-  // Per-company breakdown
+  // Per-company breakdown (each company uses its own goal)
   const perCompany = useMemo(() => {
     const allCompanies = ['Lucky Store', 'BTech', 'AJJ'];
     return allCompanies.map(c => {
       const list = filtered.filter(o => o.company === c);
-      const s = computeStats(list, orders, { ...filters, company: c as CompanyKey }, goal);
+      const cGoal = goals.find(g =>
+        g.year === filters.year && g.month === filters.month + 1 &&
+        g.scopeType === 'company' && g.scopeId === c
+      );
+      const s = computeStats(list, orders, { ...filters, company: c as CompanyKey }, cGoal);
       return { company: c, ...s };
     });
-  }, [filtered, orders, filters, goal]);
+  }, [filtered, orders, filters, goals]);
 
-  // Per-seller stats
+  // Per-seller stats (each seller uses its own goal)
   const perSeller = useMemo(() => {
     return SELLERS.map(seller => {
       const list = filtered.filter(o => o.seller === seller);
-      const s = computeStats(list, orders, filters, goal);
+      const sGoal = goals.find(g =>
+        g.year === filters.year && g.month === filters.month + 1 &&
+        g.scopeType === 'seller' && g.scopeId === seller
+      );
+      const s = computeStats(list, orders, filters, sGoal);
       return { seller, ...s };
     });
-  }, [filtered, orders, filters, goal]);
+  }, [filtered, orders, filters, goals]);
 
   const taxData = [
     { name: 'Imposto Compra', value: filtered.reduce((s, o) => s + (o.purchaseTaxValue || 0), 0) },
