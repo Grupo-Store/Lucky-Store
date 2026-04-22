@@ -20,7 +20,7 @@ import {
 } from 'recharts';
 import { cn } from '@/lib/utils';
 import { useOrders, calcTotal, calcFinalCost, calcProfit, Order, SELLERS } from '@/store/OrderStore';
-import { useFinance, Goal } from '@/store/FinanceStore';
+import { useFinance, Goal, GoalScopeType, goalKey } from '@/store/FinanceStore';
 
 type ViewMode = 'company' | 'seller';
 type CompanyKey = 'all' | 'Lucky Store' | 'BTech' | 'AJJ';
@@ -152,21 +152,62 @@ function GoalsModal({
 }) {
   const [y, setY] = useState(year);
   const [m, setM] = useState(month + 1);
+  const [scopeType, setScopeType] = useState<GoalScopeType>('company');
+  const [scopeId, setScopeId] = useState<string>('all');
   const [target, setTarget] = useState<number>(0);
   const [floor, setFloor] = useState<number>(0);
 
+  const companyOptions: { value: string; label: string }[] = [
+    { value: 'all', label: 'Geral (todas as empresas)' },
+    { value: 'Lucky Store', label: 'Lucky Store' },
+    { value: 'BTech', label: 'BTech' },
+    { value: 'AJJ', label: 'AJJ' },
+  ];
+  const sellerOptions = SELLERS.map(s => ({ value: s, label: s }));
+  const scopeOptions = scopeType === 'company' ? companyOptions : sellerOptions;
+
+  // When scope type changes, reset scopeId to first valid option
+  const onScopeTypeChange = (v: GoalScopeType) => {
+    setScopeType(v);
+    setScopeId(v === 'company' ? 'all' : SELLERS[0]);
+  };
+
   const save = () => {
-    const key = `${y}-${m}`;
-    upsertGoal({ key, year: y, month: m, target, floor });
+    const key = goalKey(y, m, scopeType, scopeId);
+    upsertGoal({ key, year: y, month: m, scopeType, scopeId, target, floor });
     setTarget(0); setFloor(0);
   };
 
+  const scopeLabel = (g: Goal) =>
+    g.scopeType === 'company'
+      ? (g.scopeId === 'all' ? 'Empresa: Geral' : `Empresa: ${g.scopeId}`)
+      : `Vendedor: ${g.scopeId}`;
+
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="max-w-2xl">
+      <DialogContent className="max-w-3xl">
         <DialogHeader><DialogTitle>Configurar Metas</DialogTitle></DialogHeader>
         <div className="space-y-4">
-          <div className="grid grid-cols-4 gap-3">
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+            <div>
+              <Label>Tipo de Meta</Label>
+              <Select value={scopeType} onValueChange={(v) => onScopeTypeChange(v as GoalScopeType)}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="company">Empresa</SelectItem>
+                  <SelectItem value="seller">Vendedor</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label>{scopeType === 'company' ? 'Empresa' : 'Vendedor'}</Label>
+              <Select value={scopeId} onValueChange={setScopeId}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {scopeOptions.map(o => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
             <div>
               <Label>Mês</Label>
               <Select value={String(m)} onValueChange={v => setM(+v)}>
@@ -197,11 +238,12 @@ function GoalsModal({
               <p className="text-sm text-muted-foreground">Nenhuma meta cadastrada.</p>
             ) : (
               <Table>
-                <TableHeader><TableRow><TableHead>Mês/Ano</TableHead><TableHead>Meta</TableHead><TableHead>Piso</TableHead><TableHead></TableHead></TableRow></TableHeader>
+                <TableHeader><TableRow><TableHead>Mês/Ano</TableHead><TableHead>Escopo</TableHead><TableHead>Meta</TableHead><TableHead>Piso</TableHead><TableHead></TableHead></TableRow></TableHeader>
                 <TableBody>
                   {goals.map(g => (
                     <TableRow key={g.key}>
                       <TableCell>{MONTHS[g.month - 1]}/{g.year}</TableCell>
+                      <TableCell>{scopeLabel(g)}</TableCell>
                       <TableCell>{BRL(g.target)}</TableCell>
                       <TableCell>{BRL(g.floor)}</TableCell>
                       <TableCell><Button size="sm" variant="destructive" onClick={() => deleteGoal(g.key)}>Excluir</Button></TableCell>
