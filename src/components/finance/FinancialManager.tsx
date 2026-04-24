@@ -67,6 +67,22 @@ export function FinancialManager() {
   const [expModal, setExpModal] = useState<{ open: boolean; expense: Expense | null }>({ open: false, expense: null });
   const [orderModal, setOrderModal] = useState<{ open: boolean; order: Order | null }>({ open: false, order: null });
 
+  // Macro tabs
+  const [macroTab, setMacroTab] = useState<'finances' | 'fretes'>('finances');
+
+  // Finanças table search
+  const [tableSearch, setTableSearch] = useState('');
+  const [tableRange, setTableRange] = useState<{ from?: Date; to?: Date }>({});
+  const [tableRangeOpen, setTableRangeOpen] = useState(false);
+
+  // Fretes filters
+  const [freightPeriod, setFreightPeriod] = useState<'week' | 'month' | 'custom'>('month');
+  const [freightCursor, setFreightCursor] = useState<Date>(new Date());
+  const [freightRange, setFreightRange] = useState<{ from?: Date; to?: Date }>({});
+  const [freightRangeOpen, setFreightRangeOpen] = useState(false);
+  const [freightSearch, setFreightSearch] = useState('');
+  const [freightDetail, setFreightDetail] = useState<{ open: boolean; person: string }>({ open: false, person: '' });
+
   // Build calendar entries from expenses + auto-derived gains from orders + standard orders (general)
   const allEntries = useMemo<CalendarEntry[]>(() => {
     const out: CalendarEntry[] = [];
