@@ -73,7 +73,7 @@ function applyFilters(orders: Order[], f: Filters): Order[] {
 function computeStats(orders: Order[], all: Order[], f: Filters, goal?: Goal) {
   const revenue = orders.reduce((s, o) => s + calcTotal(o), 0);
   const cost = orders.reduce((s, o) => s + calcFinalCost(o), 0);
-  const profit = orders.reduce((s, o) => s + calcProfit(o), 0);
+  const profit = orders.reduce((s, o) => s + calcProfit(o), 0); // Gross profit (revenue - cost)
   const margin = revenue > 0 ? profit / revenue : 0;
   const salesCount = orders.length;
   const ticketSale = salesCount > 0 ? revenue / salesCount : 0;
@@ -85,7 +85,11 @@ function computeStats(orders: Order[], all: Order[], f: Filters, goal?: Goal) {
     if (!o.cancelled || o.isRMA) return false;
     if (!o.orderDate) return false;
     const d = new Date(o.orderDate + 'T12:00:00');
-    if (getYear(d) !== f.year || getMonth(d) !== f.month) return false;
+    if (f.rangeFrom && f.rangeTo) {
+      if (isBefore(d, f.rangeFrom) || isAfter(d, f.rangeTo)) return false;
+    } else {
+      if (getYear(d) !== f.year || getMonth(d) !== f.month) return false;
+    }
     if (f.company !== 'all' && o.company !== f.company) return false;
     return true;
   });
@@ -109,16 +113,31 @@ function computeStats(orders: Order[], all: Order[], f: Filters, goal?: Goal) {
     : revenue;
   // Daily target tracks the FLOOR (minimum to hit), not the ceiling target
   const dailyTarget = remaining > 0 && floor > 0 ? gapFloor / remaining : 0;
+  // Efficiency = how much daily avg exceeds the daily floor target (positive = on track)
+  const efficiency = dailyAvg - dailyTarget;
 
   // Tax breakdown
-  const totalTax = orders.reduce((s, o) => s + (o.purchaseTaxValue || 0) + (o.salesTaxValue || 0), 0);
+  const purchaseTax = orders.reduce((s, o) => s + (o.purchaseTaxValue || 0), 0);
+  const salesTax = orders.reduce((s, o) => s + (o.salesTaxValue || 0), 0);
+  const totalTax = purchaseTax + salesTax;
   const otherCost = cost - totalTax;
+  const salesTaxPct = revenue > 0 ? salesTax / revenue : 0;
+
+  // Cost composition (for the donut chart)
+  const productCost = orders.reduce((s, o) => s + (o.finalProductCost || 0), 0);
+  const boletoCost = orders.reduce((s, o) => s + (o.boletoCost || 0), 0);
+  const giftCost = orders.reduce((s, o) => s + (o.giftCost || 0), 0);
+  const creditCost = orders.reduce((s, o) => s + (o.creditCostValue || 0), 0);
+  const debitCost = orders.reduce((s, o) => s + (o.debitCostValue || 0), 0);
+  const freightCost = orders.reduce((s, o) => s + calcFreightTotal(o.freight), 0);
 
   return {
     revenue, cost, profit, margin, salesCount, ticketSale, ticketProfit, avgPurchase,
     cancCount, cancValue, todayRevenue,
-    target, pctTarget, gap, projection, dailyTarget, dailyAvg,
-    totalTax, otherCost,
+    target, floor, pctTarget, gap, gapFloor, projection, dailyTarget, dailyAvg, efficiency,
+    elapsed, remaining,
+    totalTax, otherCost, salesTax, purchaseTax, salesTaxPct,
+    productCost, boletoCost, giftCost, creditCost, debitCost, freightCost,
   };
 }
 
