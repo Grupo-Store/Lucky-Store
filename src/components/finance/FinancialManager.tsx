@@ -165,10 +165,84 @@ export function FinancialManager() {
   };
 
   /* ---------- Table view ---------- */
-  const tableSearch = useState('')[0]; // not used UI-wise for brevity
   const sortedEntries = useMemo(() => {
     return [...entries].sort((a, b) => b.date.localeCompare(a.date));
   }, [entries]);
+
+  // Filtered entries for the Finanças TABLE (search + date range applied)
+  const tableEntries = useMemo(() => {
+    const q = tableSearch.toLowerCase().trim();
+    return sortedEntries.filter(e => {
+      if (e.type === 'ORDER') return false;
+      if (tableRange.from) {
+        const d = new Date(e.date + 'T12:00:00');
+        const from = new Date(tableRange.from); from.setHours(0,0,0,0);
+        const to = tableRange.to ? new Date(tableRange.to) : new Date(tableRange.from);
+        to.setHours(23,59,59,999);
+        if (!isWithinInterval(d, { start: from, end: to })) return false;
+      }
+      if (!q) return true;
+      const exp = e.refKind === 'expense' ? expenses.find(x => x.id === e.refId) : null;
+      const tipo = TYPE_LABELS[e.type].toLowerCase();
+      const servico = (exp?.service || e.title || '').toLowerCase();
+      const destino = (exp?.destination || '').toLowerCase();
+      return tipo.includes(q) || servico.includes(q) || destino.includes(q) || e.title.toLowerCase().includes(q);
+    });
+  }, [sortedEntries, tableSearch, tableRange, expenses]);
+
+  /* ---------- Fretes data ---------- */
+  const freightInterval = useMemo(() => {
+    if (freightPeriod === 'custom' && freightRange.from) {
+      const from = new Date(freightRange.from); from.setHours(0,0,0,0);
+      const to = freightRange.to ? new Date(freightRange.to) : new Date(freightRange.from);
+      to.setHours(23,59,59,999);
+      return { start: from, end: to };
+    }
+    if (freightPeriod === 'week') {
+      return { start: sow(freightCursor, { weekStartsOn: 0 }), end: eow(freightCursor, { weekStartsOn: 0 }) };
+    }
+    return { start: startOfMonth(freightCursor), end: endOfMonth(freightCursor) };
+  }, [freightPeriod, freightCursor, freightRange]);
+
+  // Flatten all freight cards from all orders (non-cancelled) within the freight interval
+  type FreightRow = {
+    orderId: string; os: string; customer: string; date: string; deliveryPerson: string; value: number;
+  };
+  const freightRows = useMemo<FreightRow[]>(() => {
+    const out: FreightRow[] = [];
+    orders.filter(o => !o.cancelled).forEach(o => {
+      const cards = [...(o.freight || []), ...(o.rmaFreight || [])];
+      cards.forEach(c => {
+        if (!c.deliveryPerson) return;
+        const dateIso = c.deliveryDate || o.deliveryDate;
+        if (!dateIso) return;
+        const d = new Date(dateIso + 'T12:00:00');
+        if (!isWithinInterval(d, freightInterval)) return;
+        out.push({
+          orderId: o.id, os: o.os, customer: o.customer,
+          date: dateIso, deliveryPerson: c.deliveryPerson, value: c.value || 0,
+        });
+      });
+    });
+    return out;
+  }, [orders, freightInterval]);
+
+  const freightAggregated = useMemo(() => {
+    const q = freightSearch.toLowerCase().trim();
+    const map = new Map<string, { person: string; total: number; count: number }>();
+    freightRows.forEach(r => {
+      if (q && !r.deliveryPerson.toLowerCase().includes(q)) return;
+      const cur = map.get(r.deliveryPerson) || { person: r.deliveryPerson, total: 0, count: 0 };
+      cur.total += r.value; cur.count += 1;
+      map.set(r.deliveryPerson, cur);
+    });
+    return Array.from(map.values()).sort((a, b) => b.total - a.total);
+  }, [freightRows, freightSearch]);
+
+  const freightDetailRows = useMemo(
+    () => freightRows.filter(r => r.deliveryPerson === freightDetail.person).sort((a, b) => b.date.localeCompare(a.date)),
+    [freightRows, freightDetail.person]
+  );
 
   return (
     <div className="space-y-4">
