@@ -36,31 +36,14 @@ const BRL = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', curren
 const PCT = (v: number) => `${(v * 100).toFixed(1)}%`;
 const MONTHS = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
 
-/** Counts business days (Mon-Fri) remaining in the month from today (inclusive) */
+/** Counts business days (Mon-Fri excl. PE/Recife holidays) remaining in the month from today (inclusive) */
 function remainingBusinessDays(year: number, month: number): number {
-  const today = new Date();
-  const isCurMonth = today.getFullYear() === year && today.getMonth() === month;
-  const start = isCurMonth ? today : startOfMonth(new Date(year, month, 1));
-  const end = endOfMonth(new Date(year, month, 1));
-  if (isAfter(start, end)) return 0;
-  return eachDayOfInterval({ start, end }).filter(d => {
-    const w = d.getDay();
-    return w !== 0 && w !== 6;
-  }).length;
+  return remainingBusinessDaysInMonth(year, month);
 }
 
-/** Days elapsed in current month (business days, capped) */
+/** Business days elapsed in current month (excl. PE/Recife holidays, capped to today) */
 function elapsedBusinessDays(year: number, month: number): number {
-  const today = new Date();
-  const start = startOfMonth(new Date(year, month, 1));
-  const end = today.getFullYear() === year && today.getMonth() === month
-    ? today
-    : endOfMonth(new Date(year, month, 1));
-  if (isBefore(end, start)) return 0;
-  return eachDayOfInterval({ start, end }).filter(d => {
-    const w = d.getDay();
-    return w !== 0 && w !== 6;
-  }).length;
+  return elapsedBusinessDaysInMonth(year, month);
 }
 
 interface Filters {
