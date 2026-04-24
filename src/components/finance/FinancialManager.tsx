@@ -1,11 +1,13 @@
 import { useMemo, useState } from 'react';
 import {
   format, startOfMonth, endOfMonth, eachDayOfInterval, addMonths, subMonths,
-  startOfWeek, endOfWeek, isSameMonth, isSameDay,
+  startOfWeek, endOfWeek, isSameMonth, isSameDay, startOfWeek as sow, endOfWeek as eow,
+  isWithinInterval,
 } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import {
   ChevronLeft, ChevronRight, Plus, Printer, CalendarDays, Table as TableIcon,
+  Search, Truck, X,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -16,11 +18,18 @@ import { Input } from '@/components/ui/input';
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle,
+} from '@/components/ui/dialog';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Calendar } from '@/components/ui/calendar';
+import { CalendarIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import {
   useFinance, expandExpense, expandOrderFinancial, CalendarEntry, Expense,
 } from '@/store/FinanceStore';
-import { useOrders, calcTotal, Order } from '@/store/OrderStore';
+import { useOrders, calcTotal, Order, calcFreightTotal } from '@/store/OrderStore';
 import { ExpenseModal } from './ExpenseModal';
 import { OrderModal } from '@/components/OrderModal';
 
