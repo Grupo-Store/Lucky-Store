@@ -272,7 +272,8 @@ function GoalsModal({
 
 export default function Dashboard() {
   const { orders } = useOrders();
-  const { goals, upsertGoal, deleteGoal } = useFinance();
+  const { goals, upsertGoal, deleteGoal, expenses } = useFinance();
+  const { quotes } = useQuotes();
 
   const today = new Date();
   const [filters, setFilters] = useState<Filters>({
@@ -281,6 +282,12 @@ export default function Dashboard() {
   const [mode, setMode] = useState<ViewMode>('company');
   const [goalsOpen, setGoalsOpen] = useState(false);
   const [rangeOpen, setRangeOpen] = useState(false);
+
+  // Toggleable historical metrics
+  const [showCost, setShowCost] = useState(true);
+  const [showRevenue, setShowRevenue] = useState(true);
+  const [showProfit, setShowProfit] = useState(true);
+  const [showPrevYear, setShowPrevYear] = useState(true);
 
   const filtered = useMemo(() => applyFilters(orders, filters), [orders, filters]);
 
@@ -321,17 +328,116 @@ export default function Dashboard() {
     });
   }, [filtered, orders, filters, goals]);
 
-  const taxData = [
-    { name: 'Imposto Compra', value: filtered.reduce((s, o) => s + (o.purchaseTaxValue || 0), 0) },
-    { name: 'Imposto Venda', value: filtered.reduce((s, o) => s + (o.salesTaxValue || 0), 0) },
-    { name: 'Outros Custos', value: Math.max(0, stats.otherCost) },
+  /* ---------- New aggregations for the redesigned dashboard ---------- */
+
+  // Quotes count in same period (uses requestDate)
+  const quotesCount = useMemo(() => {
+    return quotes.filter(q => {
+      if (!q.requestDate) return false;
+      const d = new Date(q.requestDate + 'T12:00:00');
+      if (filters.rangeFrom && filters.rangeTo) {
+        if (isBefore(d, filters.rangeFrom) || isAfter(d, filters.rangeTo)) return false;
+      } else {
+        if (getYear(d) !== filters.year || getMonth(d) !== filters.month) return false;
+      }
+      if (filters.company !== 'all' && q.company !== filters.company) return false;
+      return true;
+    }).length;
+  }, [quotes, filters]);
+
+  // Financial gains from filtered orders (multas + juros, paid by client)
+  const financialGains = useMemo(() => {
+    return filtered.reduce((s, o) => s + (o.penaltyValue || 0) + (o.interestValue || 0), 0);
+  }, [filtered]);
+
+  // Fixed expenses (Gastos Fixos): sum of expanded expense entries that fall in the period
+  const fixedExpenses = useMemo(() => {
+    let total = 0;
+    expenses.forEach(e => {
+      expandExpense(e).forEach(entry => {
+        if (!entry.date) return;
+        const d = new Date(entry.date + 'T12:00:00');
+        if (filters.rangeFrom && filters.rangeTo) {
+          if (isBefore(d, filters.rangeFrom) || isAfter(d, filters.rangeTo)) return;
+        } else {
+          if (getYear(d) !== filters.year || getMonth(d) !== filters.month) return;
+        }
+        total += entry.value;
+      });
+    });
+    return total;
+  }, [expenses, filters]);
+
+  const grossProfit = stats.profit; // revenue - cost
+  const netProfit = grossProfit + financialGains - fixedExpenses;
+
+  // Daily series for Historical chart
+  const dailySeries = useMemo(() => {
+    const useRange = filters.rangeFrom && filters.rangeTo;
+    const start = useRange ? filters.rangeFrom! : startOfMonth(new Date(filters.year, filters.month, 1));
+    const end = useRange ? filters.rangeTo! : endOfMonth(new Date(filters.year, filters.month, 1));
+    const days = eachDayOfInterval({ start, end });
+
+    // Prev-year same period
+    const prevStart = subYears(start, 1);
+    const prevEnd = subYears(end, 1);
+    const prevDays = eachDayOfInterval({ start: prevStart, end: prevEnd });
+
+    const sumForDay = (list: Order[], iso: string, kind: 'revenue' | 'cost' | 'profit') => {
+      let total = 0;
+      list.forEach(o => {
+        if (o.cancelled || o.isRMA) return;
+        if (o.orderDate !== iso) return;
+        if (filters.company !== 'all' && o.company !== filters.company) return;
+        if (kind === 'revenue') total += calcTotal(o);
+        else if (kind === 'cost') total += calcFinalCost(o);
+        else total += calcProfit(o);
+      });
+      return total;
+    };
+
+    return days.map((d, idx) => {
+      const isoStr = format(d, 'yyyy-MM-dd');
+      const prevIso = prevDays[idx] ? format(prevDays[idx], 'yyyy-MM-dd') : null;
+      return {
+        day: format(d, 'dd/MM'),
+        Custo: sumForDay(orders, isoStr, 'cost'),
+        Faturamento: sumForDay(orders, isoStr, 'revenue'),
+        Lucro: sumForDay(orders, isoStr, 'profit'),
+        AnoAnterior: prevIso ? sumForDay(orders, prevIso, 'revenue') : 0,
+      };
+    });
+  }, [orders, filters]);
+
+  /* ---------- Charts data ---------- */
+
+  // Cost composition donut (all categories)
+  const costCompositionData = [
+    { name: 'Produtos', value: stats.productCost },
+    { name: 'Frete', value: stats.freightCost },
+    { name: 'Impostos', value: stats.totalTax },
+    { name: 'Cartão Crédito', value: stats.creditCost },
+    { name: 'Cartão Débito', value: stats.debitCost },
+    { name: 'Boleto', value: stats.boletoCost },
+    { name: 'Brindes', value: stats.giftCost },
   ].filter(d => d.value > 0);
 
   const ticketData = [
+    { name: 'Custo', value: stats.avgPurchase },
     { name: 'Venda', value: stats.ticketSale },
-    { name: 'Compra', value: stats.avgPurchase },
     { name: 'Lucro', value: stats.ticketProfit },
   ];
+
+  // Sales tax % by company
+  const taxByCompanyData = useMemo(() => {
+    return ['Lucky Store', 'BTech', 'AJJ'].map(c => {
+      const list = filtered.filter(o => o.company === c);
+      const rev = list.reduce((s, o) => s + calcTotal(o), 0);
+      const tax = list.reduce((s, o) => s + (o.salesTaxValue || 0), 0);
+      return { name: c, pct: rev > 0 ? (tax / rev) * 100 : 0, valor: tax };
+    });
+  }, [filtered]);
+
 
   return (
     <div className="space-y-4">
