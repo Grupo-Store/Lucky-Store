@@ -1,7 +1,8 @@
 import { useMemo, useState } from 'react';
 import {
   format, startOfMonth, endOfMonth, eachDayOfInterval, addMonths, subMonths,
-  startOfWeek, endOfWeek, isSameMonth, isSameDay, startOfWeek as sow, endOfWeek as eow,
+  startOfWeek, endOfWeek, isSameMonth, isSameDay,
+  startOfWeek as sow, endOfWeek as eow,
   isWithinInterval,
 } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -29,7 +30,7 @@ import { cn } from '@/lib/utils';
 import {
   useFinance, expandExpense, expandOrderFinancial, CalendarEntry, Expense,
 } from '@/store/FinanceStore';
-import { useOrders, calcTotal, Order, calcFreightTotal } from '@/store/OrderStore';
+import { useOrders, calcTotal, Order } from '@/store/OrderStore';
 import { ExpenseModal } from './ExpenseModal';
 import { OrderModal } from '@/components/OrderModal';
 
