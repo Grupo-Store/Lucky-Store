@@ -11,16 +11,21 @@ import {
 } from '@/components/ui/table';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
-import { CalendarIcon, Target, Settings2 } from 'lucide-react';
-import { format, getMonth, getYear, isSameMonth, isSameYear, startOfMonth, endOfMonth, eachDayOfInterval, isBefore, isAfter } from 'date-fns';
+import { CalendarIcon, Target } from 'lucide-react';
+import { format, getMonth, getYear, startOfMonth, endOfMonth, eachDayOfInterval, isBefore, isAfter, subYears } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
-  PieChart, Pie, Cell, Legend,
+  PieChart, Pie, Cell, Legend, LineChart, Line, ReferenceLine, CartesianGrid,
 } from 'recharts';
 import { cn } from '@/lib/utils';
-import { useOrders, calcTotal, calcFinalCost, calcProfit, Order, SELLERS } from '@/store/OrderStore';
-import { useFinance, Goal, GoalScopeType, goalKey } from '@/store/FinanceStore';
+import { useOrders, calcTotal, calcFinalCost, calcProfit, Order, SELLERS, calcFreightTotal } from '@/store/OrderStore';
+import { useFinance, Goal, GoalScopeType, goalKey, expandExpense } from '@/store/FinanceStore';
+import { useQuotes } from '@/store/QuoteStore';
+import { Checkbox } from '@/components/ui/checkbox';
+import {
+  remainingBusinessDaysInMonth, elapsedBusinessDaysInMonth,
+} from '@/lib/holidays';
 
 type ViewMode = 'company' | 'seller';
 type CompanyKey = 'all' | 'Lucky Store' | 'BTech' | 'AJJ';
@@ -31,31 +36,14 @@ const BRL = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', curren
 const PCT = (v: number) => `${(v * 100).toFixed(1)}%`;
 const MONTHS = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
 
-/** Counts business days (Mon-Fri) remaining in the month from today (inclusive) */
+/** Counts business days (Mon-Fri excl. PE/Recife holidays) remaining in the month from today (inclusive) */
 function remainingBusinessDays(year: number, month: number): number {
-  const today = new Date();
-  const isCurMonth = today.getFullYear() === year && today.getMonth() === month;
-  const start = isCurMonth ? today : startOfMonth(new Date(year, month, 1));
-  const end = endOfMonth(new Date(year, month, 1));
-  if (isAfter(start, end)) return 0;
-  return eachDayOfInterval({ start, end }).filter(d => {
-    const w = d.getDay();
-    return w !== 0 && w !== 6;
-  }).length;
+  return remainingBusinessDaysInMonth(year, month);
 }
 
-/** Days elapsed in current month (business days, capped) */
+/** Business days elapsed in current month (excl. PE/Recife holidays, capped to today) */
 function elapsedBusinessDays(year: number, month: number): number {
-  const today = new Date();
-  const start = startOfMonth(new Date(year, month, 1));
-  const end = today.getFullYear() === year && today.getMonth() === month
-    ? today
-    : endOfMonth(new Date(year, month, 1));
-  if (isBefore(end, start)) return 0;
-  return eachDayOfInterval({ start, end }).filter(d => {
-    const w = d.getDay();
-    return w !== 0 && w !== 6;
-  }).length;
+  return elapsedBusinessDaysInMonth(year, month);
 }
 
 interface Filters {
@@ -85,7 +73,7 @@ function applyFilters(orders: Order[], f: Filters): Order[] {
 function computeStats(orders: Order[], all: Order[], f: Filters, goal?: Goal) {
   const revenue = orders.reduce((s, o) => s + calcTotal(o), 0);
   const cost = orders.reduce((s, o) => s + calcFinalCost(o), 0);
-  const profit = orders.reduce((s, o) => s + calcProfit(o), 0);
+  const profit = orders.reduce((s, o) => s + calcProfit(o), 0); // Gross profit (revenue - cost)
   const margin = revenue > 0 ? profit / revenue : 0;
   const salesCount = orders.length;
   const ticketSale = salesCount > 0 ? revenue / salesCount : 0;
@@ -97,7 +85,11 @@ function computeStats(orders: Order[], all: Order[], f: Filters, goal?: Goal) {
     if (!o.cancelled || o.isRMA) return false;
     if (!o.orderDate) return false;
     const d = new Date(o.orderDate + 'T12:00:00');
-    if (getYear(d) !== f.year || getMonth(d) !== f.month) return false;
+    if (f.rangeFrom && f.rangeTo) {
+      if (isBefore(d, f.rangeFrom) || isAfter(d, f.rangeTo)) return false;
+    } else {
+      if (getYear(d) !== f.year || getMonth(d) !== f.month) return false;
+    }
     if (f.company !== 'all' && o.company !== f.company) return false;
     return true;
   });
@@ -121,16 +113,31 @@ function computeStats(orders: Order[], all: Order[], f: Filters, goal?: Goal) {
     : revenue;
   // Daily target tracks the FLOOR (minimum to hit), not the ceiling target
   const dailyTarget = remaining > 0 && floor > 0 ? gapFloor / remaining : 0;
+  // Efficiency = how much daily avg exceeds the daily floor target (positive = on track)
+  const efficiency = dailyAvg - dailyTarget;
 
   // Tax breakdown
-  const totalTax = orders.reduce((s, o) => s + (o.purchaseTaxValue || 0) + (o.salesTaxValue || 0), 0);
+  const purchaseTax = orders.reduce((s, o) => s + (o.purchaseTaxValue || 0), 0);
+  const salesTax = orders.reduce((s, o) => s + (o.salesTaxValue || 0), 0);
+  const totalTax = purchaseTax + salesTax;
   const otherCost = cost - totalTax;
+  const salesTaxPct = revenue > 0 ? salesTax / revenue : 0;
+
+  // Cost composition (for the donut chart)
+  const productCost = orders.reduce((s, o) => s + (o.finalProductCost || 0), 0);
+  const boletoCost = orders.reduce((s, o) => s + (o.boletoCost || 0), 0);
+  const giftCost = orders.reduce((s, o) => s + (o.giftCost || 0), 0);
+  const creditCost = orders.reduce((s, o) => s + (o.creditCostValue || 0), 0);
+  const debitCost = orders.reduce((s, o) => s + (o.debitCostValue || 0), 0);
+  const freightCost = orders.reduce((s, o) => s + calcFreightTotal(o.freight), 0);
 
   return {
     revenue, cost, profit, margin, salesCount, ticketSale, ticketProfit, avgPurchase,
     cancCount, cancValue, todayRevenue,
-    target, pctTarget, gap, projection, dailyTarget, dailyAvg,
-    totalTax, otherCost,
+    target, floor, pctTarget, gap, gapFloor, projection, dailyTarget, dailyAvg, efficiency,
+    elapsed, remaining,
+    totalTax, otherCost, salesTax, purchaseTax, salesTaxPct,
+    productCost, boletoCost, giftCost, creditCost, debitCost, freightCost,
   };
 }
 
@@ -265,7 +272,8 @@ function GoalsModal({
 
 export default function Dashboard() {
   const { orders } = useOrders();
-  const { goals, upsertGoal, deleteGoal } = useFinance();
+  const { goals, upsertGoal, deleteGoal, expenses } = useFinance();
+  const { quotes } = useQuotes();
 
   const today = new Date();
   const [filters, setFilters] = useState<Filters>({
@@ -274,6 +282,12 @@ export default function Dashboard() {
   const [mode, setMode] = useState<ViewMode>('company');
   const [goalsOpen, setGoalsOpen] = useState(false);
   const [rangeOpen, setRangeOpen] = useState(false);
+
+  // Toggleable historical metrics
+  const [showCost, setShowCost] = useState(true);
+  const [showRevenue, setShowRevenue] = useState(true);
+  const [showProfit, setShowProfit] = useState(true);
+  const [showPrevYear, setShowPrevYear] = useState(true);
 
   const filtered = useMemo(() => applyFilters(orders, filters), [orders, filters]);
 
@@ -314,17 +328,116 @@ export default function Dashboard() {
     });
   }, [filtered, orders, filters, goals]);
 
-  const taxData = [
-    { name: 'Imposto Compra', value: filtered.reduce((s, o) => s + (o.purchaseTaxValue || 0), 0) },
-    { name: 'Imposto Venda', value: filtered.reduce((s, o) => s + (o.salesTaxValue || 0), 0) },
-    { name: 'Outros Custos', value: Math.max(0, stats.otherCost) },
+  /* ---------- New aggregations for the redesigned dashboard ---------- */
+
+  // Quotes count in same period (uses requestDate)
+  const quotesCount = useMemo(() => {
+    return quotes.filter(q => {
+      if (!q.requestDate) return false;
+      const d = new Date(q.requestDate + 'T12:00:00');
+      if (filters.rangeFrom && filters.rangeTo) {
+        if (isBefore(d, filters.rangeFrom) || isAfter(d, filters.rangeTo)) return false;
+      } else {
+        if (getYear(d) !== filters.year || getMonth(d) !== filters.month) return false;
+      }
+      if (filters.company !== 'all' && q.company !== filters.company) return false;
+      return true;
+    }).length;
+  }, [quotes, filters]);
+
+  // Financial gains from filtered orders (multas + juros, paid by client)
+  const financialGains = useMemo(() => {
+    return filtered.reduce((s, o) => s + (o.penaltyValue || 0) + (o.interestValue || 0), 0);
+  }, [filtered]);
+
+  // Fixed expenses (Gastos Fixos): sum of expanded expense entries that fall in the period
+  const fixedExpenses = useMemo(() => {
+    let total = 0;
+    expenses.forEach(e => {
+      expandExpense(e).forEach(entry => {
+        if (!entry.date) return;
+        const d = new Date(entry.date + 'T12:00:00');
+        if (filters.rangeFrom && filters.rangeTo) {
+          if (isBefore(d, filters.rangeFrom) || isAfter(d, filters.rangeTo)) return;
+        } else {
+          if (getYear(d) !== filters.year || getMonth(d) !== filters.month) return;
+        }
+        total += entry.value;
+      });
+    });
+    return total;
+  }, [expenses, filters]);
+
+  const grossProfit = stats.profit; // revenue - cost
+  const netProfit = grossProfit + financialGains - fixedExpenses;
+
+  // Daily series for Historical chart
+  const dailySeries = useMemo(() => {
+    const useRange = filters.rangeFrom && filters.rangeTo;
+    const start = useRange ? filters.rangeFrom! : startOfMonth(new Date(filters.year, filters.month, 1));
+    const end = useRange ? filters.rangeTo! : endOfMonth(new Date(filters.year, filters.month, 1));
+    const days = eachDayOfInterval({ start, end });
+
+    // Prev-year same period
+    const prevStart = subYears(start, 1);
+    const prevEnd = subYears(end, 1);
+    const prevDays = eachDayOfInterval({ start: prevStart, end: prevEnd });
+
+    const sumForDay = (list: Order[], iso: string, kind: 'revenue' | 'cost' | 'profit') => {
+      let total = 0;
+      list.forEach(o => {
+        if (o.cancelled || o.isRMA) return;
+        if (o.orderDate !== iso) return;
+        if (filters.company !== 'all' && o.company !== filters.company) return;
+        if (kind === 'revenue') total += calcTotal(o);
+        else if (kind === 'cost') total += calcFinalCost(o);
+        else total += calcProfit(o);
+      });
+      return total;
+    };
+
+    return days.map((d, idx) => {
+      const isoStr = format(d, 'yyyy-MM-dd');
+      const prevIso = prevDays[idx] ? format(prevDays[idx], 'yyyy-MM-dd') : null;
+      return {
+        day: format(d, 'dd/MM'),
+        Custo: sumForDay(orders, isoStr, 'cost'),
+        Faturamento: sumForDay(orders, isoStr, 'revenue'),
+        Lucro: sumForDay(orders, isoStr, 'profit'),
+        AnoAnterior: prevIso ? sumForDay(orders, prevIso, 'revenue') : 0,
+      };
+    });
+  }, [orders, filters]);
+
+  /* ---------- Charts data ---------- */
+
+  // Cost composition donut (all categories)
+  const costCompositionData = [
+    { name: 'Produtos', value: stats.productCost },
+    { name: 'Frete', value: stats.freightCost },
+    { name: 'Impostos', value: stats.totalTax },
+    { name: 'Cartão Crédito', value: stats.creditCost },
+    { name: 'Cartão Débito', value: stats.debitCost },
+    { name: 'Boleto', value: stats.boletoCost },
+    { name: 'Brindes', value: stats.giftCost },
   ].filter(d => d.value > 0);
 
   const ticketData = [
+    { name: 'Custo', value: stats.avgPurchase },
     { name: 'Venda', value: stats.ticketSale },
-    { name: 'Compra', value: stats.avgPurchase },
     { name: 'Lucro', value: stats.ticketProfit },
   ];
+
+  // Sales tax % by company
+  const taxByCompanyData = useMemo(() => {
+    return ['Lucky Store', 'BTech', 'AJJ'].map(c => {
+      const list = filtered.filter(o => o.company === c);
+      const rev = list.reduce((s, o) => s + calcTotal(o), 0);
+      const tax = list.reduce((s, o) => s + (o.salesTaxValue || 0), 0);
+      return { name: c, pct: rev > 0 ? (tax / rev) * 100 : 0, valor: tax };
+    });
+  }, [filtered]);
+
 
   return (
     <div className="space-y-4">
@@ -395,43 +508,141 @@ export default function Dashboard() {
             ))}
           </div>
 
-          {/* KPI grid */}
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
-            <KpiCard label="Faturamento Mês" value={BRL(stats.revenue)} sub={`Hoje: ${BRL(stats.todayRevenue)}`} accent="text-green-700" />
-            <KpiCard label="Lucro Total" value={BRL(stats.profit)} accent={stats.profit >= 0 ? 'text-green-700' : 'text-red-600'} />
-            <KpiCard label="Margem por Venda" value={PCT(stats.margin)} />
-            <KpiCard label="% Meta Atingida" value={stats.target > 0 ? PCT(stats.pctTarget) : '—'} sub={stats.target > 0 ? `Meta: ${BRL(stats.target)}` : 'Sem meta cadastrada'} />
-            <KpiCard label="Projeção do Mês" value={BRL(stats.projection)} sub={`Média/dia: ${BRL(stats.dailyAvg)}`} />
-            <KpiCard label="Gap para Meta" value={BRL(stats.gap)} accent="text-orange-600" />
-            <KpiCard label="Quantidade Vendas" value={String(stats.salesCount)} />
-            <KpiCard label="Cancelamentos" value={String(stats.cancCount)} sub={`Perda: ${BRL(stats.cancValue)}`} accent="text-red-600" />
-            <KpiCard label="Meta Diária Dinâmica" value={BRL(stats.dailyTarget)} sub="Para atingir o piso" accent="text-blue-700" />
+          {/* ===== SECTION 1: GERAL ===== */}
+          <div>
+            <h3 className="text-sm font-bold uppercase tracking-wider text-secondary mb-2">Geral</h3>
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+              <KpiCard label="Custo Total" value={BRL(stats.cost)} accent="text-red-600" />
+              <KpiCard label="Faturamento Total" value={BRL(stats.revenue)} sub={`Hoje: ${BRL(stats.todayRevenue)}`} accent="text-green-700" />
+              <KpiCard label="Lucro Bruto" value={BRL(grossProfit)} sub="Fat. − Custo" accent={grossProfit >= 0 ? 'text-green-700' : 'text-red-600'} />
+              <KpiCard label="Ganhos Financeiros" value={BRL(financialGains)} sub="Multas + Juros" accent="text-blue-700" />
+              <KpiCard label="Gastos Fixos" value={BRL(fixedExpenses)} sub="Despesas registradas" accent="text-orange-600" />
+              <KpiCard label="Lucro Líquido" value={BRL(netProfit)} sub="Bruto + Ganhos − Fixos" accent={netProfit >= 0 ? 'text-green-700' : 'text-red-600'} />
+            </div>
           </div>
 
-          {/* Charts */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <Card>
-              <CardHeader><CardTitle className="text-secondary">Custo Total — Composição</CardTitle></CardHeader>
+          {/* ===== SECTION 2: VENDAS ===== */}
+          <div>
+            <h3 className="text-sm font-bold uppercase tracking-wider text-secondary mb-2">Vendas</h3>
+            <div className={cn('grid grid-cols-2 md:grid-cols-3 gap-3',
+              filters.company !== 'all' ? 'lg:grid-cols-5' : 'lg:grid-cols-4')}>
+              <KpiCard label="Quantidade de Vendas" value={String(stats.salesCount)} />
+              <KpiCard label="Margem por Venda" value={PCT(stats.margin)} />
+              <KpiCard label="Quantidade de Cotações" value={String(quotesCount)} />
+              <KpiCard label="Cancelamentos" value={String(stats.cancCount)} sub={`Perda: ${BRL(stats.cancValue)}`} accent="text-red-600" />
+              {filters.company !== 'all' && (
+                <KpiCard label="% Imposto de Venda" value={PCT(stats.salesTaxPct)} sub={`Total: ${BRL(stats.salesTax)}`} accent="text-orange-600" />
+              )}
+            </div>
+          </div>
+
+          {/* ===== SECTION 3: TICKET ===== */}
+          <div>
+            <h3 className="text-sm font-bold uppercase tracking-wider text-secondary mb-2">Ticket</h3>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <KpiCard label="Ticket Médio de Custo" value={BRL(stats.avgPurchase)} accent="text-red-600" />
+              <KpiCard label="Ticket Médio de Vendas" value={BRL(stats.ticketSale)} accent="text-green-700" />
+              <KpiCard label="Ticket Médio de Lucro" value={BRL(stats.ticketProfit)} accent={stats.ticketProfit >= 0 ? 'text-green-700' : 'text-red-600'} />
+            </div>
+          </div>
+
+          {/* ===== SECTION 4: META ===== */}
+          <div>
+            <h3 className="text-sm font-bold uppercase tracking-wider text-secondary mb-2">Meta</h3>
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+              <KpiCard label="Alvo" value={stats.target > 0 ? BRL(stats.target) : '—'} sub={stats.floor > 0 ? `Piso: ${BRL(stats.floor)}` : 'Sem meta'} />
+              <KpiCard label="% da Meta Atingida" value={stats.target > 0 ? PCT(stats.pctTarget) : '—'} sub={stats.target > 0 ? `${BRL(stats.revenue)} / ${BRL(stats.target)}` : '—'} accent={stats.pctTarget >= 1 ? 'text-green-700' : 'text-secondary'} />
+              <KpiCard label="Meta Diária Dinâmica" value={BRL(stats.dailyTarget)} sub={`${stats.remaining} dia(s) úteis restantes`} accent="text-blue-700" />
+              <KpiCard label="Gap para Meta" value={BRL(stats.gap)} sub={stats.gapFloor > 0 ? `Piso: ${BRL(stats.gapFloor)}` : undefined} accent="text-orange-600" />
+              <KpiCard label="Projeção do Mês" value={BRL(stats.projection)} sub={`Média/dia: ${BRL(stats.dailyAvg)}`} />
+              <KpiCard label="Eficiência" value={BRL(stats.efficiency)} sub="Média/dia − Meta diária" accent={stats.efficiency >= 0 ? 'text-green-700' : 'text-red-600'} />
+            </div>
+          </div>
+
+          {/* ===== SECTION 5: GRÁFICOS ===== */}
+          <div>
+            <h3 className="text-sm font-bold uppercase tracking-wider text-secondary mb-2">Gráficos</h3>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <Card>
+                <CardHeader><CardTitle className="text-secondary">Custo Total — Composição</CardTitle></CardHeader>
+                <CardContent>
+                  <ResponsiveContainer width="100%" height={280}>
+                    <PieChart>
+                      <Pie data={costCompositionData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={100} innerRadius={50} label={(e: any) => `${e.name}: ${BRL(e.value)}`}>
+                        {costCompositionData.map((_, i) => <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />)}
+                      </Pie>
+                      <Tooltip formatter={(v: number) => BRL(v)} />
+                      <Legend />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader><CardTitle className="text-secondary">Ticket Médio — Comparativo</CardTitle></CardHeader>
+                <CardContent>
+                  <ResponsiveContainer width="100%" height={280}>
+                    <BarChart data={ticketData}>
+                      <XAxis dataKey="name" /><YAxis />
+                      <Tooltip formatter={(v: number) => BRL(v)} />
+                      <Bar dataKey="value" fill="hsl(192, 76%, 29%)" radius={[4, 4, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Historical line chart with toggles */}
+            <Card className="mt-4">
+              <CardHeader>
+                <div className="flex items-center justify-between flex-wrap gap-3">
+                  <CardTitle className="text-secondary">Análise Histórica — Diário</CardTitle>
+                  <div className="flex items-center gap-3 flex-wrap text-sm">
+                    <label className="flex items-center gap-1.5 cursor-pointer"><Checkbox checked={showCost} onCheckedChange={(v) => setShowCost(!!v)} /> Custo</label>
+                    <label className="flex items-center gap-1.5 cursor-pointer"><Checkbox checked={showRevenue} onCheckedChange={(v) => setShowRevenue(!!v)} /> Faturamento</label>
+                    <label className="flex items-center gap-1.5 cursor-pointer"><Checkbox checked={showProfit} onCheckedChange={(v) => setShowProfit(!!v)} /> Lucro</label>
+                    <label className="flex items-center gap-1.5 cursor-pointer"><Checkbox checked={showPrevYear} onCheckedChange={(v) => setShowPrevYear(!!v)} /> Ano Anterior (Fat.)</label>
+                  </div>
+                </div>
+              </CardHeader>
               <CardContent>
-                <ResponsiveContainer width="100%" height={280}>
-                  <PieChart>
-                    <Pie data={taxData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={100} label={(e: any) => BRL(e.value)}>
-                      {taxData.map((_, i) => <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />)}
-                    </Pie>
+                <ResponsiveContainer width="100%" height={340}>
+                  <LineChart data={dailySeries}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="day" />
+                    <YAxis tickFormatter={(v: number) => v.toLocaleString('pt-BR', { notation: 'compact' })} />
                     <Tooltip formatter={(v: number) => BRL(v)} />
                     <Legend />
-                  </PieChart>
+                    {stats.floor > 0 && (
+                      <ReferenceLine y={stats.floor} stroke="hsl(0, 70%, 60%)" strokeDasharray="6 4"
+                        label={{ value: `Piso: ${BRL(stats.floor)}`, position: 'insideTopRight', fill: 'hsl(0, 70%, 40%)', fontSize: 11 }} />
+                    )}
+                    {stats.target > 0 && (
+                      <ReferenceLine y={stats.target} stroke="hsl(35, 90%, 45%)" strokeDasharray="6 4"
+                        label={{ value: `Alvo: ${BRL(stats.target)}`, position: 'insideTopRight', fill: 'hsl(35, 90%, 35%)', fontSize: 11 }} />
+                    )}
+                    {showCost && <Line type="monotone" dataKey="Custo" stroke="hsl(0, 70%, 50%)" strokeWidth={2} dot={false} />}
+                    {showRevenue && <Line type="monotone" dataKey="Faturamento" stroke="hsl(192, 76%, 29%)" strokeWidth={2} dot={false} />}
+                    {showProfit && <Line type="monotone" dataKey="Lucro" stroke="hsl(140, 70%, 40%)" strokeWidth={2} dot={false} />}
+                    {showPrevYear && <Line type="monotone" dataKey="AnoAnterior" stroke="hsl(220, 15%, 55%)" strokeWidth={1.5} strokeDasharray="4 4" dot={false} name="Fat. Ano Anterior" />}
+                  </LineChart>
                 </ResponsiveContainer>
               </CardContent>
             </Card>
-            <Card>
-              <CardHeader><CardTitle className="text-secondary">Ticket Médio — Comparativo</CardTitle></CardHeader>
+
+            {/* Tax % by company */}
+            <Card className="mt-4">
+              <CardHeader><CardTitle className="text-secondary">Imposto de Venda (%) por Empresa</CardTitle></CardHeader>
               <CardContent>
-                <ResponsiveContainer width="100%" height={280}>
-                  <BarChart data={ticketData}>
-                    <XAxis dataKey="name" /><YAxis />
-                    <Tooltip formatter={(v: number) => BRL(v)} />
-                    <Bar dataKey="value" fill="hsl(192, 76%, 29%)" radius={[4, 4, 0, 0]} />
+                <ResponsiveContainer width="100%" height={260}>
+                  <BarChart data={taxByCompanyData}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="name" />
+                    <YAxis tickFormatter={(v: number) => `${v.toFixed(1)}%`} />
+                    <Tooltip formatter={(v: number, key: string) => key === 'pct' ? `${v.toFixed(2)}%` : BRL(v)} />
+                    <Legend />
+                    <Bar dataKey="pct" name="% Imposto / Faturamento" fill="hsl(35, 90%, 55%)" radius={[4, 4, 0, 0]} />
                   </BarChart>
                 </ResponsiveContainer>
               </CardContent>
@@ -454,7 +665,7 @@ export default function Dashboard() {
                     <TableHead className="text-right">Projeção</TableHead>
                     <TableHead className="text-right">Tkt Venda</TableHead>
                     <TableHead className="text-right">Tkt Lucro</TableHead>
-                    <TableHead className="text-right">Impostos</TableHead>
+                    <TableHead className="text-right">% Imp. Venda</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -469,7 +680,7 @@ export default function Dashboard() {
                       <TableCell className="text-right">{BRL(c.projection)}</TableCell>
                       <TableCell className="text-right">{BRL(c.ticketSale)}</TableCell>
                       <TableCell className="text-right">{BRL(c.ticketProfit)}</TableCell>
-                      <TableCell className="text-right">{BRL(c.totalTax)}</TableCell>
+                      <TableCell className="text-right">{PCT(c.salesTaxPct)}</TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
@@ -565,21 +776,21 @@ export default function Dashboard() {
               <ResponsiveContainer width="100%" height={300}>
                 <BarChart data={perSeller.map(s => ({
                   name: s.seller,
-                  Vendas: s.revenue,
-                  Lucro: s.profit,
-                  Meta: s.target,
+                  Alvo: s.target,
                   Piso: goals.find(g =>
                     g.year === filters.year && g.month === filters.month + 1 &&
                     g.scopeType === 'seller' && g.scopeId === s.seller
                   )?.floor ?? 0,
+                  Vendas: s.revenue,
+                  Lucro: s.profit,
                 }))}>
                   <XAxis dataKey="name" /><YAxis />
                   <Tooltip formatter={(v: number) => BRL(v)} />
                   <Legend />
+                  <Bar dataKey="Alvo" fill="hsl(35, 90%, 55%)" radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="Piso" fill="hsl(0, 70%, 60%)" radius={[4, 4, 0, 0]} />
                   <Bar dataKey="Vendas" fill="hsl(192, 76%, 29%)" radius={[4, 4, 0, 0]} />
                   <Bar dataKey="Lucro" fill="hsl(140, 70%, 40%)" radius={[4, 4, 0, 0]} />
-                  <Bar dataKey="Meta" fill="hsl(35, 90%, 55%)" radius={[4, 4, 0, 0]} />
-                  <Bar dataKey="Piso" fill="hsl(0, 70%, 60%)" radius={[4, 4, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             </CardContent>
