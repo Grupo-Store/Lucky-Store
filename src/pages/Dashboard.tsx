@@ -11,16 +11,21 @@ import {
 } from '@/components/ui/table';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
-import { CalendarIcon, Target, Settings2 } from 'lucide-react';
-import { format, getMonth, getYear, isSameMonth, isSameYear, startOfMonth, endOfMonth, eachDayOfInterval, isBefore, isAfter } from 'date-fns';
+import { CalendarIcon, Target } from 'lucide-react';
+import { format, getMonth, getYear, startOfMonth, endOfMonth, eachDayOfInterval, isBefore, isAfter, subYears } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
-  PieChart, Pie, Cell, Legend,
+  PieChart, Pie, Cell, Legend, LineChart, Line, ReferenceLine, CartesianGrid,
 } from 'recharts';
 import { cn } from '@/lib/utils';
-import { useOrders, calcTotal, calcFinalCost, calcProfit, Order, SELLERS } from '@/store/OrderStore';
-import { useFinance, Goal, GoalScopeType, goalKey } from '@/store/FinanceStore';
+import { useOrders, calcTotal, calcFinalCost, calcProfit, Order, SELLERS, calcFreightTotal } from '@/store/OrderStore';
+import { useFinance, Goal, GoalScopeType, goalKey, expandExpense } from '@/store/FinanceStore';
+import { useQuotes } from '@/store/QuoteStore';
+import { Checkbox } from '@/components/ui/checkbox';
+import {
+  remainingBusinessDaysInMonth, elapsedBusinessDaysInMonth,
+} from '@/lib/holidays';
 
 type ViewMode = 'company' | 'seller';
 type CompanyKey = 'all' | 'Lucky Store' | 'BTech' | 'AJJ';
