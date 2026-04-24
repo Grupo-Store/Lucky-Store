@@ -508,43 +508,141 @@ export default function Dashboard() {
             ))}
           </div>
 
-          {/* KPI grid */}
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
-            <KpiCard label="Faturamento Mês" value={BRL(stats.revenue)} sub={`Hoje: ${BRL(stats.todayRevenue)}`} accent="text-green-700" />
-            <KpiCard label="Lucro Total" value={BRL(stats.profit)} accent={stats.profit >= 0 ? 'text-green-700' : 'text-red-600'} />
-            <KpiCard label="Margem por Venda" value={PCT(stats.margin)} />
-            <KpiCard label="% Meta Atingida" value={stats.target > 0 ? PCT(stats.pctTarget) : '—'} sub={stats.target > 0 ? `Meta: ${BRL(stats.target)}` : 'Sem meta cadastrada'} />
-            <KpiCard label="Projeção do Mês" value={BRL(stats.projection)} sub={`Média/dia: ${BRL(stats.dailyAvg)}`} />
-            <KpiCard label="Gap para Meta" value={BRL(stats.gap)} accent="text-orange-600" />
-            <KpiCard label="Quantidade Vendas" value={String(stats.salesCount)} />
-            <KpiCard label="Cancelamentos" value={String(stats.cancCount)} sub={`Perda: ${BRL(stats.cancValue)}`} accent="text-red-600" />
-            <KpiCard label="Meta Diária Dinâmica" value={BRL(stats.dailyTarget)} sub="Para atingir o piso" accent="text-blue-700" />
+          {/* ===== SECTION 1: GERAL ===== */}
+          <div>
+            <h3 className="text-sm font-bold uppercase tracking-wider text-secondary mb-2">Geral</h3>
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+              <KpiCard label="Custo Total" value={BRL(stats.cost)} accent="text-red-600" />
+              <KpiCard label="Faturamento Total" value={BRL(stats.revenue)} sub={`Hoje: ${BRL(stats.todayRevenue)}`} accent="text-green-700" />
+              <KpiCard label="Lucro Bruto" value={BRL(grossProfit)} sub="Fat. − Custo" accent={grossProfit >= 0 ? 'text-green-700' : 'text-red-600'} />
+              <KpiCard label="Ganhos Financeiros" value={BRL(financialGains)} sub="Multas + Juros" accent="text-blue-700" />
+              <KpiCard label="Gastos Fixos" value={BRL(fixedExpenses)} sub="Despesas registradas" accent="text-orange-600" />
+              <KpiCard label="Lucro Líquido" value={BRL(netProfit)} sub="Bruto + Ganhos − Fixos" accent={netProfit >= 0 ? 'text-green-700' : 'text-red-600'} />
+            </div>
           </div>
 
-          {/* Charts */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <Card>
-              <CardHeader><CardTitle className="text-secondary">Custo Total — Composição</CardTitle></CardHeader>
+          {/* ===== SECTION 2: VENDAS ===== */}
+          <div>
+            <h3 className="text-sm font-bold uppercase tracking-wider text-secondary mb-2">Vendas</h3>
+            <div className={cn('grid grid-cols-2 md:grid-cols-3 gap-3',
+              filters.company !== 'all' ? 'lg:grid-cols-5' : 'lg:grid-cols-4')}>
+              <KpiCard label="Quantidade de Vendas" value={String(stats.salesCount)} />
+              <KpiCard label="Margem por Venda" value={PCT(stats.margin)} />
+              <KpiCard label="Quantidade de Cotações" value={String(quotesCount)} />
+              <KpiCard label="Cancelamentos" value={String(stats.cancCount)} sub={`Perda: ${BRL(stats.cancValue)}`} accent="text-red-600" />
+              {filters.company !== 'all' && (
+                <KpiCard label="% Imposto de Venda" value={PCT(stats.salesTaxPct)} sub={`Total: ${BRL(stats.salesTax)}`} accent="text-orange-600" />
+              )}
+            </div>
+          </div>
+
+          {/* ===== SECTION 3: TICKET ===== */}
+          <div>
+            <h3 className="text-sm font-bold uppercase tracking-wider text-secondary mb-2">Ticket</h3>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <KpiCard label="Ticket Médio de Custo" value={BRL(stats.avgPurchase)} accent="text-red-600" />
+              <KpiCard label="Ticket Médio de Vendas" value={BRL(stats.ticketSale)} accent="text-green-700" />
+              <KpiCard label="Ticket Médio de Lucro" value={BRL(stats.ticketProfit)} accent={stats.ticketProfit >= 0 ? 'text-green-700' : 'text-red-600'} />
+            </div>
+          </div>
+
+          {/* ===== SECTION 4: META ===== */}
+          <div>
+            <h3 className="text-sm font-bold uppercase tracking-wider text-secondary mb-2">Meta</h3>
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+              <KpiCard label="Alvo" value={stats.target > 0 ? BRL(stats.target) : '—'} sub={stats.floor > 0 ? `Piso: ${BRL(stats.floor)}` : 'Sem meta'} />
+              <KpiCard label="% da Meta Atingida" value={stats.target > 0 ? PCT(stats.pctTarget) : '—'} sub={stats.target > 0 ? `${BRL(stats.revenue)} / ${BRL(stats.target)}` : '—'} accent={stats.pctTarget >= 1 ? 'text-green-700' : 'text-secondary'} />
+              <KpiCard label="Meta Diária Dinâmica" value={BRL(stats.dailyTarget)} sub={`${stats.remaining} dia(s) úteis restantes`} accent="text-blue-700" />
+              <KpiCard label="Gap para Meta" value={BRL(stats.gap)} sub={stats.gapFloor > 0 ? `Piso: ${BRL(stats.gapFloor)}` : undefined} accent="text-orange-600" />
+              <KpiCard label="Projeção do Mês" value={BRL(stats.projection)} sub={`Média/dia: ${BRL(stats.dailyAvg)}`} />
+              <KpiCard label="Eficiência" value={BRL(stats.efficiency)} sub="Média/dia − Meta diária" accent={stats.efficiency >= 0 ? 'text-green-700' : 'text-red-600'} />
+            </div>
+          </div>
+
+          {/* ===== SECTION 5: GRÁFICOS ===== */}
+          <div>
+            <h3 className="text-sm font-bold uppercase tracking-wider text-secondary mb-2">Gráficos</h3>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <Card>
+                <CardHeader><CardTitle className="text-secondary">Custo Total — Composição</CardTitle></CardHeader>
+                <CardContent>
+                  <ResponsiveContainer width="100%" height={280}>
+                    <PieChart>
+                      <Pie data={costCompositionData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={100} innerRadius={50} label={(e: any) => `${e.name}: ${BRL(e.value)}`}>
+                        {costCompositionData.map((_, i) => <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />)}
+                      </Pie>
+                      <Tooltip formatter={(v: number) => BRL(v)} />
+                      <Legend />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader><CardTitle className="text-secondary">Ticket Médio — Comparativo</CardTitle></CardHeader>
+                <CardContent>
+                  <ResponsiveContainer width="100%" height={280}>
+                    <BarChart data={ticketData}>
+                      <XAxis dataKey="name" /><YAxis />
+                      <Tooltip formatter={(v: number) => BRL(v)} />
+                      <Bar dataKey="value" fill="hsl(192, 76%, 29%)" radius={[4, 4, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Historical line chart with toggles */}
+            <Card className="mt-4">
+              <CardHeader>
+                <div className="flex items-center justify-between flex-wrap gap-3">
+                  <CardTitle className="text-secondary">Análise Histórica — Diário</CardTitle>
+                  <div className="flex items-center gap-3 flex-wrap text-sm">
+                    <label className="flex items-center gap-1.5 cursor-pointer"><Checkbox checked={showCost} onCheckedChange={(v) => setShowCost(!!v)} /> Custo</label>
+                    <label className="flex items-center gap-1.5 cursor-pointer"><Checkbox checked={showRevenue} onCheckedChange={(v) => setShowRevenue(!!v)} /> Faturamento</label>
+                    <label className="flex items-center gap-1.5 cursor-pointer"><Checkbox checked={showProfit} onCheckedChange={(v) => setShowProfit(!!v)} /> Lucro</label>
+                    <label className="flex items-center gap-1.5 cursor-pointer"><Checkbox checked={showPrevYear} onCheckedChange={(v) => setShowPrevYear(!!v)} /> Ano Anterior (Fat.)</label>
+                  </div>
+                </div>
+              </CardHeader>
               <CardContent>
-                <ResponsiveContainer width="100%" height={280}>
-                  <PieChart>
-                    <Pie data={taxData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={100} label={(e: any) => BRL(e.value)}>
-                      {taxData.map((_, i) => <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />)}
-                    </Pie>
+                <ResponsiveContainer width="100%" height={340}>
+                  <LineChart data={dailySeries}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="day" />
+                    <YAxis tickFormatter={(v: number) => v.toLocaleString('pt-BR', { notation: 'compact' })} />
                     <Tooltip formatter={(v: number) => BRL(v)} />
                     <Legend />
-                  </PieChart>
+                    {stats.floor > 0 && (
+                      <ReferenceLine y={stats.floor} stroke="hsl(0, 70%, 60%)" strokeDasharray="6 4"
+                        label={{ value: `Piso: ${BRL(stats.floor)}`, position: 'insideTopRight', fill: 'hsl(0, 70%, 40%)', fontSize: 11 }} />
+                    )}
+                    {stats.target > 0 && (
+                      <ReferenceLine y={stats.target} stroke="hsl(35, 90%, 45%)" strokeDasharray="6 4"
+                        label={{ value: `Alvo: ${BRL(stats.target)}`, position: 'insideTopRight', fill: 'hsl(35, 90%, 35%)', fontSize: 11 }} />
+                    )}
+                    {showCost && <Line type="monotone" dataKey="Custo" stroke="hsl(0, 70%, 50%)" strokeWidth={2} dot={false} />}
+                    {showRevenue && <Line type="monotone" dataKey="Faturamento" stroke="hsl(192, 76%, 29%)" strokeWidth={2} dot={false} />}
+                    {showProfit && <Line type="monotone" dataKey="Lucro" stroke="hsl(140, 70%, 40%)" strokeWidth={2} dot={false} />}
+                    {showPrevYear && <Line type="monotone" dataKey="AnoAnterior" stroke="hsl(220, 15%, 55%)" strokeWidth={1.5} strokeDasharray="4 4" dot={false} name="Fat. Ano Anterior" />}
+                  </LineChart>
                 </ResponsiveContainer>
               </CardContent>
             </Card>
-            <Card>
-              <CardHeader><CardTitle className="text-secondary">Ticket Médio — Comparativo</CardTitle></CardHeader>
+
+            {/* Tax % by company */}
+            <Card className="mt-4">
+              <CardHeader><CardTitle className="text-secondary">Imposto de Venda (%) por Empresa</CardTitle></CardHeader>
               <CardContent>
-                <ResponsiveContainer width="100%" height={280}>
-                  <BarChart data={ticketData}>
-                    <XAxis dataKey="name" /><YAxis />
-                    <Tooltip formatter={(v: number) => BRL(v)} />
-                    <Bar dataKey="value" fill="hsl(192, 76%, 29%)" radius={[4, 4, 0, 0]} />
+                <ResponsiveContainer width="100%" height={260}>
+                  <BarChart data={taxByCompanyData}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="name" />
+                    <YAxis tickFormatter={(v: number) => `${v.toFixed(1)}%`} />
+                    <Tooltip formatter={(v: number, key: string) => key === 'pct' ? `${v.toFixed(2)}%` : BRL(v)} />
+                    <Legend />
+                    <Bar dataKey="pct" name="% Imposto / Faturamento" fill="hsl(35, 90%, 55%)" radius={[4, 4, 0, 0]} />
                   </BarChart>
                 </ResponsiveContainer>
               </CardContent>
@@ -567,7 +665,7 @@ export default function Dashboard() {
                     <TableHead className="text-right">Projeção</TableHead>
                     <TableHead className="text-right">Tkt Venda</TableHead>
                     <TableHead className="text-right">Tkt Lucro</TableHead>
-                    <TableHead className="text-right">Impostos</TableHead>
+                    <TableHead className="text-right">% Imp. Venda</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -582,7 +680,7 @@ export default function Dashboard() {
                       <TableCell className="text-right">{BRL(c.projection)}</TableCell>
                       <TableCell className="text-right">{BRL(c.ticketSale)}</TableCell>
                       <TableCell className="text-right">{BRL(c.ticketProfit)}</TableCell>
-                      <TableCell className="text-right">{BRL(c.totalTax)}</TableCell>
+                      <TableCell className="text-right">{PCT(c.salesTaxPct)}</TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
