@@ -17,7 +17,7 @@ import {
 } from '@/store/OrderStore';
 import {
   useQuotes, Quote, QuotePhaseKey, QUOTE_PHASE_LABELS, QUOTE_PHASE_COLORS,
-  getHighestPhase, getPhaseDate,
+  getHighestPhase, getPhaseDate, getDisplayValue,
 } from '@/store/QuoteStore';
 import { OrderModal } from '@/components/OrderModal';
 import { ProductModal } from '@/components/ProductModal';
@@ -291,7 +291,16 @@ export default function Sales() {
             <Card>
               <CardContent className="p-4">
                 <div className="flex flex-wrap justify-between items-center gap-3 mb-4">
-                  <h2 className="text-lg font-semibold text-secondary">Cotações</h2>
+                  <div className="flex items-center gap-4">
+                    <h2 className="text-lg font-semibold text-secondary">Cotações</h2>
+                    <div className="flex flex-col rounded-lg border bg-secondary/10 px-4 py-2">
+                      <span className="text-[10px] uppercase tracking-wide text-muted-foreground font-semibold">Total Cotações (visível)</span>
+                      <span className="text-lg font-bold text-secondary leading-tight">
+                        {formatBRL(filteredQuotes.reduce((s, qt) => s + getDisplayValue(qt), 0))}
+                      </span>
+                      <span className="text-[10px] text-muted-foreground">{filteredQuotes.length} cotação(ões)</span>
+                    </div>
+                  </div>
                   <div className="flex items-center gap-2 flex-wrap">
                     <SearchBar value={quoteSearch} onChange={setQuoteSearch} placeholder="Cliente, Req, Empresa, Vendedor, Fat. Direto..." />
                     <DateFilter
