@@ -565,21 +565,21 @@ export default function Dashboard() {
               <ResponsiveContainer width="100%" height={300}>
                 <BarChart data={perSeller.map(s => ({
                   name: s.seller,
-                  Vendas: s.revenue,
-                  Lucro: s.profit,
-                  Meta: s.target,
+                  Alvo: s.target,
                   Piso: goals.find(g =>
                     g.year === filters.year && g.month === filters.month + 1 &&
                     g.scopeType === 'seller' && g.scopeId === s.seller
                   )?.floor ?? 0,
+                  Vendas: s.revenue,
+                  Lucro: s.profit,
                 }))}>
                   <XAxis dataKey="name" /><YAxis />
                   <Tooltip formatter={(v: number) => BRL(v)} />
                   <Legend />
+                  <Bar dataKey="Alvo" fill="hsl(35, 90%, 55%)" radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="Piso" fill="hsl(0, 70%, 60%)" radius={[4, 4, 0, 0]} />
                   <Bar dataKey="Vendas" fill="hsl(192, 76%, 29%)" radius={[4, 4, 0, 0]} />
                   <Bar dataKey="Lucro" fill="hsl(140, 70%, 40%)" radius={[4, 4, 0, 0]} />
-                  <Bar dataKey="Meta" fill="hsl(35, 90%, 55%)" radius={[4, 4, 0, 0]} />
-                  <Bar dataKey="Piso" fill="hsl(0, 70%, 60%)" radius={[4, 4, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             </CardContent>
