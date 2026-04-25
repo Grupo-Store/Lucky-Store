@@ -58,7 +58,9 @@ function SectionTabs() {
 export function AppLayout() {
   const { username } = useAuth();
   const { pathname } = useLocation();
+  const { mode } = useDashboardFilters();
   const showDashHeader = pathname.startsWith('/dashboard');
+  const showSectionTabs = showDashHeader && mode === 'company';
 
   return (
     <SidebarProvider>
