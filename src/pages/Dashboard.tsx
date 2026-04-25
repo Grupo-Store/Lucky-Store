@@ -593,7 +593,6 @@ export default function Dashboard() {
 
               {CostPieCard}
               {HistoricalLineCard}
-              {company === 'all' && TaxByCompanyCard}
             </div>
           )}
 
@@ -610,6 +609,7 @@ export default function Dashboard() {
                   <KpiCard label="% Imposto de Venda" value={PCT(stats.salesTaxPct)} sub={`Total: ${BRL(stats.salesTax)}`} accent="text-orange-600" />
                 )}
               </div>
+              {company === 'all' && TaxByCompanyCard}
             </div>
           )}
 
