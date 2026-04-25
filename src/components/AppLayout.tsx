@@ -29,6 +29,10 @@ function ModeToggle() {
   );
 }
 
+function useMode() {
+  return useDashboardFilters().mode;
+}
+
 function SectionTabs() {
   const { section, setSection } = useDashboardFilters();
   return (
