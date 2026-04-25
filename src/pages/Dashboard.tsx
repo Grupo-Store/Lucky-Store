@@ -306,12 +306,13 @@ export default function Dashboard() {
   const { orders } = useOrders();
   const { goals, upsertGoal, deleteGoal, expenses } = useFinance();
   const { quotes } = useQuotes();
-  const { filters: globalFilters, mode } = useDashboardFilters();
+  const { filters: globalFilters, setFilters: setGlobalFilters, mode, section } = useDashboardFilters();
 
-  // Local: company sub-filter & section tab
+  // Local: company sub-filter
   const [company, setCompany] = useState<CompanyKey>('all');
-  const [section, setSection] = useState<SectionKey>('geral');
   const [goalsOpen, setGoalsOpen] = useState(false);
+  const [dateOpen, setDateOpen] = useState(false);
+  const [dateTab, setDateTab] = useState<'data' | 'periodo'>('data');
 
   // Toggleable historical metrics
   const [showCost, setShowCost] = useState(true);
