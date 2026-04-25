@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState } from 'react';
 
 export type DashboardViewMode = 'company' | 'seller';
+export type DashboardSection = 'geral' | 'vendas' | 'ticket' | 'meta';
 
 export interface DashboardFilters {
   year: number;
@@ -14,6 +15,8 @@ interface Ctx {
   setFilters: React.Dispatch<React.SetStateAction<DashboardFilters>>;
   mode: DashboardViewMode;
   setMode: React.Dispatch<React.SetStateAction<DashboardViewMode>>;
+  section: DashboardSection;
+  setSection: React.Dispatch<React.SetStateAction<DashboardSection>>;
 }
 
 const DashboardFilterCtx = createContext<Ctx | null>(null);
@@ -25,9 +28,10 @@ export function DashboardFilterProvider({ children }: { children: React.ReactNod
     month: today.getMonth(),
   });
   const [mode, setMode] = useState<DashboardViewMode>('company');
+  const [section, setSection] = useState<DashboardSection>('geral');
 
   return (
-    <DashboardFilterCtx.Provider value={{ filters, setFilters, mode, setMode }}>
+    <DashboardFilterCtx.Provider value={{ filters, setFilters, mode, setMode, section, setSection }}>
       {children}
     </DashboardFilterCtx.Provider>
   );
