@@ -5,15 +5,11 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Calendar } from '@/components/ui/calendar';
-import { CalendarIcon, Target } from 'lucide-react';
+import { Target, Pencil } from 'lucide-react';
 import { format, getMonth, getYear, startOfMonth, endOfMonth, eachDayOfInterval, isBefore, isAfter, subYears } from 'date-fns';
-import { ptBR } from 'date-fns/locale';
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, Legend, LineChart, Line, ReferenceLine, CartesianGrid,
@@ -22,39 +18,44 @@ import { cn } from '@/lib/utils';
 import { useOrders, calcTotal, calcFinalCost, calcProfit, Order, SELLERS, calcFreightTotal } from '@/store/OrderStore';
 import { useFinance, Goal, GoalScopeType, goalKey, expandExpense } from '@/store/FinanceStore';
 import { useQuotes } from '@/store/QuoteStore';
+import { useDashboardFilters } from '@/store/DashboardFilterStore';
 import { Checkbox } from '@/components/ui/checkbox';
 import {
   remainingBusinessDaysInMonth, elapsedBusinessDaysInMonth,
 } from '@/lib/holidays';
 
-type ViewMode = 'company' | 'seller';
 type CompanyKey = 'all' | 'Lucky Store' | 'BTech' | 'AJJ';
 const COMPANIES: CompanyKey[] = ['all', 'Lucky Store', 'BTech', 'AJJ'];
+
+type SectionKey = 'geral' | 'vendas' | 'ticket' | 'meta';
+const SECTIONS: { key: SectionKey; label: string }[] = [
+  { key: 'geral', label: 'GERAL' },
+  { key: 'vendas', label: 'VENDAS' },
+  { key: 'ticket', label: 'TICKET' },
+  { key: 'meta', label: 'META' },
+];
 
 const PIE_COLORS = ['#3b82f6', '#f59e0b', '#10b981', '#ef4444', '#8b5cf6', '#ec4899'];
 const BRL = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 const PCT = (v: number) => `${(v * 100).toFixed(1)}%`;
 const MONTHS = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
 
-/** Counts business days (Mon-Fri excl. PE/Recife holidays) remaining in the month from today (inclusive) */
 function remainingBusinessDays(year: number, month: number): number {
   return remainingBusinessDaysInMonth(year, month);
 }
-
-/** Business days elapsed in current month (excl. PE/Recife holidays, capped to today) */
 function elapsedBusinessDays(year: number, month: number): number {
   return elapsedBusinessDaysInMonth(year, month);
 }
 
-interface Filters {
+interface FilterCriteria {
   year: number;
-  month: number; // 0-11
+  month: number;
   rangeFrom?: Date;
   rangeTo?: Date;
   company: CompanyKey;
 }
 
-function applyFilters(orders: Order[], f: Filters): Order[] {
+function applyFilters(orders: Order[], f: FilterCriteria): Order[] {
   return orders.filter(o => {
     if (o.cancelled || o.isRMA) return false;
     if (!o.orderDate) return false;
@@ -70,17 +71,16 @@ function applyFilters(orders: Order[], f: Filters): Order[] {
   });
 }
 
-function computeStats(orders: Order[], all: Order[], f: Filters, goal?: Goal) {
+function computeStats(orders: Order[], all: Order[], f: FilterCriteria, goal?: Goal) {
   const revenue = orders.reduce((s, o) => s + calcTotal(o), 0);
   const cost = orders.reduce((s, o) => s + calcFinalCost(o), 0);
-  const profit = orders.reduce((s, o) => s + calcProfit(o), 0); // Gross profit (revenue - cost)
+  const profit = orders.reduce((s, o) => s + calcProfit(o), 0);
   const margin = revenue > 0 ? profit / revenue : 0;
   const salesCount = orders.length;
   const ticketSale = salesCount > 0 ? revenue / salesCount : 0;
   const ticketProfit = salesCount > 0 ? profit / salesCount : 0;
   const avgPurchase = salesCount > 0 ? cost / salesCount : 0;
 
-  // Cancellations from full set (same period/company)
   const cancellations = all.filter(o => {
     if (!o.cancelled || o.isRMA) return false;
     if (!o.orderDate) return false;
@@ -96,7 +96,6 @@ function computeStats(orders: Order[], all: Order[], f: Filters, goal?: Goal) {
   const cancCount = cancellations.length;
   const cancValue = cancellations.reduce((s, o) => s + calcTotal(o), 0);
 
-  // Today
   const today = new Date();
   const todayRevenue = orders.filter(o => o.orderDate === format(today, 'yyyy-MM-dd')).reduce((s, o) => s + calcTotal(o), 0);
 
@@ -108,22 +107,16 @@ function computeStats(orders: Order[], all: Order[], f: Filters, goal?: Goal) {
   const elapsed = elapsedBusinessDays(f.year, f.month);
   const remaining = remainingBusinessDays(f.year, f.month);
   const dailyAvg = elapsed > 0 ? revenue / elapsed : 0;
-  const projection = elapsed > 0
-    ? dailyAvg * (elapsed + remaining)
-    : revenue;
-  // Daily target tracks the FLOOR (minimum to hit), not the ceiling target
+  const projection = elapsed > 0 ? dailyAvg * (elapsed + remaining) : revenue;
   const dailyTarget = remaining > 0 && floor > 0 ? gapFloor / remaining : 0;
-  // Efficiency = how much daily avg exceeds the daily floor target (positive = on track)
   const efficiency = dailyAvg - dailyTarget;
 
-  // Tax breakdown
   const purchaseTax = orders.reduce((s, o) => s + (o.purchaseTaxValue || 0), 0);
   const salesTax = orders.reduce((s, o) => s + (o.salesTaxValue || 0), 0);
   const totalTax = purchaseTax + salesTax;
   const otherCost = cost - totalTax;
   const salesTaxPct = revenue > 0 ? salesTax / revenue : 0;
 
-  // Cost composition (for the donut chart)
   const productCost = orders.reduce((s, o) => s + (o.finalProductCost || 0), 0);
   const boletoCost = orders.reduce((s, o) => s + (o.boletoCost || 0), 0);
   const giftCost = orders.reduce((s, o) => s + (o.giftCost || 0), 0);
@@ -166,6 +159,7 @@ function GoalsModal({
   const [scopeId, setScopeId] = useState<string>('all');
   const [target, setTarget] = useState<number>(0);
   const [floor, setFloor] = useState<number>(0);
+  const [editingKey, setEditingKey] = useState<string | null>(null);
 
   const companyOptions: { value: string; label: string }[] = [
     { value: 'all', label: 'Geral (todas as empresas)' },
@@ -176,16 +170,29 @@ function GoalsModal({
   const sellerOptions = SELLERS.map(s => ({ value: s, label: s }));
   const scopeOptions = scopeType === 'company' ? companyOptions : sellerOptions;
 
-  // When scope type changes, reset scopeId to first valid option
   const onScopeTypeChange = (v: GoalScopeType) => {
     setScopeType(v);
     setScopeId(v === 'company' ? 'all' : SELLERS[0]);
   };
 
+  const resetForm = () => {
+    setTarget(0); setFloor(0); setEditingKey(null);
+  };
+
   const save = () => {
     const key = goalKey(y, m, scopeType, scopeId);
     upsertGoal({ key, year: y, month: m, scopeType, scopeId, target, floor });
-    setTarget(0); setFloor(0);
+    resetForm();
+  };
+
+  const loadForEdit = (g: Goal) => {
+    setY(g.year);
+    setM(g.month);
+    setScopeType(g.scopeType);
+    setScopeId(g.scopeId);
+    setTarget(g.target);
+    setFloor(g.floor);
+    setEditingKey(g.key);
   };
 
   const scopeLabel = (g: Goal) =>
@@ -196,7 +203,9 @@ function GoalsModal({
   return (
     <Dialog open={open} onOpenChange={onClose}>
       <DialogContent className="max-w-3xl">
-        <DialogHeader><DialogTitle>Configurar Metas</DialogTitle></DialogHeader>
+        <DialogHeader>
+          <DialogTitle>{editingKey ? 'Editar Meta' : 'Configurar Metas'}</DialogTitle>
+        </DialogHeader>
         <div className="space-y-4">
           <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
             <div>
@@ -240,10 +249,18 @@ function GoalsModal({
               <Input type="number" value={floor || ''} onChange={e => setFloor(+e.target.value || 0)} />
             </div>
           </div>
-          <Button onClick={save} className="w-full">Salvar Meta</Button>
+          <div className="flex gap-2">
+            <Button onClick={save} className="flex-1">
+              {editingKey ? 'Atualizar Meta' : 'Salvar Meta'}
+            </Button>
+            {editingKey && (
+              <Button variant="outline" onClick={resetForm}>Cancelar Edição</Button>
+            )}
+          </div>
 
           <div className="border-t pt-4">
             <h4 className="font-semibold mb-2">Metas registradas</h4>
+            <p className="text-xs text-muted-foreground mb-2">Clique em uma meta para editá-la.</p>
             {goals.length === 0 ? (
               <p className="text-sm text-muted-foreground">Nenhuma meta cadastrada.</p>
             ) : (
@@ -251,12 +268,24 @@ function GoalsModal({
                 <TableHeader><TableRow><TableHead>Mês/Ano</TableHead><TableHead>Escopo</TableHead><TableHead>Meta</TableHead><TableHead>Piso</TableHead><TableHead></TableHead></TableRow></TableHeader>
                 <TableBody>
                   {goals.map(g => (
-                    <TableRow key={g.key}>
+                    <TableRow
+                      key={g.key}
+                      className={cn('cursor-pointer hover:bg-muted/50', editingKey === g.key && 'bg-secondary/10')}
+                      onClick={() => loadForEdit(g)}
+                    >
                       <TableCell>{MONTHS[g.month - 1]}/{g.year}</TableCell>
                       <TableCell>{scopeLabel(g)}</TableCell>
                       <TableCell>{BRL(g.target)}</TableCell>
                       <TableCell>{BRL(g.floor)}</TableCell>
-                      <TableCell><Button size="sm" variant="destructive" onClick={() => deleteGoal(g.key)}>Excluir</Button></TableCell>
+                      <TableCell className="flex gap-1" onClick={e => e.stopPropagation()}>
+                        <Button size="sm" variant="ghost" onClick={() => loadForEdit(g)}>
+                          <Pencil className="h-3.5 w-3.5" />
+                        </Button>
+                        <Button size="sm" variant="destructive" onClick={() => {
+                          deleteGoal(g.key);
+                          if (editingKey === g.key) resetForm();
+                        }}>Excluir</Button>
+                      </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
@@ -274,14 +303,12 @@ export default function Dashboard() {
   const { orders } = useOrders();
   const { goals, upsertGoal, deleteGoal, expenses } = useFinance();
   const { quotes } = useQuotes();
+  const { filters: globalFilters, mode } = useDashboardFilters();
 
-  const today = new Date();
-  const [filters, setFilters] = useState<Filters>({
-    year: today.getFullYear(), month: today.getMonth(), company: 'all',
-  });
-  const [mode, setMode] = useState<ViewMode>('company');
+  // Local: company sub-filter & section tab
+  const [company, setCompany] = useState<CompanyKey>('all');
+  const [section, setSection] = useState<SectionKey>('geral');
   const [goalsOpen, setGoalsOpen] = useState(false);
-  const [rangeOpen, setRangeOpen] = useState(false);
 
   // Toggleable historical metrics
   const [showCost, setShowCost] = useState(true);
@@ -289,9 +316,16 @@ export default function Dashboard() {
   const [showProfit, setShowProfit] = useState(true);
   const [showPrevYear, setShowPrevYear] = useState(true);
 
+  const filters: FilterCriteria = useMemo(() => ({
+    year: globalFilters.year,
+    month: globalFilters.month,
+    rangeFrom: globalFilters.rangeFrom,
+    rangeTo: globalFilters.rangeTo,
+    company,
+  }), [globalFilters, company]);
+
   const filtered = useMemo(() => applyFilters(orders, filters), [orders, filters]);
 
-  // Goal for the current top-level company filter (overall view at top)
   const goal = useMemo(
     () => goals.find(g =>
       g.year === filters.year && g.month === filters.month + 1 &&
@@ -301,21 +335,6 @@ export default function Dashboard() {
   );
   const stats = useMemo(() => computeStats(filtered, orders, filters, goal), [filtered, orders, filters, goal]);
 
-  // Per-company breakdown (each company uses its own goal)
-  const perCompany = useMemo(() => {
-    const allCompanies = ['Lucky Store', 'BTech', 'AJJ'];
-    return allCompanies.map(c => {
-      const list = filtered.filter(o => o.company === c);
-      const cGoal = goals.find(g =>
-        g.year === filters.year && g.month === filters.month + 1 &&
-        g.scopeType === 'company' && g.scopeId === c
-      );
-      const s = computeStats(list, orders, { ...filters, company: c as CompanyKey }, cGoal);
-      return { company: c, ...s };
-    });
-  }, [filtered, orders, filters, goals]);
-
-  // Per-seller stats (each seller uses its own goal)
   const perSeller = useMemo(() => {
     return SELLERS.map(seller => {
       const list = filtered.filter(o => o.seller === seller);
@@ -328,9 +347,6 @@ export default function Dashboard() {
     });
   }, [filtered, orders, filters, goals]);
 
-  /* ---------- New aggregations for the redesigned dashboard ---------- */
-
-  // Quotes count in same period (uses requestDate)
   const quotesCount = useMemo(() => {
     return quotes.filter(q => {
       if (!q.requestDate) return false;
@@ -345,12 +361,10 @@ export default function Dashboard() {
     }).length;
   }, [quotes, filters]);
 
-  // Financial gains from filtered orders (multas + juros, paid by client)
   const financialGains = useMemo(() => {
     return filtered.reduce((s, o) => s + (o.penaltyValue || 0) + (o.interestValue || 0), 0);
   }, [filtered]);
 
-  // Fixed expenses (Gastos Fixos): sum of expanded expense entries that fall in the period
   const fixedExpenses = useMemo(() => {
     let total = 0;
     expenses.forEach(e => {
@@ -368,17 +382,15 @@ export default function Dashboard() {
     return total;
   }, [expenses, filters]);
 
-  const grossProfit = stats.profit; // revenue - cost
+  const grossProfit = stats.profit;
   const netProfit = grossProfit + financialGains - fixedExpenses;
 
-  // Daily series for Historical chart
   const dailySeries = useMemo(() => {
     const useRange = filters.rangeFrom && filters.rangeTo;
     const start = useRange ? filters.rangeFrom! : startOfMonth(new Date(filters.year, filters.month, 1));
     const end = useRange ? filters.rangeTo! : endOfMonth(new Date(filters.year, filters.month, 1));
     const days = eachDayOfInterval({ start, end });
 
-    // Prev-year same period
     const prevStart = subYears(start, 1);
     const prevEnd = subYears(end, 1);
     const prevDays = eachDayOfInterval({ start: prevStart, end: prevEnd });
@@ -409,9 +421,6 @@ export default function Dashboard() {
     });
   }, [orders, filters]);
 
-  /* ---------- Charts data ---------- */
-
-  // Cost composition donut (all categories)
   const costCompositionData = [
     { name: 'Produtos', value: stats.productCost },
     { name: 'Frete', value: stats.freightCost },
@@ -428,7 +437,6 @@ export default function Dashboard() {
     { name: 'Lucro', value: stats.ticketProfit },
   ];
 
-  // Sales tax % by company
   const taxByCompanyData = useMemo(() => {
     return ['Lucky Store', 'BTech', 'AJJ'].map(c => {
       const list = filtered.filter(o => o.company === c);
@@ -438,265 +446,216 @@ export default function Dashboard() {
     });
   }, [filtered]);
 
+  /* ---------- Reusable chart cards ---------- */
+  const CostPieCard = (
+    <Card>
+      <CardHeader><CardTitle className="text-secondary">Custo Total — Composição</CardTitle></CardHeader>
+      <CardContent>
+        <ResponsiveContainer width="100%" height={280}>
+          <PieChart>
+            <Pie data={costCompositionData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={100} innerRadius={50} label={(e: any) => `${e.name}: ${BRL(e.value)}`}>
+              {costCompositionData.map((_, i) => <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />)}
+            </Pie>
+            <Tooltip formatter={(v: number) => BRL(v)} />
+            <Legend />
+          </PieChart>
+        </ResponsiveContainer>
+      </CardContent>
+    </Card>
+  );
+
+  const TicketBarCard = (
+    <Card>
+      <CardHeader><CardTitle className="text-secondary">Ticket Médio — Comparativo</CardTitle></CardHeader>
+      <CardContent>
+        <ResponsiveContainer width="100%" height={280}>
+          <BarChart data={ticketData}>
+            <XAxis dataKey="name" /><YAxis />
+            <Tooltip formatter={(v: number) => BRL(v)} />
+            <Bar dataKey="value" fill="hsl(192, 76%, 29%)" radius={[4, 4, 0, 0]} />
+          </BarChart>
+        </ResponsiveContainer>
+      </CardContent>
+    </Card>
+  );
+
+  const HistoricalLineCard = (
+    <Card>
+      <CardHeader>
+        <div className="flex items-center justify-between flex-wrap gap-3">
+          <CardTitle className="text-secondary">Análise Histórica — Diário</CardTitle>
+          <div className="flex items-center gap-3 flex-wrap text-sm">
+            <label className="flex items-center gap-1.5 cursor-pointer"><Checkbox checked={showCost} onCheckedChange={(v) => setShowCost(!!v)} /> Custo</label>
+            <label className="flex items-center gap-1.5 cursor-pointer"><Checkbox checked={showRevenue} onCheckedChange={(v) => setShowRevenue(!!v)} /> Faturamento</label>
+            <label className="flex items-center gap-1.5 cursor-pointer"><Checkbox checked={showProfit} onCheckedChange={(v) => setShowProfit(!!v)} /> Lucro</label>
+            <label className="flex items-center gap-1.5 cursor-pointer"><Checkbox checked={showPrevYear} onCheckedChange={(v) => setShowPrevYear(!!v)} /> Ano Anterior (Fat.)</label>
+          </div>
+        </div>
+      </CardHeader>
+      <CardContent>
+        <ResponsiveContainer width="100%" height={340}>
+          <LineChart data={dailySeries}>
+            <CartesianGrid strokeDasharray="3 3" />
+            <XAxis dataKey="day" />
+            <YAxis tickFormatter={(v: number) => v.toLocaleString('pt-BR', { notation: 'compact' })} />
+            <Tooltip formatter={(v: number) => BRL(v)} />
+            <Legend />
+            {stats.floor > 0 && (
+              <ReferenceLine y={stats.floor} stroke="hsl(0, 70%, 60%)" strokeDasharray="6 4"
+                label={{ value: `Piso: ${BRL(stats.floor)}`, position: 'insideTopRight', fill: 'hsl(0, 70%, 40%)', fontSize: 11 }} />
+            )}
+            {stats.target > 0 && (
+              <ReferenceLine y={stats.target} stroke="hsl(35, 90%, 45%)" strokeDasharray="6 4"
+                label={{ value: `Alvo: ${BRL(stats.target)}`, position: 'insideTopRight', fill: 'hsl(35, 90%, 35%)', fontSize: 11 }} />
+            )}
+            {showCost && <Line type="monotone" dataKey="Custo" stroke="hsl(0, 70%, 50%)" strokeWidth={2} dot={false} />}
+            {showRevenue && <Line type="monotone" dataKey="Faturamento" stroke="hsl(192, 76%, 29%)" strokeWidth={2} dot={false} />}
+            {showProfit && <Line type="monotone" dataKey="Lucro" stroke="hsl(140, 70%, 40%)" strokeWidth={2} dot={false} />}
+            {showPrevYear && <Line type="monotone" dataKey="AnoAnterior" stroke="hsl(220, 15%, 55%)" strokeWidth={1.5} strokeDasharray="4 4" dot={false} name="Fat. Ano Anterior" />}
+          </LineChart>
+        </ResponsiveContainer>
+      </CardContent>
+    </Card>
+  );
+
+  const TaxByCompanyCard = (
+    <Card>
+      <CardHeader><CardTitle className="text-secondary">Imposto de Venda (%) por Empresa</CardTitle></CardHeader>
+      <CardContent>
+        <ResponsiveContainer width="100%" height={260}>
+          <BarChart data={taxByCompanyData}>
+            <CartesianGrid strokeDasharray="3 3" />
+            <XAxis dataKey="name" />
+            <YAxis tickFormatter={(v: number) => `${v.toFixed(1)}%`} />
+            <Tooltip formatter={(v: number, key: string) => key === 'pct' ? `${v.toFixed(2)}%` : BRL(v)} />
+            <Legend />
+            <Bar dataKey="pct" name="% Imposto / Faturamento" fill="hsl(35, 90%, 55%)" radius={[4, 4, 0, 0]} />
+          </BarChart>
+        </ResponsiveContainer>
+      </CardContent>
+    </Card>
+  );
 
   return (
     <div className="space-y-4">
-      {/* Filters bar */}
-      <Card>
-        <CardContent className="pt-4 flex flex-wrap items-end gap-3 justify-between">
-          <div className="flex flex-wrap items-end gap-3">
-            <div>
-              <Label className="text-xs">Mês</Label>
-              <Select value={String(filters.month)} onValueChange={v => setFilters(f => ({ ...f, month: +v, rangeFrom: undefined, rangeTo: undefined }))}>
-                <SelectTrigger className="w-[130px]"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {MONTHS.map((m, i) => <SelectItem key={i} value={String(i)}>{m}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label className="text-xs">Ano</Label>
-              <Input type="number" className="w-[100px]" value={filters.year}
-                onChange={e => setFilters(f => ({ ...f, year: +e.target.value || f.year }))} />
-            </div>
-            <div>
-              <Label className="text-xs">Período</Label>
-              <Popover open={rangeOpen} onOpenChange={setRangeOpen}>
-                <PopoverTrigger asChild>
-                  <Button variant="outline" className="w-[230px] justify-start font-normal">
-                    <CalendarIcon className="mr-2 h-4 w-4" />
-                    {filters.rangeFrom && filters.rangeTo
-                      ? `${format(filters.rangeFrom, 'dd/MM')} – ${format(filters.rangeTo, 'dd/MM/yy')}`
-                      : 'Selecionar período'}
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0" align="start">
-                  <Calendar mode="range"
-                    selected={{ from: filters.rangeFrom, to: filters.rangeTo }}
-                    onSelect={(r: any) => setFilters(f => ({ ...f, rangeFrom: r?.from, rangeTo: r?.to }))}
-                    locale={ptBR} className="p-3 pointer-events-auto" />
-                </PopoverContent>
-              </Popover>
-            </div>
-            <div className="flex bg-muted rounded-md p-0.5">
-              <button onClick={() => setMode('company')}
-                className={cn('px-3 py-1.5 text-sm rounded', mode === 'company' ? 'bg-card shadow-sm font-medium' : 'text-muted-foreground')}>
-                Temporal / Empresa
-              </button>
-              <button onClick={() => setMode('seller')}
-                className={cn('px-3 py-1.5 text-sm rounded', mode === 'seller' ? 'bg-card shadow-sm font-medium' : 'text-muted-foreground')}>
-                Por Vendedor
-              </button>
-            </div>
-          </div>
-          <Button onClick={() => setGoalsOpen(true)} className="gap-1.5">
-            <Target className="h-4 w-4" /> Configurar Metas
-          </Button>
-        </CardContent>
-      </Card>
-
       {mode === 'company' && (
         <>
-          {/* Company tabs */}
-          <div className="flex items-center gap-1 bg-muted rounded-full p-1 w-fit">
-            {COMPANIES.map(c => (
-              <button key={c} onClick={() => setFilters(f => ({ ...f, company: c }))}
-                className={cn('px-4 py-1.5 rounded-full text-sm font-medium',
-                  filters.company === c ? 'bg-secondary text-secondary-foreground shadow-sm' : 'text-muted-foreground')}>
-                {c === 'all' ? 'Geral' : c}
-              </button>
-            ))}
+          {/* Sub-header: company chips (left) + Goals btn (right) */}
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <div className="flex items-center gap-1 bg-muted rounded-full p-1 w-fit">
+              {COMPANIES.map(c => (
+                <button key={c} onClick={() => setCompany(c)}
+                  className={cn('px-4 py-1.5 rounded-full text-sm font-medium',
+                    company === c ? 'bg-secondary text-secondary-foreground shadow-sm' : 'text-muted-foreground')}>
+                  {c === 'all' ? 'Geral' : c}
+                </button>
+              ))}
+            </div>
+            <Button onClick={() => setGoalsOpen(true)} className="gap-1.5">
+              <Target className="h-4 w-4" /> Configurar Metas
+            </Button>
           </div>
 
-          {/* ===== SECTION 1: GERAL ===== */}
-          <div>
-            <h3 className="text-sm font-bold uppercase tracking-wider text-secondary mb-2">Geral</h3>
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
-              <KpiCard label="Custo Total" value={BRL(stats.cost)} accent="text-red-600" />
-              <KpiCard label="Faturamento Total" value={BRL(stats.revenue)} sub={`Hoje: ${BRL(stats.todayRevenue)}`} accent="text-green-700" />
-              <KpiCard label="Lucro Bruto" value={BRL(grossProfit)} sub="Fat. − Custo" accent={grossProfit >= 0 ? 'text-green-700' : 'text-red-600'} />
-              <KpiCard label="Ganhos Financeiros" value={BRL(financialGains)} sub="Multas + Juros" accent="text-blue-700" />
-              <KpiCard label="Gastos Fixos" value={BRL(fixedExpenses)} sub="Despesas registradas" accent="text-orange-600" />
-              <KpiCard label="Lucro Líquido" value={BRL(netProfit)} sub="Bruto + Ganhos − Fixos" accent={netProfit >= 0 ? 'text-green-700' : 'text-red-600'} />
-            </div>
-          </div>
-
-          {/* ===== SECTION 2: VENDAS ===== */}
-          <div>
-            <h3 className="text-sm font-bold uppercase tracking-wider text-secondary mb-2">Vendas</h3>
-            <div className={cn('grid grid-cols-2 md:grid-cols-3 gap-3',
-              filters.company !== 'all' ? 'lg:grid-cols-5' : 'lg:grid-cols-4')}>
-              <KpiCard label="Quantidade de Vendas" value={String(stats.salesCount)} />
-              <KpiCard label="Margem por Venda" value={PCT(stats.margin)} />
-              <KpiCard label="Quantidade de Cotações" value={String(quotesCount)} />
-              <KpiCard label="Cancelamentos" value={String(stats.cancCount)} sub={`Perda: ${BRL(stats.cancValue)}`} accent="text-red-600" />
-              {filters.company !== 'all' && (
-                <KpiCard label="% Imposto de Venda" value={PCT(stats.salesTaxPct)} sub={`Total: ${BRL(stats.salesTax)}`} accent="text-orange-600" />
-              )}
-            </div>
-          </div>
-
-          {/* ===== SECTION 3: TICKET ===== */}
-          <div>
-            <h3 className="text-sm font-bold uppercase tracking-wider text-secondary mb-2">Ticket</h3>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-              <KpiCard label="Ticket Médio de Custo" value={BRL(stats.avgPurchase)} accent="text-red-600" />
-              <KpiCard label="Ticket Médio de Vendas" value={BRL(stats.ticketSale)} accent="text-green-700" />
-              <KpiCard label="Ticket Médio de Lucro" value={BRL(stats.ticketProfit)} accent={stats.ticketProfit >= 0 ? 'text-green-700' : 'text-red-600'} />
-            </div>
-          </div>
-
-          {/* ===== SECTION 4: META ===== */}
-          <div>
-            <h3 className="text-sm font-bold uppercase tracking-wider text-secondary mb-2">Meta</h3>
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
-              <KpiCard label="Alvo" value={stats.target > 0 ? BRL(stats.target) : '—'} sub={stats.floor > 0 ? `Piso: ${BRL(stats.floor)}` : 'Sem meta'} />
-              <KpiCard label="% da Meta Atingida" value={stats.target > 0 ? PCT(stats.pctTarget) : '—'} sub={stats.target > 0 ? `${BRL(stats.revenue)} / ${BRL(stats.target)}` : '—'} accent={stats.pctTarget >= 1 ? 'text-green-700' : 'text-secondary'} />
-              <KpiCard label="Meta Diária Dinâmica" value={BRL(stats.dailyTarget)} sub={`${stats.remaining} dia(s) úteis restantes`} accent="text-blue-700" />
-              <KpiCard label="Gap para Meta" value={BRL(stats.gap)} sub={stats.gapFloor > 0 ? `Piso: ${BRL(stats.gapFloor)}` : undefined} accent="text-orange-600" />
-              <KpiCard label="Projeção do Mês" value={BRL(stats.projection)} sub={`Média/dia: ${BRL(stats.dailyAvg)}`} />
-              <KpiCard label="Eficiência" value={BRL(stats.efficiency)} sub="Média/dia − Meta diária" accent={stats.efficiency >= 0 ? 'text-green-700' : 'text-red-600'} />
-            </div>
-          </div>
-
-          {/* ===== SECTION 5: GRÁFICOS ===== */}
-          <div>
-            <h3 className="text-sm font-bold uppercase tracking-wider text-secondary mb-2">Gráficos</h3>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <Card>
-                <CardHeader><CardTitle className="text-secondary">Custo Total — Composição</CardTitle></CardHeader>
-                <CardContent>
-                  <ResponsiveContainer width="100%" height={280}>
-                    <PieChart>
-                      <Pie data={costCompositionData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={100} innerRadius={50} label={(e: any) => `${e.name}: ${BRL(e.value)}`}>
-                        {costCompositionData.map((_, i) => <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />)}
-                      </Pie>
-                      <Tooltip formatter={(v: number) => BRL(v)} />
-                      <Legend />
-                    </PieChart>
-                  </ResponsiveContainer>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader><CardTitle className="text-secondary">Ticket Médio — Comparativo</CardTitle></CardHeader>
-                <CardContent>
-                  <ResponsiveContainer width="100%" height={280}>
-                    <BarChart data={ticketData}>
-                      <XAxis dataKey="name" /><YAxis />
-                      <Tooltip formatter={(v: number) => BRL(v)} />
-                      <Bar dataKey="value" fill="hsl(192, 76%, 29%)" radius={[4, 4, 0, 0]} />
-                    </BarChart>
-                  </ResponsiveContainer>
-                </CardContent>
-              </Card>
-            </div>
-
-            {/* Historical line chart with toggles */}
-            <Card className="mt-4">
-              <CardHeader>
-                <div className="flex items-center justify-between flex-wrap gap-3">
-                  <CardTitle className="text-secondary">Análise Histórica — Diário</CardTitle>
-                  <div className="flex items-center gap-3 flex-wrap text-sm">
-                    <label className="flex items-center gap-1.5 cursor-pointer"><Checkbox checked={showCost} onCheckedChange={(v) => setShowCost(!!v)} /> Custo</label>
-                    <label className="flex items-center gap-1.5 cursor-pointer"><Checkbox checked={showRevenue} onCheckedChange={(v) => setShowRevenue(!!v)} /> Faturamento</label>
-                    <label className="flex items-center gap-1.5 cursor-pointer"><Checkbox checked={showProfit} onCheckedChange={(v) => setShowProfit(!!v)} /> Lucro</label>
-                    <label className="flex items-center gap-1.5 cursor-pointer"><Checkbox checked={showPrevYear} onCheckedChange={(v) => setShowPrevYear(!!v)} /> Ano Anterior (Fat.)</label>
-                  </div>
+          {/* Centralized horizontal section tabs */}
+          <div className="flex justify-center">
+            <div className="inline-flex items-center rounded-lg border border-border bg-card overflow-hidden">
+              {SECTIONS.map((s, idx) => (
+                <div key={s.key} className="flex items-center">
+                  {idx > 0 && <div className="w-px h-6 bg-border" aria-hidden />}
+                  <button
+                    onClick={() => setSection(s.key)}
+                    className={cn(
+                      'px-6 py-2.5 text-sm font-bold tracking-wider uppercase transition-all relative',
+                      section === s.key
+                        ? 'bg-secondary text-secondary-foreground'
+                        : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
+                    )}
+                  >
+                    {s.label}
+                    {section === s.key && (
+                      <span className="absolute left-2 right-2 bottom-0 h-0.5 bg-secondary-foreground" />
+                    )}
+                  </button>
                 </div>
-              </CardHeader>
-              <CardContent>
-                <ResponsiveContainer width="100%" height={340}>
-                  <LineChart data={dailySeries}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="day" />
-                    <YAxis tickFormatter={(v: number) => v.toLocaleString('pt-BR', { notation: 'compact' })} />
-                    <Tooltip formatter={(v: number) => BRL(v)} />
-                    <Legend />
-                    {stats.floor > 0 && (
-                      <ReferenceLine y={stats.floor} stroke="hsl(0, 70%, 60%)" strokeDasharray="6 4"
-                        label={{ value: `Piso: ${BRL(stats.floor)}`, position: 'insideTopRight', fill: 'hsl(0, 70%, 40%)', fontSize: 11 }} />
-                    )}
-                    {stats.target > 0 && (
-                      <ReferenceLine y={stats.target} stroke="hsl(35, 90%, 45%)" strokeDasharray="6 4"
-                        label={{ value: `Alvo: ${BRL(stats.target)}`, position: 'insideTopRight', fill: 'hsl(35, 90%, 35%)', fontSize: 11 }} />
-                    )}
-                    {showCost && <Line type="monotone" dataKey="Custo" stroke="hsl(0, 70%, 50%)" strokeWidth={2} dot={false} />}
-                    {showRevenue && <Line type="monotone" dataKey="Faturamento" stroke="hsl(192, 76%, 29%)" strokeWidth={2} dot={false} />}
-                    {showProfit && <Line type="monotone" dataKey="Lucro" stroke="hsl(140, 70%, 40%)" strokeWidth={2} dot={false} />}
-                    {showPrevYear && <Line type="monotone" dataKey="AnoAnterior" stroke="hsl(220, 15%, 55%)" strokeWidth={1.5} strokeDasharray="4 4" dot={false} name="Fat. Ano Anterior" />}
-                  </LineChart>
-                </ResponsiveContainer>
-              </CardContent>
-            </Card>
-
-            {/* Tax % by company */}
-            <Card className="mt-4">
-              <CardHeader><CardTitle className="text-secondary">Imposto de Venda (%) por Empresa</CardTitle></CardHeader>
-              <CardContent>
-                <ResponsiveContainer width="100%" height={260}>
-                  <BarChart data={taxByCompanyData}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="name" />
-                    <YAxis tickFormatter={(v: number) => `${v.toFixed(1)}%`} />
-                    <Tooltip formatter={(v: number, key: string) => key === 'pct' ? `${v.toFixed(2)}%` : BRL(v)} />
-                    <Legend />
-                    <Bar dataKey="pct" name="% Imposto / Faturamento" fill="hsl(35, 90%, 55%)" radius={[4, 4, 0, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
-              </CardContent>
-            </Card>
+              ))}
+            </div>
           </div>
 
-          {/* Per-company breakdown */}
-          <Card>
-            <CardHeader><CardTitle className="text-secondary">Detalhamento por Empresa</CardTitle></CardHeader>
-            <CardContent className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow className="bg-secondary/10">
-                    <TableHead>Empresa</TableHead>
-                    <TableHead className="text-right">Faturamento</TableHead>
-                    <TableHead className="text-right">Custo</TableHead>
-                    <TableHead className="text-right">Lucro</TableHead>
-                    <TableHead className="text-right">Margem</TableHead>
-                    <TableHead className="text-right">% Meta</TableHead>
-                    <TableHead className="text-right">Projeção</TableHead>
-                    <TableHead className="text-right">Tkt Venda</TableHead>
-                    <TableHead className="text-right">Tkt Lucro</TableHead>
-                    <TableHead className="text-right">% Imp. Venda</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {perCompany.map(c => (
-                    <TableRow key={c.company}>
-                      <TableCell className="font-medium">{c.company}</TableCell>
-                      <TableCell className="text-right">{BRL(c.revenue)}</TableCell>
-                      <TableCell className="text-right">{BRL(c.cost)}</TableCell>
-                      <TableCell className={cn('text-right font-semibold', c.profit >= 0 ? 'text-green-700' : 'text-red-600')}>{BRL(c.profit)}</TableCell>
-                      <TableCell className="text-right">{PCT(c.margin)}</TableCell>
-                      <TableCell className="text-right">{c.target > 0 ? PCT(c.pctTarget) : '—'}</TableCell>
-                      <TableCell className="text-right">{BRL(c.projection)}</TableCell>
-                      <TableCell className="text-right">{BRL(c.ticketSale)}</TableCell>
-                      <TableCell className="text-right">{BRL(c.ticketProfit)}</TableCell>
-                      <TableCell className="text-right">{PCT(c.salesTaxPct)}</TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
+          {/* ===== GERAL ===== */}
+          {section === 'geral' && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+                <KpiCard label="Custo Total" value={BRL(stats.cost)} accent="text-red-600" />
+                <KpiCard label="Faturamento Total" value={BRL(stats.revenue)} sub={`Hoje: ${BRL(stats.todayRevenue)}`} accent="text-green-700" />
+                <KpiCard label="Lucro Bruto" value={BRL(grossProfit)} sub="Fat. − Custo" accent={grossProfit >= 0 ? 'text-green-700' : 'text-red-600'} />
+                <KpiCard label="Ganhos Financeiros" value={BRL(financialGains)} sub="Multas + Juros" accent="text-blue-700" />
+                <KpiCard label="Gastos Fixos" value={BRL(fixedExpenses)} sub="Despesas registradas" accent="text-orange-600" />
+                <KpiCard label="Lucro Líquido" value={BRL(netProfit)} sub="Bruto + Ganhos − Fixos" accent={netProfit >= 0 ? 'text-green-700' : 'text-red-600'} />
+              </div>
+
+              {CostPieCard}
+              {HistoricalLineCard}
+              {company === 'all' && TaxByCompanyCard}
+            </div>
+          )}
+
+          {/* ===== VENDAS ===== */}
+          {section === 'vendas' && (
+            <div className="space-y-4">
+              <div className={cn('grid grid-cols-2 md:grid-cols-3 gap-3',
+                company !== 'all' ? 'lg:grid-cols-5' : 'lg:grid-cols-4')}>
+                <KpiCard label="Quantidade de Vendas" value={String(stats.salesCount)} />
+                <KpiCard label="Margem por Venda" value={PCT(stats.margin)} />
+                <KpiCard label="Quantidade de Cotações" value={String(quotesCount)} />
+                <KpiCard label="Cancelamentos" value={String(stats.cancCount)} sub={`Perda: ${BRL(stats.cancValue)}`} accent="text-red-600" />
+                {company !== 'all' && (
+                  <KpiCard label="% Imposto de Venda" value={PCT(stats.salesTaxPct)} sub={`Total: ${BRL(stats.salesTax)}`} accent="text-orange-600" />
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* ===== TICKET ===== */}
+          {section === 'ticket' && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <KpiCard label="Ticket Médio de Custo" value={BRL(stats.avgPurchase)} accent="text-red-600" />
+                <KpiCard label="Ticket Médio de Vendas" value={BRL(stats.ticketSale)} accent="text-green-700" />
+                <KpiCard label="Ticket Médio de Lucro" value={BRL(stats.ticketProfit)} accent={stats.ticketProfit >= 0 ? 'text-green-700' : 'text-red-600'} />
+              </div>
+              {TicketBarCard}
+            </div>
+          )}
+
+          {/* ===== META ===== */}
+          {section === 'meta' && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+                <KpiCard label="Alvo" value={stats.target > 0 ? BRL(stats.target) : '—'} sub={stats.floor > 0 ? `Piso: ${BRL(stats.floor)}` : 'Sem meta'} />
+                <KpiCard label="% da Meta Atingida" value={stats.target > 0 ? PCT(stats.pctTarget) : '—'} sub={stats.target > 0 ? `${BRL(stats.revenue)} / ${BRL(stats.target)}` : '—'} accent={stats.pctTarget >= 1 ? 'text-green-700' : 'text-secondary'} />
+                <KpiCard label="Meta Diária Dinâmica" value={BRL(stats.dailyTarget)} sub={`${stats.remaining} dia(s) úteis restantes`} accent="text-blue-700" />
+                <KpiCard label="Gap para Meta" value={BRL(stats.gap)} sub={stats.gapFloor > 0 ? `Piso: ${BRL(stats.gapFloor)}` : undefined} accent="text-orange-600" />
+                <KpiCard label="Projeção do Mês" value={BRL(stats.projection)} sub={`Média/dia: ${BRL(stats.dailyAvg)}`} />
+                <KpiCard label="Eficiência" value={BRL(stats.efficiency)} sub="Média/dia − Meta diária" accent={stats.efficiency >= 0 ? 'text-green-700' : 'text-red-600'} />
+              </div>
+              {HistoricalLineCard}
+            </div>
+          )}
         </>
       )}
 
       {mode === 'seller' && (
         <>
+          {/* Goals button still accessible in seller mode */}
+          <div className="flex justify-end">
+            <Button onClick={() => setGoalsOpen(true)} className="gap-1.5">
+              <Target className="h-4 w-4" /> Configurar Metas
+            </Button>
+          </div>
           <h3 className="text-lg font-semibold text-secondary">Performance por Vendedor</h3>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             {perSeller.map(s => {
               const hasGoal = s.target > 0;
-              const hitFloor = hasGoal && s.revenue >= (perSeller.find(p => p.seller === s.seller)?.target ?? 0) * 0; // placeholder, replaced below
               const sellerGoal = goals.find(g =>
                 g.year === filters.year && g.month === filters.month + 1 &&
                 g.scopeType === 'seller' && g.scopeId === s.seller
