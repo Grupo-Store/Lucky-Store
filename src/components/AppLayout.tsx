@@ -67,14 +67,16 @@ export function AppLayout() {
       <div className="min-h-screen flex w-full">
         <AppSidebar />
         <div className="flex-1 flex flex-col">
-          <header className="h-14 flex items-center justify-between border-b border-border bg-card px-4 gap-3">
+          <header className="relative h-14 flex items-center justify-between border-b border-border bg-card px-4 gap-3">
             <div className="flex items-center gap-3">
               <SidebarTrigger />
               {showDashHeader && <ModeToggle />}
             </div>
-            <div className="flex-1 flex justify-center">
-              {showDashHeader && <SectionTabs />}
-            </div>
+            {showSectionTabs && (
+              <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-auto">
+                <SectionTabs />
+              </div>
+            )}
             <div className="flex items-center gap-2 text-sm font-medium text-foreground">
               <UserCircle className="h-7 w-7 text-secondary" />
               <span>{username}</span>
