@@ -540,44 +540,42 @@ export default function Dashboard() {
     <div className="space-y-4">
       {mode === 'company' && (
         <>
-          {/* Sub-header: company chips (left) + Goals btn (right) */}
-          <div className="flex items-center justify-between flex-wrap gap-2">
-            <div className="flex items-center gap-1 bg-muted rounded-full p-1 w-fit">
-              {COMPANIES.map(c => (
-                <button key={c} onClick={() => setCompany(c)}
-                  className={cn('px-4 py-1.5 rounded-full text-sm font-medium',
-                    company === c ? 'bg-secondary text-secondary-foreground shadow-sm' : 'text-muted-foreground')}>
-                  {c === 'all' ? 'Geral' : c}
-                </button>
-              ))}
+          {/* Sub-header: Company dropdown (left) + Centered tabs + Goals btn (right) */}
+          <div className="relative flex items-center justify-between gap-3 flex-wrap">
+            <div className="w-[200px] shrink-0">
+              <Select value={company} onValueChange={(v) => setCompany(v as CompanyKey)}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {COMPANIES.map(c => (
+                    <SelectItem key={c} value={c}>{c === 'all' ? 'Geral' : c}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
-            <Button onClick={() => setGoalsOpen(true)} className="gap-1.5">
-              <Target className="h-4 w-4" /> Configurar Metas
-            </Button>
-          </div>
 
-          {/* Centralized horizontal section tabs */}
-          <div className="flex justify-center">
-            <div className="inline-flex items-center rounded-lg border border-border bg-card overflow-hidden">
-              {SECTIONS.map((s, idx) => (
-                <div key={s.key} className="flex items-center">
-                  {idx > 0 && <div className="w-px h-6 bg-border" aria-hidden />}
+            <div className="order-3 lg:order-2 lg:absolute lg:left-1/2 lg:-translate-x-1/2 mx-auto">
+              <div className="inline-flex items-center gap-1 rounded-full bg-muted p-1">
+                {SECTIONS.map(s => (
                   <button
+                    key={s.key}
                     onClick={() => setSection(s.key)}
                     className={cn(
-                      'px-6 py-2.5 text-sm font-bold tracking-wider uppercase transition-all relative',
+                      'px-5 py-2 rounded-full text-sm font-bold tracking-wider uppercase transition-all',
                       section === s.key
-                        ? 'bg-secondary text-secondary-foreground'
-                        : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
+                        ? 'bg-secondary text-secondary-foreground shadow-sm'
+                        : 'text-muted-foreground hover:text-foreground'
                     )}
                   >
                     {s.label}
-                    {section === s.key && (
-                      <span className="absolute left-2 right-2 bottom-0 h-0.5 bg-secondary-foreground" />
-                    )}
                   </button>
-                </div>
-              ))}
+                ))}
+              </div>
+            </div>
+
+            <div className="order-2 lg:order-3 shrink-0">
+              <Button onClick={() => setGoalsOpen(true)} className="gap-1.5">
+                <Target className="h-4 w-4" /> Configurar Metas
+              </Button>
             </div>
           </div>
 
@@ -595,7 +593,6 @@ export default function Dashboard() {
 
               {CostPieCard}
               {HistoricalLineCard}
-              {company === 'all' && TaxByCompanyCard}
             </div>
           )}
 
@@ -612,6 +609,7 @@ export default function Dashboard() {
                   <KpiCard label="% Imposto de Venda" value={PCT(stats.salesTaxPct)} sub={`Total: ${BRL(stats.salesTax)}`} accent="text-orange-600" />
                 )}
               </div>
+              {company === 'all' && TaxByCompanyCard}
             </div>
           )}
 
