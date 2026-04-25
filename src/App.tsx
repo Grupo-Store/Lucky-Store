@@ -7,6 +7,7 @@ import { AuthProvider, useAuth } from "@/store/AuthStore";
 import { OrderProvider } from "@/store/OrderStore";
 import { QuoteProvider } from "@/store/QuoteStore";
 import { FinanceProvider } from "@/store/FinanceStore";
+import { DashboardFilterProvider } from "@/store/DashboardFilterStore";
 import { LoginScreen } from "@/components/LoginScreen";
 import { AppLayout } from "@/components/AppLayout";
 import Sales from "@/pages/Sales";
@@ -24,6 +25,7 @@ function AuthGate() {
     <OrderProvider>
       <QuoteProvider>
         <FinanceProvider>
+        <DashboardFilterProvider>
         <BrowserRouter>
           <Routes>
             <Route element={<AppLayout />}>
@@ -34,6 +36,7 @@ function AuthGate() {
             <Route path="*" element={<NotFound />} />
           </Routes>
         </BrowserRouter>
+        </DashboardFilterProvider>
         </FinanceProvider>
       </QuoteProvider>
     </OrderProvider>
