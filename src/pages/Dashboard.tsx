@@ -5,10 +5,13 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Calendar } from '@/components/ui/calendar';
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table';
-import { Target, Pencil } from 'lucide-react';
+import { Target, Pencil, CalendarIcon } from 'lucide-react';
+import { ptBR } from 'date-fns/locale';
 import { format, getMonth, getYear, startOfMonth, endOfMonth, eachDayOfInterval, isBefore, isAfter, subYears } from 'date-fns';
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
@@ -303,12 +306,13 @@ export default function Dashboard() {
   const { orders } = useOrders();
   const { goals, upsertGoal, deleteGoal, expenses } = useFinance();
   const { quotes } = useQuotes();
-  const { filters: globalFilters, mode } = useDashboardFilters();
+  const { filters: globalFilters, setFilters: setGlobalFilters, mode, section } = useDashboardFilters();
 
-  // Local: company sub-filter & section tab
+  // Local: company sub-filter
   const [company, setCompany] = useState<CompanyKey>('all');
-  const [section, setSection] = useState<SectionKey>('geral');
   const [goalsOpen, setGoalsOpen] = useState(false);
+  const [dateOpen, setDateOpen] = useState(false);
+  const [dateTab, setDateTab] = useState<'data' | 'periodo'>('data');
 
   // Toggleable historical metrics
   const [showCost, setShowCost] = useState(true);
@@ -540,33 +544,90 @@ export default function Dashboard() {
     <div className="space-y-4">
       {mode === 'company' && (
         <>
-          {/* Sub-header: Company dropdown (left) + Centered tabs + Goals btn (right) */}
+          {/* Sub-header: Date filter (left) + Centered company pill tabs + Goals btn (right) */}
           <div className="relative flex items-center justify-between gap-3 flex-wrap">
-            <div className="w-[200px] shrink-0">
-              <Select value={company} onValueChange={(v) => setCompany(v as CompanyKey)}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {COMPANIES.map(c => (
-                    <SelectItem key={c} value={c}>{c === 'all' ? 'Geral' : c}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+            <div className="shrink-0">
+              <Popover open={dateOpen} onOpenChange={setDateOpen}>
+                <PopoverTrigger asChild>
+                  <Button variant="outline" className="gap-2">
+                    <CalendarIcon className="h-4 w-4" />
+                    {globalFilters.rangeFrom && globalFilters.rangeTo
+                      ? `${format(globalFilters.rangeFrom, 'dd/MM/yy')} – ${format(globalFilters.rangeTo, 'dd/MM/yy')}`
+                      : `${MONTHS[globalFilters.month]}/${globalFilters.year}`}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="start">
+                  <div className="flex border-b">
+                    <button
+                      onClick={() => setDateTab('data')}
+                      className={cn('flex-1 px-4 py-2 text-sm font-semibold transition',
+                        dateTab === 'data' ? 'bg-secondary text-secondary-foreground' : 'text-muted-foreground hover:bg-muted')}>
+                      Data
+                    </button>
+                    <button
+                      onClick={() => setDateTab('periodo')}
+                      className={cn('flex-1 px-4 py-2 text-sm font-semibold transition',
+                        dateTab === 'periodo' ? 'bg-secondary text-secondary-foreground' : 'text-muted-foreground hover:bg-muted')}>
+                      Período
+                    </button>
+                  </div>
+                  {dateTab === 'data' ? (
+                    <div className="p-4 space-y-3 w-[280px]">
+                      <div>
+                        <Label className="text-xs">Mês</Label>
+                        <Select
+                          value={String(globalFilters.month)}
+                          onValueChange={v => setGlobalFilters(f => ({ ...f, month: +v, rangeFrom: undefined, rangeTo: undefined }))}>
+                          <SelectTrigger><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            {MONTHS.map((m, i) => <SelectItem key={i} value={String(i)}>{m}</SelectItem>)}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div>
+                        <Label className="text-xs">Ano</Label>
+                        <Input
+                          type="number"
+                          value={globalFilters.year}
+                          onChange={e => setGlobalFilters(f => ({ ...f, year: +e.target.value || f.year, rangeFrom: undefined, rangeTo: undefined }))}
+                        />
+                      </div>
+                      <Button className="w-full" size="sm" onClick={() => setDateOpen(false)}>Aplicar</Button>
+                    </div>
+                  ) : (
+                    <div>
+                      <Calendar
+                        mode="range"
+                        selected={{ from: globalFilters.rangeFrom, to: globalFilters.rangeTo }}
+                        onSelect={(r: any) => setGlobalFilters(f => ({ ...f, rangeFrom: r?.from, rangeTo: r?.to }))}
+                        locale={ptBR}
+                        numberOfMonths={2}
+                        className="p-3 pointer-events-auto"
+                      />
+                      <div className="p-2 border-t flex justify-between">
+                        <Button size="sm" variant="ghost" onClick={() => setGlobalFilters(f => ({ ...f, rangeFrom: undefined, rangeTo: undefined }))}>Limpar</Button>
+                        <Button size="sm" onClick={() => setDateOpen(false)}>Aplicar</Button>
+                      </div>
+                    </div>
+                  )}
+                </PopoverContent>
+              </Popover>
             </div>
 
             <div className="order-3 lg:order-2 lg:absolute lg:left-1/2 lg:-translate-x-1/2 mx-auto">
               <div className="inline-flex items-center gap-1 rounded-full bg-muted p-1">
-                {SECTIONS.map(s => (
+                {COMPANIES.map(c => (
                   <button
-                    key={s.key}
-                    onClick={() => setSection(s.key)}
+                    key={c}
+                    onClick={() => setCompany(c)}
                     className={cn(
-                      'px-5 py-2 rounded-full text-sm font-bold tracking-wider uppercase transition-all',
-                      section === s.key
+                      'px-4 py-1.5 rounded-full text-xs font-bold tracking-wider uppercase transition-all',
+                      company === c
                         ? 'bg-secondary text-secondary-foreground shadow-sm'
                         : 'text-muted-foreground hover:text-foreground'
                     )}
                   >
-                    {s.label}
+                    {c === 'all' ? 'Geral' : c}
                   </button>
                 ))}
               </div>
