@@ -22,3 +22,20 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Python
+backend/venv/
+backend/__pycache__/
+backend/**/__pycache__/
+backend/**/*.pyc
+backend/**/*.pyo
+backend/**/*.pyd
+.Python
+*.egg-info/
+.pytest_cache/
+
+# Environment variables (secrets — nunca commitar)
+backend/.env
+.env
+.env.*
+!.env.example

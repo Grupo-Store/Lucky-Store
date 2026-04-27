@@ -3,11 +3,41 @@
 ## Project Overview
 **Orderly Hub** is a comprehensive order management system for multi-company operations (Lucky Store, BTech, AJJ) with complete audit trail, LGPD compliance, and production-ready architecture.
 
-**Status:** Database schema complete. Backend API development ready to start.
+**Status:** Backend foundation completa e rodando. Servidor FastAPI ativo, banco conectado, auth implementado. ORM models e APIs em desenvolvimento.
 
-**Team:** 4 Developers (2 Backend, 2 Frontend)  
+**Team:** Rafael, Gustavo, Duda, Peu  
 **Target MVP:** 8-10 weeks  
 **Target Full Release:** 20-24 weeks
+
+---
+
+## 👥 Divisão de Tasks por Operacional
+
+> Cada operacional atua em múltiplas frentes (backend, frontend, infra) para evitar gargalos e especialização única.
+
+| Operacional | Frente Principal | Frente Secundária | Infra/Ops |
+|---|---|---|---|
+| **Rafael** | Backend (ORM, Orders API, Audit) | Frontend (Quote Modal, Sales Page) | CI/CD |
+| **Gustavo** | Backend (Auth, Quotes API, Dashboard Goals) | Frontend (React Query, Audit Log UI) | Railway DB |
+| **Duda** | Backend (RMA API, Status tracking, Financial) | Frontend (Order Modal, Status History UI) | Monitoring |
+| **Peu** | Frontend (API Client, Hooks, RMA Modal) | Backend (Order Costs, Swagger, LGPD) | Vercel Deploy |
+
+### Resumo por fase
+
+| Fase | Rafael | Gustavo | Duda | Peu |
+|---|---|---|---|---|
+| 1.1 DB Setup | Coordena | Instala local | Verifica | Instala local |
+| 1.3 ORM Models | users, lojas, vendedores, clientes | pedidos, produtos, custo_pedido, frete | rmas, item_rma, cotacoes, item_cotacao | venda_vendedor, compra_vendedor, meta, audit |
+| 1.4 Auth | RBAC middleware | 2FA + testes | Row-level auth | Endpoint tests |
+| 1.5 Orders API | CRUD + validações | Order items | Status + history | Costs + payments |
+| 1.6 Quotes & RMA | — | Quotes API completa | RMA API completa | Quote items |
+| 1.7 Audit | Audit logs | LGPD deletion | LGPD export | Status history |
+| 1.8 API Testing | Unit tests + perf | Unit tests | Integration tests | Swagger + E2E |
+| 2.x Frontend | Quote Modal + Sales Page | React Query + Audit Log UI | Order Modal + Status UI | API Client + RMA Modal |
+| 2.5 Compliance UI | LGPD Export backend | Audit Log component | Status History component | LGPD Deletion UI |
+| 2.6 Dashboard | KPIs backend | Goals + Projections | Financial backend | Dashboard frontend |
+| 3.x Testing | Segurança + perf | Backend tests | Frontend tests | E2E |
+| 4.x Deploy | CI/CD | Railway PostgreSQL | Monitoring | Vercel |
 
 ---
 
@@ -45,24 +75,24 @@
 **Priority:** P0 - BLOCKER
 
 **Database Implementation:**
-- [ ] PostgreSQL 14+ installed locally (each backend dev)
-- [ ] DATABASE_INIT.sql executed successfully
-- [ ] All 16 tables created with correct structure
-- [ ] All 2 audit tables created (status_history, audit_logs)
-- [ ] All 2 views created (resultado_mensal, resultado_anual)
-- [ ] All 40+ indexes optimized
-- [ ] Triggers for updated_at working
-- [ ] Seed data populated (3 stores, 1 admin user)
+- [x] PostgreSQL 14+ installed locally → **Rafael** ✅ (outros devs pendente)
+- [x] DATABASE_INIT.sql executed successfully → **Rafael** ✅
+- [x] All 16 tables created with correct structure → **Rafael** ✅
+- [x] All 2 audit tables created (status_history, audit_logs) → **Rafael** ✅
+- [x] All 2 views created (resultado_mensal, resultado_anual) → **Rafael** ✅
+- [x] All 40+ indexes optimized → **Rafael** ✅
+- [x] Triggers for updated_at working → **Rafael** ✅
+- [x] Seed data populated (3 stores, 1 admin user) → **Rafael** ✅
 
 **Verification Tasks:**
-- [ ] Run 9-phase verification checklist (DATABASE_SETUP_GUIDE.md)
-- [ ] Execute all 5 test scenarios
-- [ ] Verify UUID primary keys on all tables
-- [ ] Verify soft deletes functionality
-- [ ] Verify audit fields on main tables
-- [ ] Verify status_history table working
-- [ ] Verify audit_logs table working
-- [ ] Verify views returning correct data
+- [ ] Run 9-phase verification checklist (DATABASE_SETUP_GUIDE.md) → **Duda**
+- [ ] Execute all 5 test scenarios → **Duda**
+- [ ] Verify UUID primary keys on all tables → **Duda**
+- [ ] Verify soft deletes functionality → **Duda**
+- [ ] Verify audit fields on main tables → **Duda**
+- [ ] Verify status_history table working → **Duda**
+- [ ] Verify audit_logs table working → **Duda**
+- [ ] Verify views returning correct data → **Duda**
 
 **Effort:** 2 backend devs, 1 day each  
 **Success Criteria:**
@@ -77,27 +107,21 @@
 **Priority:** P0 - BLOCKER
 
 **Technology Selection:**
-- [ ] **Decide:** Python FastAPI or Node.js Express? ← CRITICAL DECISION THIS WEEK
-- [ ] Set up development environment
-- [ ] Initialize project repository
-- [ ] Configure environment variables (.env)
+- [x] **Decide:** Python FastAPI ← DECIDED ✅
+- [x] Set up development environment ✅
+- [x] Initialize project repository ✅
+- [x] Configure environment variables (.env) ✅
 
 **Choose One Path:**
 
-**Path A: Python + FastAPI**
-- [ ] Create Python project structure
-- [ ] Install dependencies: fastapi, uvicorn, sqlalchemy, psycopg2
-- [ ] Configure database connection
-- [ ] Set up Alembic for migrations
-- [ ] Create first ORM model (users table)
-- [ ] Test database connection
-
-**Path B: Node.js + Express**
-- [ ] Create Node.js project structure
-- [ ] Install dependencies: express, prisma, passport, bcrypt
-- [ ] Configure Prisma (generate schema from DATABASE_INIT.sql)
-- [ ] Create first route with database query
-- [ ] Test database connection
+**Path A: Python + FastAPI** ✅
+- [x] Create Python project structure ✅
+- [x] Install dependencies: fastapi, uvicorn, sqlalchemy, psycopg2, pydantic[email] ✅
+- [x] Configure database connection (UTF-8 encoding) ✅
+- [x] Set up Alembic for migrations + baseline stampado ✅
+- [x] Create first ORM model (users table) ✅
+- [x] Create schemas Pydantic (user.py) ✅
+- [x] Test database connection → **✅ Servidor rodando em localhost:8000, Swagger acessível**
 
 **Effort:** 2 backend devs, 1.5 days  
 **Success Criteria:**
@@ -111,29 +135,29 @@
 **Priority:** P0 - BLOCKER
 
 **Generate All ORM Models:**
-- [ ] Create users model with encryption
-- [ ] Create lojas model with relationships
-- [ ] Create vendedores model with cascading
-- [ ] Create clientes model
-- [ ] Create pedidos model (main table)
-- [ ] Create produtos model (order items)
-- [ ] Create custo_pedido model
-- [ ] Create frete model
-- [ ] Create rmas model (returns)
-- [ ] Create item_rma model
-- [ ] Create cotacoes model (quotes)
-- [ ] Create item_cotacao model
-- [ ] Create venda_vendedor model
-- [ ] Create compra_vendedor model
-- [ ] Create meta_vendedor model
-- [ ] Create status_history model (audit)
-- [ ] Create audit_logs model (audit)
+- [x] Create users model with encryption → **Rafael** ✅ done
+- [ ] Create lojas model with relationships → **Rafael**
+- [ ] Create vendedores model with cascading → **Rafael**
+- [ ] Create clientes model → **Rafael**
+- [ ] Create pedidos model (main table) → **Gustavo**
+- [ ] Create produtos model (order items) → **Gustavo**
+- [ ] Create custo_pedido model → **Gustavo**
+- [ ] Create frete model → **Gustavo**
+- [ ] Create rmas model (returns) → **Duda**
+- [ ] Create item_rma model → **Duda**
+- [ ] Create cotacoes model (quotes) → **Duda**
+- [ ] Create item_cotacao model → **Duda**
+- [ ] Create venda_vendedor model → **Peu**
+- [ ] Create compra_vendedor model → **Peu**
+- [ ] Create meta_vendedor model → **Peu**
+- [ ] Create status_history model (audit) → **Peu**
+- [ ] Create audit_logs model (audit) → **Peu**
 
 **Testing ORM:**
-- [ ] All models instantiate correctly
-- [ ] Relationships resolve properly
-- [ ] Foreign keys enforced
-- [ ] Indexes used in queries
+- [ ] All models instantiate correctly → **Gustavo**
+- [ ] Relationships resolve properly → **Gustavo**
+- [ ] Foreign keys enforced → **Duda**
+- [ ] Indexes used in queries → **Duda**
 
 **Effort:** 2 backend devs, 1.5 days  
 **Success Criteria:**
@@ -146,48 +170,53 @@
 ### 1.4 Authentication System (Days 4-7)
 **Priority:** P0 - BLOCKER
 
-**User Management:**
-- [ ] Create users table with password hashing
-- [ ] Implement registration endpoint (admin only)
-- [ ] Implement login endpoint
-- [ ] Implement password reset flow
+**User Management:** → **Rafael**
+- [x] Create users table with password hashing → **Rafael** ✅
+- [x] Implement registration endpoint (admin only) → **Rafael** ✅
+- [x] Implement login endpoint → **Rafael** ✅
+- [ ] Implement password reset flow → **Rafael**
 
-**JWT Implementation:**
-- [ ] Generate JWT on successful login
-- [ ] Set token expiry (1 hour access, 7 days refresh)
-- [ ] Implement token refresh endpoint
-- [ ] Validate JWT on protected routes
-- [ ] Implement logout with token blacklisting
+**JWT Implementation:** → **Rafael**
+- [x] Generate JWT on successful login → **Rafael** ✅
+- [x] Set token expiry (1 hour access, 7 days refresh) → **Rafael** ✅
+- [x] Implement token refresh endpoint → **Rafael** ✅
+- [ ] Validate JWT on protected routes (middleware) → **Rafael** ⚠️ PRÓXIMO
+- [ ] Implement logout with token blacklisting → **Rafael**
 
-**2FA Implementation:**
-- [ ] Generate TOTP secret on user registration
-- [ ] Implement TOTP verification
-- [ ] Return JWT after successful 2FA
-- [ ] Integrate authenticator app support
+**2FA Implementation:** → **Gustavo**
+- [x] Generate TOTP secret on user registration → **Gustavo** ✅
+- [x] Implement TOTP verification → **Gustavo** ✅
+- [x] Return JWT after successful 2FA → **Gustavo** ✅
+- [x] POST /api/auth/2fa/setup → **Gustavo** ✅
+- [x] POST /api/auth/2fa/confirm → **Gustavo** ✅
+- [ ] Integrar QR code real com Google Authenticator → **Gustavo**
 
-**Authorization:**
+**Authorization:** → **Duda**
 - [ ] Implement role-based access control (RBAC)
-  - [ ] Admin (full access, user management)
-  - [ ] Manager (read/write all entities, user management for store)
-  - [ ] Seller (read/write own records only)
-  - [ ] Viewer (read-only access)
-- [ ] Create middleware to check roles
-- [ ] Implement row-level authorization (sellers see only own data)
+  - [ ] Admin (full access, user management) → **Duda**
+  - [ ] Manager (read/write all entities, user management for store) → **Duda**
+  - [ ] Seller (read/write own records only) → **Duda**
+  - [ ] Viewer (read-only access) → **Duda**
+- [ ] Create middleware to check roles → **Duda**
+- [ ] Implement row-level authorization (sellers see only own data) → **Duda**
 
 **API Endpoints:**
-- [ ] POST /api/auth/register (admin only)
-- [ ] POST /api/auth/login
-- [ ] POST /api/auth/verify-2fa
-- [ ] POST /api/auth/refresh-token
-- [ ] POST /api/auth/logout
-- [ ] GET /api/auth/me (current user)
+- [x] POST /api/auth/register (admin only) → **Rafael** ✅
+- [x] POST /api/auth/login → **Rafael** ✅
+- [x] POST /api/auth/verify-2fa → **Gustavo** ✅
+- [x] POST /api/auth/refresh-token → **Rafael** ✅
+- [x] POST /api/auth/logout → **Rafael** ✅
+- [x] GET /api/auth/me (current user) → **Rafael** ✅
+- [x] POST /api/auth/2fa/setup → **Gustavo** ✅
+- [x] POST /api/auth/2fa/confirm → **Gustavo** ✅
+> ⚠️ Endpoints visíveis no Swagger — **testar funcionamento real via Swagger UI antes de avançar**
 
-**Testing:**
-- [ ] Test registration flow
-- [ ] Test login + 2FA flow
-- [ ] Test token refresh
-- [ ] Test authorization (seller can't see other seller's data)
-- [ ] Test role-based access
+**Testing:** → **Peu**
+- [ ] Test registration flow → **Peu**
+- [ ] Test login + 2FA flow → **Peu**
+- [ ] Test token refresh → **Peu**
+- [ ] Test authorization (seller can't see other seller's data) → **Peu**
+- [ ] Test role-based access → **Peu**
 
 **Effort:** 1 backend dev, 3-4 days  
 **Success Criteria:**
@@ -202,59 +231,59 @@
 ### 1.5 Core API Endpoints - Orders (Days 5-8)
 **Priority:** P0 - BLOCKER
 
-**Orders CRUD:**
-- [ ] POST /api/orders (create new order)
-  - [ ] Validate input with Zod/Pydantic
-  - [ ] Calculate economia (valor_projetado - valor_compra)
-  - [ ] Create in pedidos table
-  - [ ] Track in audit_logs
-- [ ] GET /api/orders (list with filters, pagination)
-  - [ ] Filter by status, date range, vendor, store
-  - [ ] Pagination (page, limit)
-  - [ ] Sorting (by date, status, value)
-  - [ ] Exclude soft-deleted records (WHERE deleted_at IS NULL)
-- [ ] GET /api/orders/:id (get order details)
-  - [ ] Return complete order with items and costs
-  - [ ] Include status history
-- [ ] PUT /api/orders/:id (update order)
-  - [ ] Validate business rules
-  - [ ] Track changes in audit_logs
-- [ ] PATCH /api/orders/:id/status (change status only)
-  - [ ] Validate status transition is allowed
-  - [ ] Record in status_history table
-  - [ ] Track in audit_logs
-- [ ] DELETE /api/orders/:id (soft delete)
-  - [ ] Set deleted_at = NOW()
-  - [ ] Record deletion in audit_logs
+**Orders CRUD:** → **Rafael**
+- [ ] POST /api/orders (create new order) → **Rafael**
+  - [ ] Validate input with Pydantic → **Rafael**
+  - [ ] Calculate economia (valor_projetado - valor_compra) → **Rafael**
+  - [ ] Create in pedidos table → **Rafael**
+  - [ ] Track in audit_logs → **Rafael**
+- [ ] GET /api/orders (list with filters, pagination) → **Rafael**
+  - [ ] Filter by status, date range, vendor, store → **Rafael**
+  - [ ] Pagination (page, limit) → **Rafael**
+  - [ ] Sorting (by date, status, value) → **Rafael**
+  - [ ] Exclude soft-deleted records (WHERE deleted_at IS NULL) → **Rafael**
+- [ ] GET /api/orders/:id (get order details) → **Rafael**
+  - [ ] Return complete order with items and costs → **Rafael**
+  - [ ] Include status history → **Rafael**
+- [ ] PUT /api/orders/:id (update order) → **Rafael**
+  - [ ] Validate business rules → **Rafael**
+  - [ ] Track changes in audit_logs → **Rafael**
+- [ ] PATCH /api/orders/:id/status (change status only) → **Duda**
+  - [ ] Validate status transition is allowed → **Duda**
+  - [ ] Record in status_history table → **Duda**
+  - [ ] Track in audit_logs → **Duda**
+- [ ] DELETE /api/orders/:id (soft delete) → **Rafael**
+  - [ ] Set deleted_at = NOW() → **Rafael**
+  - [ ] Record deletion in audit_logs → **Rafael**
 
-**Order Items:**
-- [ ] POST /api/orders/:id/items (add item to order)
-- [ ] PATCH /api/orders/:id/items/:itemId/status (update item status)
-- [ ] DELETE /api/orders/:id/items/:itemId (remove item)
+**Order Items:** → **Gustavo**
+- [ ] POST /api/orders/:id/items (add item to order) → **Gustavo**
+- [ ] PATCH /api/orders/:id/items/:itemId/status (update item status) → **Gustavo**
+- [ ] DELETE /api/orders/:id/items/:itemId (remove item) → **Gustavo**
 
-**Order Costs:**
-- [ ] POST /api/orders/:id/costs (set costs 1:1)
-- [ ] PUT /api/orders/:id/costs (update costs)
-- [ ] Calculate financial totals and margins
+**Order Costs:** → **Peu**
+- [ ] POST /api/orders/:id/costs (set costs 1:1) → **Peu**
+- [ ] PUT /api/orders/:id/costs (update costs) → **Peu**
+- [ ] Calculate financial totals and margins → **Peu**
 
-**Order Payments:**
-- [ ] POST /api/orders/:id/payment-methods
-- [ ] Track multiple payment methods per order
+**Order Payments:** → **Peu**
+- [ ] POST /api/orders/:id/payment-methods → **Peu**
+- [ ] Track multiple payment methods per order → **Peu**
 
-**Business Logic Validation:**
-- [ ] Unique numero_nf per store (UNIQUE constraint enforced)
-- [ ] One status per order
-- [ ] Valid status transitions only
-- [ ] Cannot delete order with RMA (FK constraint)
-- [ ] Financial values must be DECIMAL(12,2)
+**Business Logic Validation:** → **Rafael**
+- [ ] Unique numero_nf per store (UNIQUE constraint enforced) → **Rafael**
+- [ ] One status per order → **Rafael**
+- [ ] Valid status transitions only → **Duda**
+- [ ] Cannot delete order with RMA (FK constraint) → **Duda**
+- [ ] Financial values must be DECIMAL(12,2) → **Peu**
 
-**Testing:**
-- [ ] Test complete order creation flow
-- [ ] Test all CRUD operations
-- [ ] Test soft delete and recovery
-- [ ] Test status transitions
-- [ ] Test audit logging
-- [ ] Test pagination and filtering
+**Testing:** → **Gustavo + Peu**
+- [ ] Test complete order creation flow → **Gustavo**
+- [ ] Test all CRUD operations → **Gustavo**
+- [ ] Test soft delete and recovery → **Peu**
+- [ ] Test status transitions → **Peu**
+- [ ] Test audit logging → **Gustavo**
+- [ ] Test pagination and filtering → **Peu**
 
 **Effort:** 2 backend devs, 3-4 days  
 **Success Criteria:**
@@ -269,32 +298,32 @@
 ### 1.6 Core API Endpoints - Quotes & RMA (Days 7-9)
 **Priority:** P0 - BLOCKER
 
-**Quotes API:**
-- [ ] POST /api/quotes (create quote)
-- [ ] GET /api/quotes (list quotes)
-- [ ] GET /api/quotes/:id (quote details)
-- [ ] PUT /api/quotes/:id (update quote)
-- [ ] PATCH /api/quotes/:id/phase (update phase)
-- [ ] DELETE /api/quotes/:id (soft delete)
-- [ ] POST /api/quotes/:id/convert (convert quote to order)
+**Quotes API:** → **Gustavo**
+- [ ] POST /api/quotes (create quote) → **Gustavo**
+- [ ] GET /api/quotes (list quotes) → **Gustavo**
+- [ ] GET /api/quotes/:id (quote details) → **Gustavo**
+- [ ] PUT /api/quotes/:id (update quote) → **Gustavo**
+- [ ] PATCH /api/quotes/:id/phase (update phase) → **Gustavo**
+- [ ] DELETE /api/quotes/:id (soft delete) → **Gustavo**
+- [ ] POST /api/quotes/:id/convert (convert quote to order) → **Gustavo**
 
-**Quote Items:**
-- [ ] POST /api/quotes/:id/items
-- [ ] DELETE /api/quotes/:id/items/:itemId
+**Quote Items:** → **Peu**
+- [ ] POST /api/quotes/:id/items → **Peu**
+- [ ] DELETE /api/quotes/:id/items/:itemId → **Peu**
 
-**RMA API:**
-- [ ] POST /api/rma (create from existing order)
-- [ ] GET /api/rma (list RMA requests)
-- [ ] GET /api/rma/:id (RMA details)
-- [ ] PATCH /api/rma/:id/items/:itemId/status
-- [ ] PATCH /api/rma/:id/close (complete RMA)
+**RMA API:** → **Duda**
+- [ ] POST /api/rma (create from existing order) → **Duda**
+- [ ] GET /api/rma (list RMA requests) → **Duda**
+- [ ] GET /api/rma/:id (RMA details) → **Duda**
+- [ ] PATCH /api/rma/:id/items/:itemId/status → **Duda**
+- [ ] PATCH /api/rma/:id/close (complete RMA) → **Duda**
 
-**Testing:**
-- [ ] Quote creation works
-- [ ] Quote conversion to order works
-- [ ] RMA creation from order works
-- [ ] RMA status tracking works
-- [ ] All audit trails captured
+**Testing:** → **Peu**
+- [ ] Quote creation works → **Peu**
+- [ ] Quote conversion to order works → **Peu**
+- [ ] RMA creation from order works → **Peu**
+- [ ] RMA status tracking works → **Peu**
+- [ ] All audit trails captured → **Duda**
 
 **Effort:** 2 backend devs, 2-3 days  
 **Success Criteria:**
@@ -307,37 +336,37 @@
 ### 1.7 Audit & Compliance Features (Days 8-10)
 **Priority:** P0 - BLOCKER (LGPD Requirement)
 
-**Status History Tracking:**
-- [ ] Insert into status_history on every status change
-- [ ] Track entity_type, entity_id, old_status, new_status
-- [ ] Record changed_by (user) and reason
-- [ ] Verify data in status_history table
+**Status History Tracking:** → **Peu**
+- [ ] Insert into status_history on every status change → **Peu**
+- [ ] Track entity_type, entity_id, old_status, new_status → **Peu**
+- [ ] Record changed_by (user) and reason → **Peu**
+- [ ] Verify data in status_history table → **Peu**
 
-**Audit Log Implementation:**
-- [ ] Insert into audit_logs on CREATE
-- [ ] Insert into audit_logs on UPDATE
-  - [ ] Store old_values as JSONB
-  - [ ] Store new_values as JSONB
-- [ ] Insert into audit_logs on DELETE (soft delete)
-- [ ] Capture ip_address and user_agent
-- [ ] Set 6+ month retention policy
+**Audit Log Implementation:** → **Rafael**
+- [ ] Insert into audit_logs on CREATE → **Rafael**
+- [ ] Insert into audit_logs on UPDATE → **Rafael**
+  - [ ] Store old_values as JSONB → **Rafael**
+  - [ ] Store new_values as JSONB → **Rafael**
+- [ ] Insert into audit_logs on DELETE (soft delete) → **Rafael**
+- [ ] Capture ip_address and user_agent → **Rafael**
+- [ ] Set 6+ month retention policy → **Rafael**
 
-**LGPD Data Export API (Preparation):**
-- [ ] Design GET /api/users/:id/data-export endpoint (returns all user's data)
-- [ ] Design GET /api/orders/:id/history endpoint (returns all changes)
-- [ ] Include audit_logs in exports
+**LGPD Data Export API (Preparation):** → **Duda**
+- [ ] Design GET /api/users/:id/data-export endpoint (returns all user's data) → **Duda**
+- [ ] Design GET /api/orders/:id/history endpoint (returns all changes) → **Duda**
+- [ ] Include audit_logs in exports → **Duda**
 
-**LGPD Data Deletion API (Preparation):**
-- [ ] Design POST /api/users/:id/delete-data endpoint
-- [ ] Soft-delete all user's records
-- [ ] Anonymize personal data
+**LGPD Data Deletion API (Preparation):** → **Gustavo**
+- [ ] Design POST /api/users/:id/delete-data endpoint → **Gustavo**
+- [ ] Soft-delete all user's records → **Gustavo**
+- [ ] Anonymize personal data → **Gustavo**
 
-**Verification:**
-- [ ] All CRUD operations create audit trail
-- [ ] Status changes recorded in status_history
-- [ ] Old/new values captured in audit_logs
-- [ ] IP addresses logged
-- [ ] Data exports return complete history
+**Verification:** → **Peu**
+- [ ] All CRUD operations create audit trail → **Peu**
+- [ ] Status changes recorded in status_history → **Peu**
+- [ ] Old/new values captured in audit_logs → **Peu**
+- [ ] IP addresses logged → **Peu**
+- [ ] Data exports return complete history → **Duda**
 
 **Effort:** 1 backend dev, 2-3 days  
 **Success Criteria:**
@@ -351,28 +380,28 @@
 ### 1.8 API Testing & Documentation (Days 9-10)
 **Priority:** P1 - Required for MVP
 
-**Unit Tests:**
-- [ ] Write tests for all models
-- [ ] Write tests for all services
-- [ ] Achieve 70%+ code coverage
+**Unit Tests:** → **Rafael + Gustavo**
+- [ ] Write tests for all models → **Rafael**
+- [ ] Write tests for all services → **Gustavo**
+- [ ] Achieve 70%+ code coverage → **Rafael + Gustavo**
 
-**Integration Tests:**
-- [ ] Test complete order creation flow
-- [ ] Test authentication + authorization
-- [ ] Test soft delete flow
-- [ ] Test audit logging
-- [ ] Test pagination and filtering
+**Integration Tests:** → **Duda + Peu**
+- [ ] Test complete order creation flow → **Duda**
+- [ ] Test authentication + authorization → **Peu**
+- [ ] Test soft delete flow → **Duda**
+- [ ] Test audit logging → **Peu**
+- [ ] Test pagination and filtering → **Duda**
 
-**API Documentation:**
-- [ ] Create Swagger/OpenAPI documentation
-- [ ] Document all endpoints with examples
-- [ ] Document error responses
-- [ ] Document authentication requirements
+**API Documentation:** → **Peu**
+- [ ] Create Swagger/OpenAPI documentation → **Peu**
+- [ ] Document all endpoints with examples → **Peu**
+- [ ] Document error responses → **Peu**
+- [ ] Document authentication requirements → **Peu**
 
-**Performance Tests:**
-- [ ] Measure API response times (target: <200ms)
-- [ ] Load test with 100 concurrent users
-- [ ] Monitor database query performance
+**Performance Tests:** → **Rafael**
+- [ ] Measure API response times (target: <200ms) → **Rafael**
+- [ ] Load test with 100 concurrent users → **Rafael**
+- [ ] Monitor database query performance → **Rafael**
 
 **Effort:** 2 backend devs, 1-2 days  
 **Success Criteria:**
@@ -388,15 +417,15 @@
 ### 2.1 API Client Setup (Days 1-2)
 **Priority:** P0 - BLOCKER
 
-**Frontend Team Tasks:**
-- [ ] Create API client module (src/api/)
-- [ ] Configure axios with interceptors
-  - [ ] Auto-attach Authorization header
-  - [ ] Auto-refresh tokens on 401
-  - [ ] Retry failed requests
-- [ ] Implement error handling
-- [ ] Create API endpoint constants
-- [ ] Mock API responses for development
+**Frontend Team Tasks:** → **Peu**
+- [ ] Create API client module (src/api/) → **Peu**
+- [ ] Configure axios with interceptors → **Gustavo**
+  - [ ] Auto-attach Authorization header → **Gustavo**
+  - [ ] Auto-refresh tokens on 401 → **Gustavo**
+  - [ ] Retry failed requests → **Gustavo**
+- [ ] Implement error handling → **Peu**
+- [ ] Create API endpoint constants → **Peu**
+- [ ] Mock API responses for development → **Duda**
 
 **Effort:** 2 frontend devs, 1-2 days  
 **Success Criteria:**
@@ -409,12 +438,12 @@
 ### 2.2 React Query Integration (Days 2-3)
 **Priority:** P0 - BLOCKER
 
-**Frontend Team Tasks:**
-- [ ] Install and configure React Query
-- [ ] Create custom hooks (useOrders, useQuotes, useRMA)
-- [ ] Set up caching strategy
-- [ ] Implement mutations (useCreateOrder, useUpdateOrder, etc.)
-- [ ] Handle loading and error states
+**Frontend Team Tasks:** → **Gustavo**
+- [ ] Install and configure React Query → **Gustavo**
+- [ ] Create custom hooks (useOrders, useQuotes, useRMA) → **Gustavo**
+- [ ] Set up caching strategy → **Gustavo**
+- [ ] Implement mutations (useCreateOrder, useUpdateOrder, etc.) → **Peu**
+- [ ] Handle loading and error states → **Peu**
 
 **Effort:** 2 frontend devs, 1-2 days  
 **Success Criteria:**
@@ -428,15 +457,15 @@
 **Priority:** P0 - BLOCKER
 
 **Frontend Team Tasks:**
-- [ ] Update OrderModal to call API
-  - [ ] POST /api/orders on submit
-  - [ ] Handle loading state
-  - [ ] Display error messages
-  - [ ] Show success notification
-- [ ] Update QuoteModal to call API
-- [ ] Update RmaModal to call API
-- [ ] Implement optimistic updates (UI updates before API confirms)
-- [ ] Implement refetch on success
+- [ ] Update OrderModal to call API → **Duda**
+  - [ ] POST /api/orders on submit → **Duda**
+  - [ ] Handle loading state → **Duda**
+  - [ ] Display error messages → **Duda**
+  - [ ] Show success notification → **Duda**
+- [ ] Update QuoteModal to call API → **Rafael**
+- [ ] Update RmaModal to call API → **Peu**
+- [ ] Implement optimistic updates (UI updates before API confirms) → **Gustavo**
+- [ ] Implement refetch on success → **Gustavo**
 
 **Effort:** 2 frontend devs, 2-3 days  
 **Success Criteria:**
@@ -451,14 +480,14 @@
 **Priority:** P0 - BLOCKER
 
 **Frontend Team Tasks:**
-- [ ] Update Sales page to fetch orders from API
-  - [ ] Implement filtering
-  - [ ] Implement pagination
-  - [ ] Implement sorting
-  - [ ] Show loading skeleton
-- [ ] Update Dashboard to fetch analytics from API
-- [ ] Implement real-time updates (refetch on interval)
-- [ ] Display order status history in UI
+- [ ] Update Sales page to fetch orders from API → **Rafael**
+  - [ ] Implement filtering → **Rafael**
+  - [ ] Implement pagination → **Rafael**
+  - [ ] Implement sorting → **Rafael**
+  - [ ] Show loading skeleton → **Duda**
+- [ ] Update Dashboard to fetch analytics from API → **Gustavo**
+- [ ] Implement real-time updates (refetch on interval) → **Gustavo**
+- [ ] Display order status history in UI → **Duda**
 
 **Effort:** 2 frontend devs, 2-3 days  
 **Success Criteria:**
@@ -494,16 +523,16 @@
 ### 2.5.1 Status History UI (Days 1-3)
 **Priority:** P1 - MVP Feature
 
-**Frontend Tasks:**
-- [ ] Create StatusHistory component
-- [ ] Show timeline of all status changes
-- [ ] Display: who changed it, when, and why
-- [ ] Add to order details page
+**Frontend Tasks:** → **Duda**
+- [ ] Create StatusHistory component → **Duda**
+- [ ] Show timeline of all status changes → **Duda**
+- [ ] Display: who changed it, when, and why → **Duda**
+- [ ] Add to order details page → **Duda**
 
-**Backend Tasks:**
-- [ ] GET /api/orders/:id/history endpoint
-- [ ] Return status_history records
-- [ ] Include user info (who made change)
+**Backend Tasks:** → **Peu**
+- [ ] GET /api/orders/:id/history endpoint → **Peu**
+- [ ] Return status_history records → **Peu**
+- [ ] Include user info (who made change) → **Peu**
 
 **Effort:** 1 frontend + 1 backend dev, 2 days  
 **Success Criteria:**
@@ -516,16 +545,16 @@
 ### 2.5.2 Audit Log Viewer (Days 3-5)
 **Priority:** P1 - MVP Feature
 
-**Frontend Tasks:**
-- [ ] Create AuditLog component
-- [ ] Show all changes to an entity
-- [ ] Display old values vs new values
-- [ ] Add to admin panel
+**Frontend Tasks:** → **Gustavo**
+- [ ] Create AuditLog component → **Gustavo**
+- [ ] Show all changes to an entity → **Gustavo**
+- [ ] Display old values vs new values → **Gustavo**
+- [ ] Add to admin panel → **Gustavo**
 
-**Backend Tasks:**
-- [ ] GET /api/orders/:id/audit endpoint
-- [ ] Return audit_logs records with full details
-- [ ] Include JSONB diffs
+**Backend Tasks:** → **Rafael**
+- [ ] GET /api/orders/:id/audit endpoint → **Rafael**
+- [ ] Return audit_logs records with full details → **Rafael**
+- [ ] Include JSONB diffs → **Rafael**
 
 **Effort:** 1 frontend + 1 backend dev, 2 days  
 **Success Criteria:**
@@ -538,16 +567,16 @@
 ### 2.5.3 LGPD Data Export (Days 5-7)
 **Priority:** P1 - LGPD Requirement
 
-**Backend Tasks:**
-- [ ] Implement GET /api/users/:id/data-export
-- [ ] Return JSON with all user's data
-- [ ] Include all audit logs
-- [ ] Download as JSON file
+**Backend Tasks:** → **Duda**
+- [ ] Implement GET /api/users/:id/data-export → **Duda**
+- [ ] Return JSON with all user's data → **Duda**
+- [ ] Include all audit logs → **Duda**
+- [ ] Download as JSON file → **Duda**
 
-**Frontend Tasks:**
-- [ ] Create data export button
-- [ ] Call API and download file
-- [ ] Show success message
+**Frontend Tasks:** → **Duda**
+- [ ] Create data export button → **Duda**
+- [ ] Call API and download file → **Duda**
+- [ ] Show success message → **Duda**
 
 **Effort:** 1 backend + 1 frontend dev, 2 days  
 **Success Criteria:**
@@ -560,17 +589,17 @@
 ### 2.5.4 Data Deletion (Days 7-10)
 **Priority:** P1 - LGPD Requirement
 
-**Backend Tasks:**
-- [ ] Implement POST /api/users/:id/delete-data
-- [ ] Soft-delete all user's records
-- [ ] Anonymize personal info
-- [ ] Keep audit trail
+**Backend Tasks:** → **Gustavo**
+- [ ] Implement POST /api/users/:id/delete-data → **Gustavo**
+- [ ] Soft-delete all user's records → **Gustavo**
+- [ ] Anonymize personal info → **Gustavo**
+- [ ] Keep audit trail → **Gustavo**
 
-**Frontend Tasks:**
-- [ ] Create delete account form
-- [ ] Require confirmation
-- [ ] Require password verification
-- [ ] Show confirmation message
+**Frontend Tasks:** → **Peu**
+- [ ] Create delete account form → **Peu**
+- [ ] Require confirmation → **Peu**
+- [ ] Require password verification → **Peu**
+- [ ] Show confirmation message → **Peu**
 
 **Effort:** 1 backend + 1 frontend dev, 2-3 days  
 **Success Criteria:**
@@ -586,28 +615,28 @@
 **Priority:** P1 - Required for MVP
 
 **Backend Team Tasks:**
-- [ ] GET /api/dashboard/kpis - Retrieve KPI metrics for period
-  - [ ] Revenue (total, by company, by seller)
-  - [ ] Costs (total, by category: purchase tax, sales tax, other)
-  - [ ] Profit (total, by company, by seller)
-  - [ ] Margin % (profit/revenue)
-  - [ ] Sales count
-  - [ ] Ticket average (revenue/sales, cost/sales, profit/sales)
-  - [ ] Cancellation tracking (count, value lost)
-  - [ ] Today's revenue
-- [ ] GET /api/dashboard/goals - Retrieve sales targets for period
-- [ ] POST /api/dashboard/goals - Create/update sales target
-- [ ] DELETE /api/dashboard/goals/:key - Delete sales target
-- [ ] GET /api/dashboard/projections - Calculate daily targets
-  - [ ] Remaining business days
-  - [ ] Elapsed business days
-  - [ ] Daily average
-  - [ ] Projection for month
-  - [ ] Dynamic daily target to meet goal
-- [ ] GET /api/dashboard/breakdown-by-company - Per-company KPIs
-- [ ] GET /api/dashboard/breakdown-by-seller - Per-seller KPIs
-- [ ] Implement date range filtering (month or custom range)
-- [ ] Filter by company (all, Lucky Store, BTech, AJJ)
+- [ ] GET /api/dashboard/kpis - Retrieve KPI metrics for period → **Rafael**
+  - [ ] Revenue (total, by company, by seller) → **Rafael**
+  - [ ] Costs (total, by category: purchase tax, sales tax, other) → **Rafael**
+  - [ ] Profit (total, by company, by seller) → **Rafael**
+  - [ ] Margin % (profit/revenue) → **Rafael**
+  - [ ] Sales count → **Rafael**
+  - [ ] Ticket average (revenue/sales, cost/sales, profit/sales) → **Rafael**
+  - [ ] Cancellation tracking (count, value lost) → **Rafael**
+  - [ ] Today's revenue → **Rafael**
+- [ ] GET /api/dashboard/goals - Retrieve sales targets for period → **Gustavo**
+- [ ] POST /api/dashboard/goals - Create/update sales target → **Gustavo**
+- [ ] DELETE /api/dashboard/goals/:key - Delete sales target → **Gustavo**
+- [ ] GET /api/dashboard/projections - Calculate daily targets → **Gustavo**
+  - [ ] Remaining business days → **Gustavo**
+  - [ ] Elapsed business days → **Gustavo**
+  - [ ] Daily average → **Gustavo**
+  - [ ] Projection for month → **Gustavo**
+  - [ ] Dynamic daily target to meet goal → **Gustavo**
+- [ ] GET /api/dashboard/breakdown-by-company - Per-company KPIs → **Rafael**
+- [ ] GET /api/dashboard/breakdown-by-seller - Per-seller KPIs → **Rafael**
+- [ ] Implement date range filtering (month or custom range) → **Rafael**
+- [ ] Filter by company (all, Lucky Store, BTech, AJJ) → **Rafael**
 
 **Effort:** 1 backend dev, 3-4 days  
 **Success Criteria:**
@@ -622,19 +651,19 @@
 ### 2.6.2 Financial Management Backend (Expenses & Penalties)
 **Priority:** P2 - Required after MVP
 
-**Backend Team Tasks:**
-- [ ] Implement Expense model (predicted vs paid)
-- [ ] POST /api/expenses - Create expense
-- [ ] PATCH /api/expenses/:id - Update expense
-- [ ] DELETE /api/expenses/:id - Delete expense
-- [ ] GET /api/expenses - List with filtering
-- [ ] Expense installment plan support (credit card payments)
-- [ ] Calculate penalty and interest on orders
-- [ ] GET /api/calendar/entries - Financial calendar
-  - [ ] Return expense entries
-  - [ ] Return order penalties
-  - [ ] Return order interest
-  - [ ] Return installment entries
+**Backend Team Tasks:** → **Duda**
+- [ ] Implement Expense model (predicted vs paid) → **Duda**
+- [ ] POST /api/expenses - Create expense → **Duda**
+- [ ] PATCH /api/expenses/:id - Update expense → **Duda**
+- [ ] DELETE /api/expenses/:id - Delete expense → **Duda**
+- [ ] GET /api/expenses - List with filtering → **Duda**
+- [ ] Expense installment plan support (credit card payments) → **Duda**
+- [ ] Calculate penalty and interest on orders → **Duda**
+- [ ] GET /api/calendar/entries - Financial calendar → **Duda**
+  - [ ] Return expense entries → **Duda**
+  - [ ] Return order penalties → **Duda**
+  - [ ] Return order interest → **Duda**
+  - [ ] Return installment entries → **Duda**
 
 **Effort:** 1 backend dev, 4-5 days  
 **Success Criteria:**
@@ -649,43 +678,43 @@
 **Priority:** P1 - Required for MVP
 
 **Frontend Team Tasks:**
-- [ ] Create Dashboard.tsx page (already exists, enhance)
-  - [ ] KPI cards layout
-  - [ ] Month/year selector
-  - [ ] Date range picker
-  - [ ] Company filter tabs
-  - [ ] View mode toggle (company vs seller)
-- [ ] Create KPI cards component
-  - [ ] Revenue card with today's total
-  - [ ] Profit card (with color: green if positive, red if negative)
-  - [ ] Margin % card
-  - [ ] Sales count card
-  - [ ] Cancellations card
-  - [ ] Target achievement % card
-  - [ ] Projection card
-  - [ ] Gap to target card
-  - [ ] Dynamic daily target card
-  - [ ] Average ticket cards
-- [ ] Create Pie chart (cost composition)
-  - [ ] Purchase tax
-  - [ ] Sales tax
-  - [ ] Other costs
-- [ ] Create Bar chart (ticket comparison)
-  - [ ] Ticket sale average
-  - [ ] Ticket cost average
-  - [ ] Ticket profit average
-- [ ] Create breakdown tables
-  - [ ] Per-company breakdown (all metrics)
-  - [ ] Per-seller breakdown (all metrics)
-- [ ] Implement filtering logic
-  - [ ] Filter by month or date range
-  - [ ] Filter by company
-  - [ ] Toggle between company/seller views
-- [ ] Implement goal management modal
-  - [ ] Display existing goals
-  - [ ] Add new goal
-  - [ ] Edit goal
-  - [ ] Delete goal
+- [ ] Create Dashboard.tsx page (already exists, enhance) → **Duda**
+  - [ ] KPI cards layout → **Duda**
+  - [ ] Month/year selector → **Duda**
+  - [ ] Date range picker → **Duda**
+  - [ ] Company filter tabs → **Duda**
+  - [ ] View mode toggle (company vs seller) → **Duda**
+- [ ] Create KPI cards component → **Peu**
+  - [ ] Revenue card with today's total → **Peu**
+  - [ ] Profit card (with color: green if positive, red if negative) → **Peu**
+  - [ ] Margin % card → **Peu**
+  - [ ] Sales count card → **Peu**
+  - [ ] Cancellations card → **Peu**
+  - [ ] Target achievement % card → **Peu**
+  - [ ] Projection card → **Peu**
+  - [ ] Gap to target card → **Peu**
+  - [ ] Dynamic daily target card → **Peu**
+  - [ ] Average ticket cards → **Peu**
+- [ ] Create Pie chart (cost composition) → **Duda**
+  - [ ] Purchase tax → **Duda**
+  - [ ] Sales tax → **Duda**
+  - [ ] Other costs → **Duda**
+- [ ] Create Bar chart (ticket comparison) → **Duda**
+  - [ ] Ticket sale average → **Duda**
+  - [ ] Ticket cost average → **Duda**
+  - [ ] Ticket profit average → **Duda**
+- [ ] Create breakdown tables → **Peu**
+  - [ ] Per-company breakdown (all metrics) → **Peu**
+  - [ ] Per-seller breakdown (all metrics) → **Peu**
+- [ ] Implement filtering logic → **Duda**
+  - [ ] Filter by month or date range → **Duda**
+  - [ ] Filter by company → **Duda**
+  - [ ] Toggle between company/seller views → **Duda**
+- [ ] Implement goal management modal → **Peu**
+  - [ ] Display existing goals → **Peu**
+  - [ ] Add new goal → **Peu**
+  - [ ] Edit goal → **Peu**
+  - [ ] Delete goal → **Peu**
 
 **Effort:** 2 frontend devs, 4-5 days  
 **Success Criteria:**
@@ -753,16 +782,16 @@
 **Priority:** P1 - Required for MVP
 
 **Backend Testing:**
-- [ ] Unit tests (70%+ coverage)
-- [ ] Integration tests (all API flows)
-- [ ] Security tests (SQL injection, XSS, CSRF)
-- [ ] Database tests (constraints, transactions)
+- [ ] Unit tests (70%+ coverage) → **Rafael + Gustavo**
+- [ ] Integration tests (all API flows) → **Duda + Peu**
+- [ ] Security tests (SQL injection, XSS, CSRF) → **Rafael + Duda**
+- [ ] Database tests (constraints, transactions) → **Rafael**
 
 **Frontend Testing:**
-- [ ] Component tests (all components)
-- [ ] Integration tests (API calls)
-- [ ] E2E tests (critical user flows)
-- [ ] Accessibility tests (WCAG compliance)
+- [ ] Component tests (all components) → **Duda + Peu**
+- [ ] Integration tests (API calls) → **Gustavo + Peu**
+- [ ] E2E tests (critical user flows) → **Peu**
+- [ ] Accessibility tests (WCAG compliance) → **Gustavo**
 
 **Effort:** 4 devs, 5 days  
 **Success Criteria:**
@@ -822,11 +851,11 @@
 ### 4.1 CI/CD Pipeline
 **Priority:** P1 - Required for MVP
 
-**DevOps Tasks:**
-- [ ] Set up GitHub Actions
-- [ ] Run tests on every push
-- [ ] Build Docker images
-- [ ] Automated deployment to staging
+**DevOps Tasks:** → **Rafael**
+- [ ] Set up GitHub Actions → **Rafael**
+- [ ] Run tests on every push → **Rafael**
+- [ ] Build Docker images → **Rafael**
+- [ ] Automated deployment to staging → **Rafael**
 
 **Effort:** 1 DevOps + 1 backend dev, 3 days  
 **Success Criteria:**
@@ -839,11 +868,12 @@
 ### 4.2 Production Database Setup
 **Priority:** P1 - Required for MVP
 
-**DevOps Tasks:**
-- [ ] Set up PostgreSQL in cloud (RDS/Cloud SQL)
-- [ ] Configure backups (daily, 30-day retention)
-- [ ] Set up monitoring
-- [ ] Test disaster recovery
+**DevOps Tasks:** → **Gustavo**
+- [ ] Criar projeto Railway + PostgreSQL service → **Gustavo**
+- [ ] Configurar variáveis de ambiente no Railway → **Gustavo**
+- [ ] Rodar `railway run alembic upgrade head` → **Gustavo**
+- [ ] Verificar backups automáticos Railway → **Gustavo**
+- [ ] Test disaster recovery → **Gustavo**
 
 **Effort:** 1 DevOps dev, 3 days  
 **Success Criteria:**
@@ -856,11 +886,11 @@
 ### 4.3 Frontend Deployment
 **Priority:** P1 - Required for MVP
 
-**DevOps Tasks:**
-- [ ] Deploy to Vercel or Netlify
-- [ ] Set up CDN
-- [ ] Configure SSL
-- [ ] Set up monitoring
+**DevOps Tasks:** → **Peu**
+- [ ] Deploy to Vercel → **Peu**
+- [ ] Set up CDN → **Peu**
+- [ ] Configure SSL → **Peu**
+- [ ] Set up monitoring → **Peu**
 
 **Effort:** 1 DevOps dev, 2 days  
 **Success Criteria:**
@@ -873,11 +903,11 @@
 ### 4.4 Production Monitoring
 **Priority:** P1 - Required for MVP
 
-**DevOps Tasks:**
-- [ ] Set up Sentry for error tracking
-- [ ] Set up DataDog for metrics
-- [ ] Configure alerts
-- [ ] Set up log aggregation
+**DevOps Tasks:** → **Duda**
+- [ ] Set up Sentry for error tracking → **Duda**
+- [ ] Set up DataDog for metrics → **Duda**
+- [ ] Configure alerts → **Duda**
+- [ ] Set up log aggregation → **Duda**
 
 **Effort:** 1 DevOps dev, 2 days  
 **Success Criteria:**
@@ -980,7 +1010,7 @@
 
 | Risk | Probability | Impact | Mitigation |
 |------|------------|--------|-----------|
-| Backend language decision delayed | High | High | **DECISION THIS WEEK (Python or Node.js)** |
+| Backend language decision delayed | ~~High~~ RESOLVED | High | Python FastAPI chosen |
 | Database performance issues | Medium | High | Indexes designed, load testing planned |
 | Integration bugs in week 4 | Medium | High | Comprehensive API testing in week 3 |
 | Scope creep (more features added) | High | High | Strict backlog management, Phase 2 = post-MVP |
@@ -1024,14 +1054,17 @@ Any delay in Week 1-3 → Delays Week 10 launch
 
 ## Next Week Actions
 
-- [ ] **CRITICAL:** Decide backend language (Python FastAPI or Node.js Express)
-- [ ] **CRITICAL:** Set up PostgreSQL locally (2 backend devs)
-- [ ] **CRITICAL:** Run DATABASE_INIT.sql
+- [x] **CRITICAL:** Decide backend language → Python FastAPI
+- [x] **CRITICAL:** Decide backend language → Python FastAPI ✅
+- [x] **CRITICAL:** Set up PostgreSQL + conectar banco ✅
+- [x] **CRITICAL:** Servidor FastAPI rodando (localhost:8000/docs) ✅
+- [x] **CRITICAL:** Alembic configurado com baseline ✅
+- [ ] **CRITICAL:** Testar endpoints de auth via Swagger (register → login → 2FA)
+- [ ] **CRITICAL:** Run DATABASE_INIT.sql para verificar todas as 16 tabelas
 - [ ] **CRITICAL:** Run verification checklist (DATABASE_SETUP_GUIDE.md)
-- [ ] **CRITICAL:** Execute all 5 test scenarios
-- [ ] Backend team: Start ORM model generation
+- [ ] **PRÓXIMO:** Gerar os 15 ORM models restantes (1.3)
+- [ ] **PRÓXIMO:** Implementar RBAC middleware (1.4)
 - [ ] Frontend team: Start API client setup
-- [ ] All: Read ARCHITECTURE.md for system overview
 
 ---
 
@@ -1054,7 +1087,7 @@ Any delay in Week 1-3 → Delays Week 10 launch
 
 ---
 
-**Last Updated:** April 22, 2026  
-**Status:** ✅ Production Ready for MVP  
-**Next Milestone:** Week 1 Database Verification  
+**Last Updated:** April 26, 2026  
+**Status:** 🚀 Backend foundation rodando — fase de ORM models + RBAC iniciando  
+**Next Milestone:** Auth testado + 15 ORM models gerados  
 **MVP Target:** Week 10 (8-10 weeks)

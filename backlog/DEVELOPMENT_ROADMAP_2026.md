@@ -4,8 +4,10 @@
 
 **Total Duration:** 8-10 weeks for MVP, 20-24 weeks for full release  
 **Team:** 4 Developers (2 Backend, 2 Frontend)  
-**Start Date:** Week 1 (April 22, 2026)  
+**Start Date:** Week 1 (April 22, 2026) — **Em andamento (April 25)**  
 **MVP Target:** Week 10 (June 24-July 1, 2026)
+
+**Stack decidida:** Python FastAPI + SQLAlchemy + Alembic + PostgreSQL local (dev) + Railway (produção)
 
 ---
 
@@ -35,17 +37,17 @@
 
 ---
 
-#### Tuesday - Backend Technology Decision & ORM Setup
+#### Tuesday - Backend Setup ✅ CONCLUÍDO (April 25)
 **Backend Team (2 devs):**
-- [ ] **CRITICAL DECISION:** Python FastAPI or Node.js Express?
-  - Recommendation: FastAPI if you want speed, Express if team knows JavaScript
-- [ ] Initialize backend project
-- [ ] Set up development environment (.env, config)
-- [ ] Install database ORM:
-  - Python: SQLAlchemy + Alembic
-  - Node.js: Prisma
-- [ ] Generate ORM models from DATABASE_INIT.sql
-- [ ] Test database connection
+- [x] **DECISÃO:** Python FastAPI ✅
+- [x] Projeto backend inicializado (`main.py`, `app/`, `alembic/`)
+- [x] `.env` configurado (DATABASE_URL, JWT_SECRET, CORS)
+- [x] SQLAlchemy + Alembic instalados e configurados
+- [x] Primeiro modelo ORM criado (`models/user.py`)
+- [x] Auth routes implementadas (8 endpoints)
+- [x] `Procfile` + `railway.toml` para deploy Railway
+- [ ] Gerar ORM models restantes (15 tabelas) ← **próximo passo**
+- [ ] Testar conexão com banco local
 
 **Frontend Team (2 devs):**
 - [ ] Install React Query
@@ -84,16 +86,18 @@
 
 #### Friday - Week 1 Demo
 **All Team:**
-- [ ] Demo: Database running + ORM models working
+- [ ] Demo: PostgreSQL local rodando + migrations executadas
+- [ ] Demo: ORM models gerados para todas as 16 tabelas
 - [ ] Confirm: No blockers for next week
 - [ ] Retrospective: What went well, what to improve
-- [ ] Planning: Confirm backend language decision is final
 
 **Success Criteria:**
-- ✅ PostgreSQL set up locally (all 4 devs)
-- ✅ All 16 ORM models generated
-- ✅ Database connection confirmed
-- ✅ Backend framework chosen (Python or Node.js)
+- ✅ Backend framework escolhido: **Python FastAPI** ← DONE
+- ✅ Projeto backend estruturado ← DONE
+- ✅ Auth endpoints funcionando ← DONE
+- [ ] PostgreSQL set up locally (todos os devs)
+- [ ] Todos os 16 modelos ORM gerados
+- [ ] Conexão com banco confirmada
 
 ---
 
@@ -435,11 +439,11 @@
 
 #### Tuesday-Wednesday - Production Database
 **DevOps Engineer:**
-- [ ] Set up PostgreSQL in cloud (AWS RDS/GCP Cloud SQL)
-- [ ] Configure automated daily backups
-- [ ] Set up connection pooling (PgBouncer)
-- [ ] Test disaster recovery
-- [ ] Configure monitoring and alerting
+- [ ] Criar projeto Railway e adicionar serviço PostgreSQL
+- [ ] Configurar variáveis de ambiente no Railway (`${{Postgres.DATABASE_URL}}`, `JWT_SECRET`, etc.)
+- [ ] Rodar `railway run alembic upgrade head` (cria tabelas em produção)
+- [ ] Configurar backup automático (Railway inclui por padrão)
+- [ ] Testar conexão do FastAPI com banco Railway
 
 ---
 
@@ -611,8 +615,8 @@ Every other Friday:
 | Issue | Solution |
 |-------|----------|
 | Database setup takes too long | Start fresh with DATABASE_INIT.sql, verify with checklist |
-| Backend language decision delayed | Vote immediately: FastAPI (speed) vs Express (ecosystem) |
-| ORM model generation unclear | Reference DATABASE_SCHEMA_REFACTORED.md for structure |
+| Backend language ~~decision delayed~~ | ✅ Decidido: Python FastAPI |
+| ORM model generation unclear | Usar `DATABASE_SCHEMA_REFACTORED.md` como referência; base já criada em `app/models/user.py` |
 | Auth endpoint not working | Debug with Postman, check password hashing |
 | Status history not tracking | Verify INSERT into status_history on every status change |
 | Soft delete showing deleted records | Check WHERE deleted_at IS NULL in all queries |
@@ -631,6 +635,6 @@ Every other Friday:
 
 ---
 
-**Roadmap Version:** 1.0  
-**Last Updated:** April 22, 2026  
-**Status:** ✅ Ready to Execute
+**Roadmap Version:** 1.1  
+**Last Updated:** April 25, 2026  
+**Status:** 🚧 Week 1 em andamento — backend foundation concluída

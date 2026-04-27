@@ -21,7 +21,7 @@ Orderly Hub is a modern, scalable order management system designed for multi-com
 │                          HTTP/REST API                               │
 │                                ↕                                      │
 │  ┌─────────────────────────────────────────────────────────────────┐ │
-│  │  BACKEND API (Node.js/Express OR Python/FastAPI)               │ │
+│  │  BACKEND API (Python + FastAPI) ✅ DECIDED                     │ │
 │  │  ├─ Authentication (JWT + TOTP 2FA)                            │ │
 │  │  ├─ Authorization (RBAC: Admin/Manager/Seller/Viewer)         │ │
 │  │  ├─ Core Services:                                             │ │
@@ -29,8 +29,8 @@ Orderly Hub is a modern, scalable order management system designed for multi-com
 │  │  │  ├─ QuoteService (CRUD + conversion)                       │ │
 │  │  │  ├─ RMAService (returns management)                        │ │
 │  │  │  └─ AuditService (logging + compliance)                    │ │
-│  │  ├─ ORM: Prisma (Node.js) OR SQLAlchemy (Python)              │ │
-│  │  ├─ Validation: Zod (Node.js) OR Pydantic (Python)            │ │
+│  │  ├─ ORM: SQLAlchemy 2.x + Alembic (migrations)               │ │
+│  │  ├─ Validation: Pydantic v2                                   │ │
 │  │  └─ Error Handling: Standard REST error responses             │ │
 │  └─────────────────────────────────────────────────────────────────┘ │
 │                                ↕                                      │
@@ -71,14 +71,14 @@ Orderly Hub is a modern, scalable order management system designed for multi-com
 │  └─────────────────────────────────────────────────────────────────┘ │
 │                                                                        │
 │  ┌─────────────────────────────────────────────────────────────────┐ │
-│  │  INFRASTRUCTURE                                                 │ │
-│  │  ├─ Hosting: AWS/Azure/DigitalOcean/Railway/Render            │ │
-│  │  ├─ Containers: Docker                                         │ │
+│  │  INFRASTRUCTURE ✅ DECIDIDO                                     │ │
+│  │  ├─ Hosting: Railway (produção) + PostgreSQL local (dev)      │ │
+│  │  ├─ Containers: Docker (opcional)                              │ │
 │  │  ├─ CI/CD: GitHub Actions                                      │ │
 │  │  ├─ Error Tracking: Sentry                                     │ │
-│  │  ├─ Monitoring: DataDog / New Relic                            │ │
-│  │  ├─ Logging: CloudWatch / ELK Stack                            │ │
-│  │  └─ CDN: Cloudflare / AWS CloudFront                           │ │
+│  │  ├─ Monitoring: Railway Dashboard + DataDog (futuro)          │ │
+│  │  ├─ Logging: Railway Logs + estruturado via Python logging    │ │
+│  │  └─ Frontend: Vercel (deploy)                                 │ │
 │  └─────────────────────────────────────────────────────────────────┘ │
 │                                                                        │
 └──────────────────────────────────────────────────────────────────────┘
@@ -161,14 +161,38 @@ Orderly Hub is a modern, scalable order management system designed for multi-com
 ### Backend Layer
 
 ```
-┌─ API Routes
-│  ├─ /api/auth
+Estrutura real: backend/
+├── main.py                  ✅ criado
+├── alembic.ini              ✅ criado
+├── Procfile                 ✅ criado
+├── railway.toml             ✅ criado
+├── requirements.txt         ✅ criado
+├── .env                     ✅ criado
+├── alembic/
+│   ├── env.py               ✅ criado
+│   ├── script.py.mako       ✅ criado
+│   └── versions/            ✅ criado (aguarda migrations)
+├── app/
+│   ├── config.py            ✅ criado
+│   ├── database.py          ✅ criado
+│   ├── models/user.py       ✅ criado
+│   ├── schemas/user.py      ✅ criado
+│   ├── services/auth.py     ✅ criado
+│   ├── utils/security.py    ✅ criado
+│   ├── utils/errors.py      ✅ criado
+│   └── api/routes/auth.py   ✅ criado
+└── tests/                   ⬜ pendente
+
+┌─ API Routes implementadas
+│  ├─ /api/auth              ✅ IMPLEMENTADO
 │  │  ├─ POST /register (admin)
 │  │  ├─ POST /login
 │  │  ├─ POST /verify-2fa
 │  │  ├─ POST /refresh-token
 │  │  ├─ POST /logout
-│  │  └─ GET /me
+│  │  ├─ GET /me
+│  │  ├─ POST /2fa/setup
+│  │  └─ POST /2fa/confirm
 │  ├─ /api/orders
 │  │  ├─ GET / (list with filters)
 │  │  ├─ POST / (create)
@@ -269,11 +293,9 @@ Orderly Hub is a modern, scalable order management system designed for multi-com
 │  └─ (ORM handles queries)
 │
 └─ Utils
-   ├─ validation (Zod/Pydantic)
-   ├─ errors (custom error classes)
-   ├─ jwt (token generation)
-   ├─ password (hashing)
-   └─ logging (Winston/Pino)
+   ├─ security.py  (bcrypt, JWT, TOTP) ✅
+   ├─ errors.py    (custom exceptions) ✅
+   └─ logging      (Python logging, structured)
 ```
 
 ### Database Layer
@@ -486,8 +508,7 @@ Implementation:
 │  └─ HSTS headers enabled
 │
 ├─ Input Validation
-│  ├─ Zod schema validation (Node.js)
-│  ├─ Pydantic validation (Python)
+│  ├─ Pydantic v2 validation (request/response schemas)
 │  ├─ SQL injection prevention: ORM + parameterized queries
 │  └─ XSS prevention: React output encoding
 │
@@ -669,17 +690,21 @@ Monitoring:
 
 ## Technology Stack Decision Matrix
 
-### Backend Framework Options
+### Backend Framework
 
-| Criteria | FastAPI (Python) | Express (Node.js) |
-|----------|------------------|-------------------|
-| Development Speed | ⭐⭐⭐⭐⭐ Fast | ⭐⭐⭐⭐ Medium |
-| Learning Curve | ⭐⭐⭐ Moderate | ⭐⭐ Easy |
-| Performance | ⭐⭐⭐⭐ Very Good | ⭐⭐⭐⭐ Very Good |
-| Ecosystem | ⭐⭐⭐⭐ Large | ⭐⭐⭐⭐⭐ Huge |
-| Type Safety | ⭐⭐⭐⭐ Type hints | ⭐⭐⭐⭐⭐ TypeScript |
-| Database ORM | SQLAlchemy | Prisma |
-| **RECOMMENDED** | **✅ Choose if time-critical** | **✅ Choose if team prefers JS** |
+**✅ DECISÃO TOMADA: Python + FastAPI**
+
+| Componente | Tecnologia escolhida |
+|---|---|
+| Framework | FastAPI 0.104+ |
+| ORM | SQLAlchemy 2.x |
+| Migrations | Alembic 1.13 |
+| Validação | Pydantic v2 |
+| Hashing | bcrypt (passlib) |
+| Auth tokens | python-jose (JWT) |
+| 2FA | pyotp (TOTP) |
+| Servidor | Uvicorn |
+| Testes | pytest + pytest-asyncio |
 
 ---
 
@@ -705,19 +730,35 @@ Monitoring:
 
 ---
 
-## Next Steps
+## Status Atual (April 25, 2026)
 
-1. **This Week:** Decide backend language (Python or Node.js)
-2. **Week 1:** Set up PostgreSQL, run DATABASE_INIT.sql
-3. **Week 1-2:** Generate ORM models, implement authentication
-4. **Week 2-3:** Build core APIs (Orders, Quotes, RMA)
-5. **Week 4-5:** Frontend integration with React Query
-6. **Week 6-7:** Testing and security hardening
-7. **Week 8:** Deployment and production monitoring
-8. **Week 10:** MVP launch 🚀
+### ✅ Concluído
+- Decisão de stack: Python FastAPI
+- Estrutura do projeto backend criada
+- `main.py` com CORS e exception handlers
+- `config.py` com Pydantic Settings
+- `database.py` com SQLAlchemy engine + pool
+- `models/user.py` com RBAC e soft delete
+- `schemas/user.py` com todos os schemas de auth
+- `services/auth.py` com register, login, TOTP, tokens
+- `utils/security.py` com bcrypt, JWT, TOTP
+- `utils/errors.py` com hierarquia de exceções
+- `api/routes/auth.py` com 8 endpoints
+- Alembic configurado (alembic.ini + env.py)
+- `.env` configurado
+- `Procfile` + `railway.toml` para deploy
+- Railway escolhido como plataforma de produção
+
+### ⬜ Próximos passos
+1. Instalar PostgreSQL local e rodar `DATABASE_INIT.sql`
+2. Rodar `alembic upgrade head`
+3. Gerar os 15 modelos ORM restantes (Fase 1.3)
+4. Implementar APIs de Orders, Quotes, RMA (Fase 1.5-1.6)
+5. Integração frontend (Fase 2)
+6. Deploy Railway na Semana 8
 
 ---
 
-**Architecture Version:** 2.0 (Updated April 22, 2026)  
-**Status:** ✅ Production Ready  
-**Last Updated:** April 22, 2026
+**Architecture Version:** 2.1 (Updated April 25, 2026)  
+**Status:** ✅ Backend Foundation Complete  
+**Last Updated:** April 25, 2026

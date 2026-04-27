@@ -185,24 +185,28 @@ psql -U postgres -d orderly_hub
 **Time:** 2-4 hours
 
 ### Phase 2: Backend Integration (Week 1-2)
-- [ ] Choose backend framework (Python FastAPI or Node.js Express)
-- [ ] Follow backend integration code from DATABASE_SETUP_GUIDE.md
-- [ ] Generate ORM models (SQLAlchemy or Prisma)
-- [ ] Create first API endpoint with database query
-- [ ] Test endpoint connects to database
+- [x] Framework escolhido: **Python FastAPI** ✅
+- [x] Projeto estruturado (`backend/`) ✅
+- [x] SQLAlchemy + Alembic configurados ✅
+- [x] Primeiro modelo ORM criado (`models/user.py`) ✅
+- [x] Auth API implementada (8 endpoints) ✅
+- [ ] Gerar os 15 modelos ORM restantes
+- [ ] Criar primeiro endpoint com query ao banco (Orders)
+- [ ] Testar conexão com banco local
 
 **Owner:** Backend Developers  
 **Time:** 4-8 hours
 
-### Phase 3: Deployment Setup (Week 2-3)
-- [ ] Create production database (cloud provider)
-- [ ] Set up automated backups using DATABASE_SETUP_GUIDE.md
-- [ ] Configure monitoring queries
-- [ ] Test restore procedure
-- [ ] Document production DB access
+### Phase 3: Deployment Setup (Week 8)
+- [ ] Criar projeto no Railway e adicionar serviço PostgreSQL
+- [ ] Configurar variáveis de ambiente no Railway (`${{Postgres.DATABASE_URL}}`, `JWT_SECRET`)
+- [ ] Rodar `railway run alembic upgrade head` (cria tabelas em produção)
+- [ ] Fazer deploy do backend FastAPI via GitHub → Railway
+- [ ] Verificar `/health` endpoint em produção
+- [ ] Testar backup automático (Railway inclui por padrão)
 
-**Owner:** DevOps Engineer  
-**Time:** 6-10 hours
+**Owner:** Backend Lead  
+**Time:** 4-6 hours (Railway simplifica muito o processo)
 
 ### Phase 4: Testing & Monitoring (Week 3-4)
 - [ ] Run load tests with sample data
@@ -305,8 +309,7 @@ psql -U postgres -d orderly_hub
 - **Test the database** → DATABASE_SETUP_GUIDE.md → Testing section
 - **Back up the database** → DATABASE_SETUP_GUIDE.md → Backup & Recovery
 - **Monitor performance** → DATABASE_SETUP_GUIDE.md → Monitoring & Maintenance
-- **Integrate with Python** → DATABASE_SETUP_GUIDE.md → Backend Integration (Python)
-- **Integrate with Node.js** → DATABASE_SETUP_GUIDE.md → Backend Integration (Node.js)
+- **Integrar com Python/FastAPI** → `backend/app/database.py` já configurado; seguir `DATABASE_SETUP_GUIDE.md → Backend Integration (Python)`
 - **Migrate from old schema** → DATABASE_REFACTORING_GUIDE.md → Migration Path
 
 ---
@@ -420,8 +423,8 @@ See: DATABASE_SETUP_GUIDE.md → Backend Integration section
 
 ---
 
-**Created:** April 21, 2026  
-**Status:** ✅ Production Ready  
-**Version:** 1.0  
-**Team:** 4 Developers (2 Backend, 2 Frontend)  
-**Target MVP:** Weeks 1-3 (Database setup and testing complete)
+**Created:** April 21, 2026 | **Updated:** April 25, 2026  
+**Status:** 🚧 Week 1 — DB setup pendente, backend foundation concluída  
+**Version:** 1.1  
+**Stack:** Python FastAPI + SQLAlchemy + Alembic + Railway  
+**Target MVP:** Semana 10 (July 1, 2026)
