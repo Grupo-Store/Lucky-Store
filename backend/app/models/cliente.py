@@ -1,8 +1,8 @@
 import uuid
-from sqlalchemy import Column, String, DateTime
-from sqlalchemy.dialects.postgresql import UUID
+from datetime import datetime, timezone
+from sqlalchemy import Column, String, DateTime  # type: ignore[import]
+from sqlalchemy.dialects.postgresql import UUID  # type: ignore[import]
 from sqlalchemy.orm import relationship
-from datetime import datetime
 from app.database import Base
 
 
@@ -19,11 +19,10 @@ class Cliente(Base):
     state = Column(String(2), nullable=True)
     zip_code = Column(String(10), nullable=True)
 
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
-    deleted_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
+    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc), nullable=False)
+    deleted_at = Column(DateTime(timezone=True), nullable=True)
 
-    # One-to-many: cliente pode ter vários pedidos
     pedidos = relationship("Pedido", back_populates="cliente")
 
     def __repr__(self):

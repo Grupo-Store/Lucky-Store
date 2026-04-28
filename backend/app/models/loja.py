@@ -1,8 +1,8 @@
 import uuid
-from sqlalchemy import Column, String, DateTime
-from sqlalchemy.dialects.postgresql import UUID
+from datetime import datetime, timezone
+from sqlalchemy import Column, String, DateTime  # type: ignore[import]
+from sqlalchemy.dialects.postgresql import UUID  # type: ignore[import]
 from sqlalchemy.orm import relationship
-from datetime import datetime
 from app.database import Base
 
 
@@ -15,11 +15,10 @@ class Loja(Base):
     city = Column(String(100), nullable=True)
     state = Column(String(2), nullable=True)
 
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
-    deleted_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
+    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc), nullable=False)
+    deleted_at = Column(DateTime(timezone=True), nullable=True)
 
-    # Relationships — string refs para evitar import circular
     vendedores = relationship("Vendedor", back_populates="loja", lazy="select")
     pedidos = relationship("Pedido", back_populates="loja", lazy="select")
     rmas = relationship("Rma", back_populates="loja", lazy="select")

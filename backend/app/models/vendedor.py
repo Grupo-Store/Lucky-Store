@@ -1,8 +1,8 @@
 import uuid
-from sqlalchemy import Column, String, DateTime, ForeignKey, UniqueConstraint
-from sqlalchemy.dialects.postgresql import UUID
+from datetime import datetime, timezone
+from sqlalchemy import Column, String, DateTime, ForeignKey, UniqueConstraint  # type: ignore[import]
+from sqlalchemy.dialects.postgresql import UUID  # type: ignore[import]
 from sqlalchemy.orm import relationship
-from datetime import datetime
 from app.database import Base
 
 
@@ -15,28 +15,24 @@ class Vendedor(Base):
     email = Column(String(255), nullable=True)
     phone = Column(String(20), nullable=True)
 
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
-    deleted_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
+    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc), nullable=False)
+    deleted_at = Column(DateTime(timezone=True), nullable=True)
 
     __table_args__ = (
         UniqueConstraint("id_loja", "nome", name="uq_vendedor_loja_nome"),
     )
 
-    # Many-to-one: vendedor pertence a uma loja
     loja = relationship("Loja", back_populates="vendedores")
 
-    # One-to-many: vendedor pode ter vários pedidos, RMAs, cotações
     pedidos = relationship("Pedido", back_populates="vendedor", foreign_keys="Pedido.id_vendedor")
     rmas = relationship("Rma", back_populates="vendedor", foreign_keys="Rma.id_vendedor")
     cotacoes = relationship("Cotacao", back_populates="vendedor", foreign_keys="Cotacao.id_vendedor")
 
-    # Registros de comissão/participação
     vendas = relationship("VendaVendedor", back_populates="vendedor", cascade="all, delete-orphan")
     compras = relationship("CompraVendedor", back_populates="vendedor", cascade="all, delete-orphan")
     metas = relationship("MetaVendedor", back_populates="vendedor", cascade="all, delete-orphan")
 
-    # Produtos onde este vendedor é o vendedor ou o comprador
     produtos_vendidos = relationship(
         "Produto",
         back_populates="vendedor",
