@@ -2,6 +2,7 @@ import uuid
 from datetime import datetime, timezone
 from sqlalchemy import Column, ForeignKey, Numeric, Date, DateTime, UniqueConstraint  # type: ignore[import]
 from sqlalchemy.dialects.postgresql import UUID  # type: ignore[import]
+from sqlalchemy.orm import relationship
 from app.database import Base
 
 
@@ -31,6 +32,8 @@ class MetaVendedor(Base):
     __table_args__ = (
         UniqueConstraint("id_vendedor", "ano_mes", name="uq_meta_vendedor_mes"),
     )
+
+    vendedor = relationship("Vendedor", back_populates="metas")
 
     def __repr__(self):
         return f"<MetaVendedor vendedor={self.id_vendedor} mes={self.ano_mes}>"

@@ -2,6 +2,7 @@ import uuid
 from datetime import datetime, timezone
 from sqlalchemy import Column, ForeignKey, Numeric, DateTime, UniqueConstraint  # type: ignore[import]
 from sqlalchemy.dialects.postgresql import UUID  # type: ignore[import]
+from sqlalchemy.orm import relationship
 from app.database import Base
 
 
@@ -27,6 +28,8 @@ class VendaVendedor(Base):
     __table_args__ = (
         UniqueConstraint("id_pedido", "id_vendedor", name="uq_venda_vendedor"),
     )
+
+    vendedor = relationship("Vendedor", back_populates="vendas")
 
     def __repr__(self):
         return f"<VendaVendedor pedido={self.id_pedido} vendedor={self.id_vendedor}>"

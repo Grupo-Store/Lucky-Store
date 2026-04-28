@@ -1,9 +1,13 @@
-# ORM Models
+# ORM Models — todos importados aqui para o SQLAlchemy resolver os relacionamentos
 from app.models.user import User
+from app.models.loja import Loja
+from app.models.vendedor import Vendedor
+from app.models.cliente import Cliente
 from app.models.rma import Rma, RmaStatus
 from app.models.item_rma import ItemRma, ItemRmaStatus
 from app.models.cotacao import Cotacao
 from app.models.item_cotacao import ItemCotacao
+# Gustavo (pedidos, produtos, custo_pedido, frete — pendente merge)
 from app.models.venda_vendedor import VendaVendedor
 from app.models.compra_vendedor import CompraVendedor
 from app.models.meta_vendedor import MetaVendedor
@@ -12,17 +16,16 @@ from app.models.audit_log import AuditLog, AuditAction
 
 __all__ = [
     "User",
+    "Loja",
+    "Vendedor",
+    "Cliente",
+    "Rma", "RmaStatus",
+    "ItemRma", "ItemRmaStatus",
+    "Cotacao",
+    "ItemCotacao",
     "VendaVendedor",
     "CompraVendedor",
     "MetaVendedor",
-    "StatusHistory",
-    "EntityType",
-    "AuditLog",
-    "AuditAction",
-    "Rma", 
-    "RmaStatus", 
-    "ItemRma", 
-    "ItemRmaStatus", 
-    "Cotacao", 
-    "ItemCotacao"
+    "StatusHistory", "EntityType",
+    "AuditLog", "AuditAction",
 ]
