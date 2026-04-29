@@ -3,7 +3,7 @@
 ## Project Overview
 **Orderly Hub** is a comprehensive order management system for multi-company operations (Lucky Store, BTech, AJJ) with complete audit trail, LGPD compliance, and production-ready architecture.
 
-**Status:** Backend foundation completa e rodando. Servidor FastAPI ativo, banco conectado, auth implementado. ORM models e APIs em desenvolvimento.
+**Status:** Backend foundation completa. ORM models 100% gerados. Auth com JWT, 2FA, blacklist e change-password implementados. Orders CRUD completo com audit log e status history.
 
 **Team:** Rafael, Gustavo, Duda, Peu  
 **Target MVP:** 8-10 weeks  
@@ -135,23 +135,23 @@
 **Priority:** P0 - BLOCKER
 
 **Generate All ORM Models:**
-- [x] Create users model with encryption → **Rafael** ✅ done
-- [ ] Create lojas model with relationships → **Rafael**
-- [ ] Create vendedores model with cascading → **Rafael**
-- [ ] Create clientes model → **Rafael**
-- [ ] Create pedidos model (main table) → **Gustavo**
-- [ ] Create produtos model (order items) → **Gustavo**
-- [ ] Create custo_pedido model → **Gustavo**
-- [ ] Create frete model → **Gustavo**
-- [ ] Create rmas model (returns) → **Duda**
-- [ ] Create item_rma model → **Duda**
-- [ ] Create cotacoes model (quotes) → **Duda**
-- [ ] Create item_cotacao model → **Duda**
-- [ ] Create venda_vendedor model → **Peu**
-- [ ] Create compra_vendedor model → **Peu**
-- [ ] Create meta_vendedor model → **Peu**
-- [ ] Create status_history model (audit) → **Peu**
-- [ ] Create audit_logs model (audit) → **Peu**
+- [x] Create users model with encryption → **Rafael** ✅
+- [x] Create lojas model with relationships → **Rafael** ✅
+- [x] Create vendedores model with cascading → **Rafael** ✅
+- [x] Create clientes model → **Rafael** ✅
+- [x] Create pedidos model (main table) → **Rafael** ✅
+- [x] Create produtos model (order items) → **Gustavo** ✅
+- [x] Create custo_pedido model → **Rafael** ✅
+- [x] Create frete model → **Rafael** ✅
+- [x] Create rmas model (returns) → **Duda** ✅
+- [x] Create item_rma model → **Duda** ✅
+- [x] Create cotacoes model (quotes) → **Duda** ✅
+- [x] Create item_cotacao model → **Duda** ✅
+- [x] Create venda_vendedor model → **Peu** ✅
+- [x] Create compra_vendedor model → **Peu** ✅
+- [x] Create meta_vendedor model → **Peu** ✅
+- [x] Create status_history model (audit) → **Peu** ✅
+- [x] Create audit_logs model (audit) → **Peu** ✅
 
 **Testing ORM:**
 - [ ] All models instantiate correctly → **Gustavo**
@@ -180,8 +180,9 @@
 - [x] Generate JWT on successful login → **Rafael** ✅
 - [x] Set token expiry (1 hour access, 7 days refresh) → **Rafael** ✅
 - [x] Implement token refresh endpoint → **Rafael** ✅
-- [ ] Validate JWT on protected routes (middleware) → **Rafael** ⚠️ PRÓXIMO
-- [ ] Implement logout with token blacklisting → **Rafael**
+- [x] Validate JWT on protected routes (get_current_user dependency) → **Rafael** ✅
+- [x] Implement logout with token blacklisting (in-memory) → **Rafael** ✅
+- [x] POST /api/auth/change-password → **Rafael** ✅
 
 **2FA Implementation:** → **Gustavo**
 - [x] Generate TOTP secret on user registration → **Gustavo** ✅
@@ -189,27 +190,26 @@
 - [x] Return JWT after successful 2FA → **Gustavo** ✅
 - [x] POST /api/auth/2fa/setup → **Gustavo** ✅
 - [x] POST /api/auth/2fa/confirm → **Gustavo** ✅
-- [ ] Integrar QR code real com Google Authenticator → **Gustavo**
+- [x] QR code real em base64 PNG (Google Authenticator) → **Rafael** ✅
 
-**Authorization:** → **Duda**
-- [ ] Implement role-based access control (RBAC)
-  - [ ] Admin (full access, user management) → **Duda**
-  - [ ] Manager (read/write all entities, user management for store) → **Duda**
-  - [ ] Seller (read/write own records only) → **Duda**
-  - [ ] Viewer (read-only access) → **Duda**
-- [ ] Create middleware to check roles → **Duda**
-- [ ] Implement row-level authorization (sellers see only own data) → **Duda**
+**Authorization:** → decisão de produto
+- [x] Todos os usuários são **admin** com acesso total ao dashboard → decisão confirmada ✅
+- [ ] RBAC granular (manager/seller/viewer) → **pós-MVP se necessário**
 
 **API Endpoints:**
-- [x] POST /api/auth/register (admin only) → **Rafael** ✅
+- [x] POST /api/auth/register (bootstrap: sem auth se DB vazio) → **Rafael** ✅
 - [x] POST /api/auth/login → **Rafael** ✅
 - [x] POST /api/auth/verify-2fa → **Gustavo** ✅
 - [x] POST /api/auth/refresh-token → **Rafael** ✅
-- [x] POST /api/auth/logout → **Rafael** ✅
+- [x] POST /api/auth/logout (blacklist token) → **Rafael** ✅
 - [x] GET /api/auth/me (current user) → **Rafael** ✅
 - [x] POST /api/auth/2fa/setup → **Gustavo** ✅
 - [x] POST /api/auth/2fa/confirm → **Gustavo** ✅
-> ⚠️ Endpoints visíveis no Swagger — **testar funcionamento real via Swagger UI antes de avançar**
+- [x] POST /api/auth/change-password → **Rafael** ✅
+- [x] GET /api/users → **Rafael** ✅
+- [x] GET /api/users/me → **Rafael** ✅
+- [x] GET /api/users/:id → **Rafael** ✅
+- [x] PATCH /api/users/:id/deactivate → **Rafael** ✅
 
 **Testing:** → **Peu**
 - [ ] Test registration flow → **Peu**
@@ -271,11 +271,11 @@
 - [ ] Track multiple payment methods per order → **Peu**
 
 **Business Logic Validation:** → **Rafael**
-- [ ] Unique numero_nf per store (UNIQUE constraint enforced) → **Rafael**
-- [ ] One status per order → **Rafael**
-- [ ] Valid status transitions only → **Duda**
+- [x] Unique numero_nf per store (UNIQUE constraint enforced via DB) → **Rafael** ✅
+- [x] One status per order → **Rafael** ✅
+- [x] Status livre (qualquer → qualquer, sem restrição de transição) → **Rafael** ✅
 - [ ] Cannot delete order with RMA (FK constraint) → **Duda**
-- [ ] Financial values must be DECIMAL(12,2) → **Peu**
+- [x] Financial values must be DECIMAL(12,2) → **Rafael** ✅
 
 **Testing:** → **Gustavo + Peu**
 - [ ] Test complete order creation flow → **Gustavo**
@@ -336,18 +336,18 @@
 ### 1.7 Audit & Compliance Features (Days 8-10)
 **Priority:** P0 - BLOCKER (LGPD Requirement)
 
-**Status History Tracking:** → **Peu**
-- [ ] Insert into status_history on every status change → **Peu**
-- [ ] Track entity_type, entity_id, old_status, new_status → **Peu**
-- [ ] Record changed_by (user) and reason → **Peu**
+**Status History Tracking:** → **Rafael** ✅ (implementado junto com Orders)
+- [x] Insert into status_history on every status change → **Rafael** ✅
+- [x] Track entity_type, entity_id, old_status, new_status → **Rafael** ✅
+- [x] Record changed_by (user) and reason → **Rafael** ✅
 - [ ] Verify data in status_history table → **Peu**
 
 **Audit Log Implementation:** → **Rafael**
-- [ ] Insert into audit_logs on CREATE → **Rafael**
-- [ ] Insert into audit_logs on UPDATE → **Rafael**
-  - [ ] Store old_values as JSONB → **Rafael**
-  - [ ] Store new_values as JSONB → **Rafael**
-- [ ] Insert into audit_logs on DELETE (soft delete) → **Rafael**
+- [x] Insert into audit_logs on CREATE → **Rafael** ✅
+- [x] Insert into audit_logs on UPDATE → **Rafael** ✅
+  - [x] Store old_values as JSONB → **Rafael** ✅
+  - [x] Store new_values as JSONB → **Rafael** ✅
+- [x] Insert into audit_logs on DELETE (soft delete) → **Rafael** ✅
 - [ ] Capture ip_address and user_agent → **Rafael**
 - [ ] Set 6+ month retention policy → **Rafael**
 
@@ -1059,12 +1059,15 @@ Any delay in Week 1-3 → Delays Week 10 launch
 - [x] **CRITICAL:** Set up PostgreSQL + conectar banco ✅
 - [x] **CRITICAL:** Servidor FastAPI rodando (localhost:8000/docs) ✅
 - [x] **CRITICAL:** Alembic configurado com baseline ✅
-- [ ] **CRITICAL:** Testar endpoints de auth via Swagger (register → login → 2FA)
-- [ ] **CRITICAL:** Run DATABASE_INIT.sql para verificar todas as 16 tabelas
-- [ ] **CRITICAL:** Run verification checklist (DATABASE_SETUP_GUIDE.md)
-- [ ] **PRÓXIMO:** Gerar os 15 ORM models restantes (1.3)
-- [ ] **PRÓXIMO:** Implementar RBAC middleware (1.4)
-- [ ] Frontend team: Start API client setup
+- [x] **CRÍTICO:** Auth completo (login, 2FA, blacklist, change-password) ✅
+- [x] **CRÍTICO:** ORM models 100% gerados ✅
+- [x] **CRÍTICO:** Orders CRUD completo (6 endpoints) ✅
+- [x] **CRÍTICO:** Audit log + status history integrados aos pedidos ✅
+- [ ] **PRÓXIMO:** Merge feature/orm-models → develop
+- [ ] **PRÓXIMO:** Merge feature/auth-middleware → develop (PR aberto)
+- [ ] **PRÓXIMO:** Push + PR feature/orders-api → develop
+- [ ] **PRÓXIMO:** Quotes & RMA API (1.6) → Gustavo + Duda
+- [ ] **PRÓXIMO:** Frontend team: API client setup (2.1)
 
 ---
 
@@ -1087,7 +1090,7 @@ Any delay in Week 1-3 → Delays Week 10 launch
 
 ---
 
-**Last Updated:** April 26, 2026  
-**Status:** 🚀 Backend foundation rodando — fase de ORM models + RBAC iniciando  
-**Next Milestone:** Auth testado + 15 ORM models gerados  
+**Last Updated:** April 29, 2026  
+**Status:** 🚀 ORM models 100% + Auth completo + Orders CRUD funcionando  
+**Next Milestone:** Merge branches → develop; Quotes & RMA API (1.6)  
 **MVP Target:** Week 10 (8-10 weeks)

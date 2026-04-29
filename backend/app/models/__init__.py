@@ -8,6 +8,7 @@ from app.models.item_rma import ItemRma, ItemRmaStatus
 from app.models.cotacao import Cotacao
 from app.models.item_cotacao import ItemCotacao
 from app.models.pedido import Pedido, PedidoFormaPagamento, CustoPedido, Frete
+from app.models.produto import Produto
 from app.models.venda_vendedor import VendaVendedor
 from app.models.compra_vendedor import CompraVendedor
 from app.models.meta_vendedor import MetaVendedor
@@ -29,4 +30,5 @@ __all__ = [
     "StatusHistory", "EntityType",
     "AuditLog", "AuditAction",
     "Pedido", "PedidoFormaPagamento", "CustoPedido", "Frete",
+    "Produto",
 ]
