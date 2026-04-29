@@ -43,6 +43,7 @@ class Pedido(Base):
     formas_pagamento = relationship("PedidoFormaPagamento", back_populates="pedido", cascade="all, delete-orphan")
     custo = relationship("CustoPedido", back_populates="pedido", uselist=False, cascade="all, delete-orphan")
     fretes = relationship("Frete", back_populates="pedido", cascade="all, delete-orphan")
+    produtos = relationship("Produto", back_populates="pedido", cascade="all, delete-orphan")
 
     def __repr__(self):
         return f"<Pedido {self.numero_os} status={self.status}>"
