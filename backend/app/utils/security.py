@@ -1,109 +1,70 @@
-from datetime import datetime, timedelta
+import io
+import base64
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 from passlib.context import CryptContext
 from jose import JWTError, jwt
 import pyotp
+import qrcode
 from app.config import get_settings
 
 settings = get_settings()
 
-# Password hashing
-pwd_context = CryptContext(
-    schemes=["bcrypt"],
-    deprecated="auto",
-    bcrypt__rounds=12,
-)
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto", bcrypt__rounds=12)
 
 
 def hash_password(password: str) -> str:
-    """Hash password using bcrypt."""
     return pwd_context.hash(password)
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
-    """Verify password against hash."""
     return pwd_context.verify(plain_password, hashed_password)
 
 
-def create_access_token(
-    subject: str,
-    expires_delta: Optional[timedelta] = None
-) -> str:
-    """Create JWT access token."""
-    if expires_delta:
-        expire = datetime.utcnow() + expires_delta
-    else:
-        expire = datetime.utcnow() + timedelta(
-            minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES
-        )
-    
-    to_encode = {
-        "sub": subject,
-        "exp": expire,
-        "type": "access"
-    }
-    
-    encoded_jwt = jwt.encode(
-        to_encode,
-        settings.JWT_SECRET,
-        algorithm=settings.JWT_ALGORITHM
+def create_access_token(subject: str, expires_delta: Optional[timedelta] = None) -> str:
+    expire = datetime.now(timezone.utc) + (
+        expires_delta or timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
     )
-    
-    return encoded_jwt
+    payload = {"sub": subject, "exp": expire, "type": "access"}
+    return jwt.encode(payload, settings.JWT_SECRET, algorithm=settings.JWT_ALGORITHM)
 
 
 def create_refresh_token(subject: str) -> str:
-    """Create JWT refresh token."""
-    expire = datetime.utcnow() + timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS)
-    
-    to_encode = {
-        "sub": subject,
-        "exp": expire,
-        "type": "refresh"
-    }
-    
-    encoded_jwt = jwt.encode(
-        to_encode,
-        settings.JWT_SECRET,
-        algorithm=settings.JWT_ALGORITHM
-    )
-    
-    return encoded_jwt
+    expire = datetime.now(timezone.utc) + timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS)
+    payload = {"sub": subject, "exp": expire, "type": "refresh"}
+    return jwt.encode(payload, settings.JWT_SECRET, algorithm=settings.JWT_ALGORITHM)
 
 
-def verify_token(token: str) -> Optional[str]:
-    """Verify JWT token and return subject."""
+def verify_token(token: str, expected_type: str = "access") -> Optional[str]:
     try:
-        payload = jwt.decode(
-            token,
-            settings.JWT_SECRET,
-            algorithms=[settings.JWT_ALGORITHM]
-        )
-        user_id: str = payload.get("sub")
-        
-        if user_id is None:
+        payload = jwt.decode(token, settings.JWT_SECRET, algorithms=[settings.JWT_ALGORITHM])
+        if payload.get("type") != expected_type:
             return None
-        
-        return user_id
+        user_id: str = payload.get("sub")
+        return user_id or None
     except JWTError:
         return None
 
 
 def generate_totp_secret() -> str:
-    """Generate TOTP secret for 2FA."""
     return pyotp.random_base32()
 
 
 def verify_totp(secret: str, token: str) -> bool:
-    """Verify TOTP token."""
-    totp = pyotp.TOTP(secret)
-    return totp.verify(token, valid_window=settings.TOTP_WINDOW)
+    return pyotp.TOTP(secret).verify(token, valid_window=settings.TOTP_WINDOW)
 
 
 def get_totp_provisioning_uri(secret: str, email: str) -> str:
-    """Get provisioning URI for TOTP setup."""
-    totp = pyotp.TOTP(secret)
-    return totp.provisioning_uri(
-        name=email,
-        issuer_name=settings.TOTP_ISSUER
-    )
+    return pyotp.TOTP(secret).provisioning_uri(name=email, issuer_name=settings.TOTP_ISSUER)
+
+
+def generate_qr_code_base64(data: str) -> str:
+    """Returns a data URI (data:image/png;base64,...) ready for use in <img src>."""
+    qr = qrcode.QRCode(version=1, box_size=10, border=4)
+    qr.add_data(data)
+    qr.make(fit=True)
+    img = qr.make_image(fill_color="black", back_color="white")
+    buffer = io.BytesIO()
+    img.save(buffer, format="PNG")
+    b64 = base64.b64encode(buffer.getvalue()).decode()
+    return f"data:image/png;base64,{b64}"

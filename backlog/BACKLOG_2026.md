@@ -174,14 +174,14 @@
 - [x] Create users table with password hashing → **Rafael** ✅
 - [x] Implement registration endpoint (admin only) → **Rafael** ✅
 - [x] Implement login endpoint → **Rafael** ✅
-- [ ] Implement password reset flow → **Rafael**
+- [x] Implement password reset flow (change-password endpoint) → **Rafael** ✅
 
 **JWT Implementation:** → **Rafael**
 - [x] Generate JWT on successful login → **Rafael** ✅
 - [x] Set token expiry (1 hour access, 7 days refresh) → **Rafael** ✅
 - [x] Implement token refresh endpoint → **Rafael** ✅
-- [ ] Validate JWT on protected routes (middleware) → **Rafael** ⚠️ PRÓXIMO
-- [ ] Implement logout with token blacklisting → **Rafael**
+- [x] Validate JWT on protected routes (middleware) → **Rafael** ✅
+- [x] Implement logout with token blacklisting → **Rafael** ✅
 
 **2FA Implementation:** → **Gustavo**
 - [x] Generate TOTP secret on user registration → **Gustavo** ✅
@@ -189,16 +189,12 @@
 - [x] Return JWT after successful 2FA → **Gustavo** ✅
 - [x] POST /api/auth/2fa/setup → **Gustavo** ✅
 - [x] POST /api/auth/2fa/confirm → **Gustavo** ✅
-- [ ] Integrar QR code real com Google Authenticator → **Gustavo**
+- [x] Integrar QR code real com Google Authenticator → **Rafael** ✅
 
-**Authorization:** → **Duda**
-- [ ] Implement role-based access control (RBAC)
-  - [ ] Admin (full access, user management) → **Duda**
-  - [ ] Manager (read/write all entities, user management for store) → **Duda**
-  - [ ] Seller (read/write own records only) → **Duda**
-  - [ ] Viewer (read-only access) → **Duda**
-- [ ] Create middleware to check roles → **Duda**
-- [ ] Implement row-level authorization (sellers see only own data) → **Duda**
+**Authorization:** → simplificado (todos os usuários são admins, acesso total)
+- [x] Implement role-based access control (RBAC) → simplificado: JWT válido = acesso total ✅
+- [x] Create middleware to check roles → `get_current_user` em `core/dependencies.py` ✅
+- [x] Implement row-level authorization → N/A (todos veem tudo) ✅
 
 **API Endpoints:**
 - [x] POST /api/auth/register (admin only) → **Rafael** ✅
@@ -209,22 +205,26 @@
 - [x] GET /api/auth/me (current user) → **Rafael** ✅
 - [x] POST /api/auth/2fa/setup → **Gustavo** ✅
 - [x] POST /api/auth/2fa/confirm → **Gustavo** ✅
-> ⚠️ Endpoints visíveis no Swagger — **testar funcionamento real via Swagger UI antes de avançar**
+- [x] POST /api/auth/change-password → **Rafael** ✅
+- [x] GET /api/users → **Rafael** ✅
+- [x] GET /api/users/{id} → **Rafael** ✅
+- [x] PATCH /api/users/{id}/deactivate → **Rafael** ✅
 
-**Testing:** → **Peu**
+**Testing:** → **Peu** ⚠️ pendente
 - [ ] Test registration flow → **Peu**
 - [ ] Test login + 2FA flow → **Peu**
 - [ ] Test token refresh → **Peu**
-- [ ] Test authorization (seller can't see other seller's data) → **Peu**
-- [ ] Test role-based access → **Peu**
+- [ ] Test that revoked tokens are rejected after logout → **Peu**
+- [ ] Test change-password flow → **Peu**
 
 **Effort:** 1 backend dev, 3-4 days  
 **Success Criteria:**
 - ✅ User can register (admin)
 - ✅ User can login with email/password
-- ✅ 2FA works with authenticator app
+- ✅ 2FA works with authenticator app (QR code real)
 - ✅ Tokens refresh automatically
-- ✅ Role-based authorization enforced
+- ✅ JWT middleware protects all routes
+- ✅ Logout revokes token
 
 ---
 
