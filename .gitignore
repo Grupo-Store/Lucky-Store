@@ -39,3 +39,4 @@ backend/.env
 .env
 .env.*
 !.env.example
+.specs/
