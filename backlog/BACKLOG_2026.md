@@ -275,7 +275,7 @@
 - [x] Unique numero_nf per store (UNIQUE constraint enforced via DB) → **Rafael** ✅
 - [x] One status per order → **Rafael** ✅
 - [x] Status livre (qualquer → qualquer, sem restrição de transição) → **Rafael** ✅
-- [ ] Cannot delete order with RMA (FK constraint) → **Duda**
+- [x] Cannot delete order with RMA (FK constraint) → **Duda** ✅
 - [x] Financial values must be DECIMAL(12,2) → **Rafael** ✅
 
 **Testing:** → **Gustavo + Peu**

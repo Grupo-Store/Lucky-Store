@@ -6,6 +6,7 @@ from uuid import UUID
 from sqlalchemy.orm import Session
 from sqlalchemy import asc, desc
 from app.models.pedido import Pedido, PedidoFormaPagamento, CustoPedido
+from app.models.rma import Rma
 from app.models.status_history import StatusHistory, EntityType
 from app.models.audit_log import AuditLog, AuditAction
 from app.schemas.pedido import PedidoCreate, PedidoUpdate
@@ -195,6 +196,11 @@ class PedidoService:
     @staticmethod
     def soft_delete(db: Session, pedido_id: UUID, current_user_id: UUID) -> None:
         pedido = PedidoService.get_by_id(db, pedido_id)
+
+        has_rma = db.query(Rma).filter(Rma.id_pedido_origem == pedido_id).first()
+        if has_rma:
+            raise BusinessLogicException("Pedido não pode ser excluído pois possui RMA(s) vinculado(s)")
+
         pedido.deleted_at = datetime.now(timezone.utc)
 
         _audit(db, AuditAction.DELETE, pedido.id, current_user_id,
