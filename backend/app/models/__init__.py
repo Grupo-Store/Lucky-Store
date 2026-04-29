@@ -7,7 +7,7 @@ from app.models.rma import Rma, RmaStatus
 from app.models.item_rma import ItemRma, ItemRmaStatus
 from app.models.cotacao import Cotacao
 from app.models.item_cotacao import ItemCotacao
-# Gustavo (pedidos, produtos, custo_pedido, frete — pendente merge)
+from app.models.pedido import Pedido, PedidoFormaPagamento, CustoPedido, Frete
 from app.models.venda_vendedor import VendaVendedor
 from app.models.compra_vendedor import CompraVendedor
 from app.models.meta_vendedor import MetaVendedor
@@ -28,4 +28,5 @@ __all__ = [
     "MetaVendedor",
     "StatusHistory", "EntityType",
     "AuditLog", "AuditAction",
+    "Pedido", "PedidoFormaPagamento", "CustoPedido", "Frete",
 ]

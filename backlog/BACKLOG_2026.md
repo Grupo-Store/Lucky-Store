@@ -232,29 +232,29 @@
 **Priority:** P0 - BLOCKER
 
 **Orders CRUD:** → **Rafael**
-- [ ] POST /api/orders (create new order) → **Rafael**
-  - [ ] Validate input with Pydantic → **Rafael**
-  - [ ] Calculate economia (valor_projetado - valor_compra) → **Rafael**
-  - [ ] Create in pedidos table → **Rafael**
-  - [ ] Track in audit_logs → **Rafael**
-- [ ] GET /api/orders (list with filters, pagination) → **Rafael**
-  - [ ] Filter by status, date range, vendor, store → **Rafael**
-  - [ ] Pagination (page, limit) → **Rafael**
-  - [ ] Sorting (by date, status, value) → **Rafael**
-  - [ ] Exclude soft-deleted records (WHERE deleted_at IS NULL) → **Rafael**
-- [ ] GET /api/orders/:id (get order details) → **Rafael**
-  - [ ] Return complete order with items and costs → **Rafael**
-  - [ ] Include status history → **Rafael**
-- [ ] PUT /api/orders/:id (update order) → **Rafael**
-  - [ ] Validate business rules → **Rafael**
-  - [ ] Track changes in audit_logs → **Rafael**
-- [ ] PATCH /api/orders/:id/status (change status only) → **Duda**
-  - [ ] Validate status transition is allowed → **Duda**
-  - [ ] Record in status_history table → **Duda**
-  - [ ] Track in audit_logs → **Duda**
-- [ ] DELETE /api/orders/:id (soft delete) → **Rafael**
-  - [ ] Set deleted_at = NOW() → **Rafael**
-  - [ ] Record deletion in audit_logs → **Rafael**
+- [x] POST /api/pedidos (create new order) → **Rafael** ✅
+  - [x] Validate input with Pydantic → **Rafael** ✅
+  - [x] Calculate economia (valor_venda - custo_produto_final - custo_servico) → **Rafael** ✅
+  - [x] Create in pedidos table → **Rafael** ✅
+  - [x] Track in audit_logs → **Rafael** ✅
+- [x] GET /api/pedidos (list with filters, pagination) → **Rafael** ✅
+  - [x] Filter by status, date range, vendor, store → **Rafael** ✅
+  - [x] Pagination (page, limit) → **Rafael** ✅
+  - [x] Sorting (by date, status, value) → **Rafael** ✅
+  - [x] Exclude soft-deleted records (WHERE deleted_at IS NULL) → **Rafael** ✅
+- [x] GET /api/pedidos/:id (get order details) → **Rafael** ✅
+  - [x] Return complete order with items and costs → **Rafael** ✅
+  - [x] Include status history → **Rafael** ✅
+- [x] PUT /api/pedidos/:id (update order) → **Rafael** ✅
+  - [x] Validate business rules → **Rafael** ✅
+  - [x] Track changes in audit_logs → **Rafael** ✅
+- [x] PATCH /api/pedidos/:id/status (change status only) → **Rafael** ✅
+  - [x] Validate status transition is allowed → **Rafael** ✅
+  - [x] Record in status_history table → **Rafael** ✅
+  - [x] Track in audit_logs → **Rafael** ✅
+- [x] DELETE /api/pedidos/:id (soft delete) → **Rafael** ✅
+  - [x] Set deleted_at = NOW() → **Rafael** ✅
+  - [x] Record deletion in audit_logs → **Rafael** ✅
 
 **Order Items:** → **Gustavo**
 - [ ] POST /api/orders/:id/items (add item to order) → **Gustavo**

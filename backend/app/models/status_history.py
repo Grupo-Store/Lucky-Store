@@ -23,7 +23,7 @@ class StatusHistory(Base):
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
 
     # Referência da entidade — sem FK; entity_type + entity_id identificam o registro
-    entity_type = Column(SQLEnum(EntityType), nullable=False)
+    entity_type = Column(SQLEnum(EntityType, native_enum=False, values_callable=lambda x: [e.value for e in x]), nullable=False)
     entity_id = Column(UUID(as_uuid=True), nullable=False)
 
     # Transição de status
