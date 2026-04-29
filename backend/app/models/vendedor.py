@@ -33,16 +33,5 @@ class Vendedor(Base):
     compras = relationship("CompraVendedor", back_populates="vendedor", cascade="all, delete-orphan")
     metas = relationship("MetaVendedor", back_populates="vendedor", cascade="all, delete-orphan")
 
-    produtos_vendidos = relationship(
-        "Produto",
-        back_populates="vendedor",
-        foreign_keys="Produto.id_vendedor",
-    )
-    produtos_comprados = relationship(
-        "Produto",
-        back_populates="comprador",
-        foreign_keys="Produto.id_comprador",
-    )
-
     def __repr__(self):
         return f"<Vendedor {self.nome}>"
