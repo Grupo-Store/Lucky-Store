@@ -350,6 +350,54 @@ export function QuoteModal({ open, onClose, quote, onSave, onDelete, nextIndex }
           </div>
         </section>
 
+        {/* ============== 5. IMPOSTOS ============== */}
+        <section className="border rounded-lg p-4">
+          <h3 className="text-sm font-bold text-secondary uppercase tracking-wide mb-3">Impostos</h3>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <Label>Imposto Lucky Store (%)</Label>
+              <Input type="number" step="0.01" min={0} className="bg-white border-border"
+                value={form.taxLucky ?? 0}
+                onChange={e => set('taxLucky', parseFloat(e.target.value) || 0)}
+                onKeyDown={handleEnterBlur} />
+            </div>
+            <div>
+              <Label>Imposto BTech (%)</Label>
+              <Input type="number" step="0.01" min={0} className="bg-white border-border"
+                value={form.taxBTech ?? 0}
+                onChange={e => set('taxBTech', parseFloat(e.target.value) || 0)}
+                onKeyDown={handleEnterBlur} />
+            </div>
+          </div>
+        </section>
+
+        {/* ============== 6. RESUMO DE LUCRATIVIDADE ============== */}
+        <section className="border-2 border-secondary/40 rounded-lg p-4 bg-secondary/5">
+          <h3 className="text-sm font-bold text-secondary uppercase tracking-wide mb-3">Resumo de Lucratividade</h3>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div>
+              <Label className="text-xs text-muted-foreground">Margem</Label>
+              <Input readOnly className="bg-white border-border font-bold text-secondary"
+                value={`${margin.toFixed(2)}%`} />
+            </div>
+            <div>
+              <Label className="text-xs text-muted-foreground">Lucro Bruto</Label>
+              <Input readOnly className="bg-white border-border font-bold text-secondary"
+                value={toBRL(grossProfit)} />
+            </div>
+            <div>
+              <Label className="text-xs text-muted-foreground">Lucro BTech</Label>
+              <Input readOnly className="bg-white border-border font-bold text-secondary"
+                value={toBRL(profitBTech)} />
+            </div>
+            <div>
+              <Label className="text-xs text-muted-foreground">Lucro Lucky</Label>
+              <Input readOnly className="bg-white border-border font-bold text-secondary"
+                value={toBRL(profitLucky)} />
+            </div>
+          </div>
+        </section>
+
         <div className="flex justify-between items-center print:hidden">
           <div>
             {isEdit && onDelete && (
