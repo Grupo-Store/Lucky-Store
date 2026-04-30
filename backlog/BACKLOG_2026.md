@@ -3,7 +3,7 @@
 ## Project Overview
 **Orderly Hub** is a comprehensive order management system for multi-company operations (Lucky Store, BTech, AJJ) with complete audit trail, LGPD compliance, and production-ready architecture.
 
-**Status:** Backend foundation completa. ORM models 100% gerados. Auth com JWT, 2FA, blacklist e change-password implementados. Orders CRUD completo com audit log e status history.
+**Status:** Auth (8 endpoints) ✅ | Orders CRUD (6 endpoints) ✅ | RMA API (5 endpoints) ✅ | Quotes API ❌ pendente | Users management ❌ pendente. Cotação V2 + seed data completo.
 
 **Team:** Rafael, Gustavo, Duda, Peu  
 **Target MVP:** 8-10 weeks  
@@ -38,6 +38,40 @@
 | 2.6 Dashboard | KPIs backend | Goals + Projections | Financial backend | Dashboard frontend |
 | 3.x Testing | Segurança + perf | Backend tests | Frontend tests | E2E |
 | 4.x Deploy | CI/CD | Railway PostgreSQL | Monitoring | Vercel |
+
+---
+
+## What's New in This Update (April 30, 2026)
+
+✅ **Produto ORM Model criado:**
+- `backend/app/models/produto.py` com todos os campos (descricao, quantidade, valor_projetado, valor_compra, economia, fornecedor, datas, status)
+- Relacionamentos com Pedido (cascade delete) e dois Vendedores (vendedor + comprador)
+
+✅ **Business rules & bugfixes Orders API:**
+- Status livre: qualquer status pode ir para qualquer outro (sem restrição de transição)
+- Cannot delete order with RMA: `soft_delete` lança `BusinessLogicException` se existir Rma vinculado
+- Status values corrigidos para inglês (`To Buy`, `Bought`, etc.) para bater com constraint do DB
+- `status_history.entity_type`: SQLEnum com `values_callable` para armazenar lowercase
+- `bcrypt` rebaixado de 4.x → 3.2.2 (incompatibilidade com passlib causava 401 no login)
+
+✅ **Cotação V2 — campos alinhados com frontend:**
+- `cotacoes`: adicionados `b2b_company`, `observacao`, `pct_imposto_lucky`, `pct_imposto_btech`
+- `item_cotacao`: adicionados `valor_fechamento`, `valor_total_fechamento` (gerado pelo DB), `fornecedor`
+- `MIGRATION_COTACAO_V2.sql` pronto para rodar no pgAdmin
+- ORM models `cotacao.py` e `item_cotacao.py` recriados com todos os campos
+
+✅ **Bugfix RMA enums (CheckViolation):**
+- `RmaStatus` e `ItemRmaStatus`: adicionado `values_callable` ao `SQLEnum`
+- Sem isso, SQLAlchemy armazenava `REGISTERED` em vez de `Registered`, violando a constraint
+
+✅ **Seed data completo (`database/seed_mock_data.sql`):**
+- TRUNCATE CASCADE + 3 lojas, 3 vendedores, 3 clientes, 1 admin user
+- 6 pedidos cross-loja + 10 produtos mock com status alinhados
+- custo_pedido, pedido_forma_pagamento (lowercase), status_history completo
+
+✅ **PRs abertos:**
+- `feature/orders-api` → `develop`
+- `feature/orm-models` → `develop`
 
 ---
 
@@ -205,11 +239,11 @@
 - [x] GET /api/auth/me (current user) → **Rafael** ✅
 - [x] POST /api/auth/2fa/setup → **Gustavo** ✅
 - [x] POST /api/auth/2fa/confirm → **Gustavo** ✅
-- [x] POST /api/auth/change-password → **Rafael** ✅
-- [x] GET /api/users → **Rafael** ✅
-- [x] GET /api/users/me → **Rafael** ✅
-- [x] GET /api/users/:id → **Rafael** ✅
-- [x] PATCH /api/users/:id/deactivate → **Rafael** ✅
+- [ ] POST /api/auth/change-password → **Rafael** (não encontrado nas rotas)
+- [ ] GET /api/users → **Rafael** (rota não implementada)
+- [ ] GET /api/users/me → **Rafael** (rota não implementada)
+- [ ] GET /api/users/:id → **Rafael** (rota não implementada)
+- [ ] PATCH /api/users/:id/deactivate → **Rafael** (rota não implementada)
 
 **Testing:** → **Peu** ⚠️ pendente
 - [ ] Test registration flow → **Peu**
@@ -312,12 +346,12 @@
 - [ ] POST /api/quotes/:id/items → **Peu**
 - [ ] DELETE /api/quotes/:id/items/:itemId → **Peu**
 
-**RMA API:** → **Duda**
-- [ ] POST /api/rma (create from existing order) → **Duda**
-- [ ] GET /api/rma (list RMA requests) → **Duda**
-- [ ] GET /api/rma/:id (RMA details) → **Duda**
-- [ ] PATCH /api/rma/:id/items/:itemId/status → **Duda**
-- [ ] PATCH /api/rma/:id/close (complete RMA) → **Duda**
+**RMA API:** → **Duda** ✅ COMPLETO
+- [x] POST /api/rma (create from existing order) → **Duda** ✅
+- [x] GET /api/rma (list RMA requests) → **Duda** ✅
+- [x] GET /api/rma/:id (RMA details) → **Duda** ✅
+- [x] PATCH /api/rma/:id/items/:itemId/status → **Duda** ✅
+- [x] PATCH /api/rma/:id/close (complete RMA) → **Duda** ✅
 
 **Testing:** → **Peu**
 - [ ] Quote creation works → **Peu**
@@ -1064,9 +1098,17 @@ Any delay in Week 1-3 → Delays Week 10 launch
 - [x] **CRÍTICO:** ORM models 100% gerados ✅
 - [x] **CRÍTICO:** Orders CRUD completo (6 endpoints) ✅
 - [x] **CRÍTICO:** Audit log + status history integrados aos pedidos ✅
-- [ ] **PRÓXIMO:** Merge feature/orm-models → develop
-- [ ] **PRÓXIMO:** Merge feature/auth-middleware → develop (PR aberto)
-- [ ] **PRÓXIMO:** Push + PR feature/orders-api → develop
+- [x] **FEITO:** Push + PR feature/orders-api → develop ✅
+- [x] **FEITO:** Produto ORM model criado ✅
+- [x] **FEITO:** Cannot delete order with RMA implementado ✅
+- [x] **FEITO:** Status livre (qualquer → qualquer) implementado ✅
+- [x] **FEITO:** Cotação V2 — novos campos do frontend ✅
+- [x] **FEITO:** RmaStatus + ItemRmaStatus enum fix ✅
+- [x] **FEITO:** Seed data completo com 10 produtos mock ✅
+- [ ] **PRÓXIMO:** Merge feature/orm-models → develop (aguardando review)
+- [ ] **PRÓXIMO:** Merge feature/auth-middleware → develop (aguardando review)
+- [ ] **PRÓXIMO:** Merge feature/orders-api → develop (aguardando review)
+- [ ] **PRÓXIMO:** Rodar MIGRATION_COTACAO_V2.sql no banco de produção
 - [ ] **PRÓXIMO:** Quotes & RMA API (1.6) → Gustavo + Duda
 - [ ] **PRÓXIMO:** Frontend team: API client setup (2.1)
 
@@ -1091,7 +1133,7 @@ Any delay in Week 1-3 → Delays Week 10 launch
 
 ---
 
-**Last Updated:** April 29, 2026  
-**Status:** 🚀 ORM models 100% + Auth completo + Orders CRUD funcionando  
-**Next Milestone:** Merge branches → develop; Quotes & RMA API (1.6)  
+**Last Updated:** April 30, 2026  
+**Status:** 🚀 19 endpoints implementados — Auth (8) + Orders (6) + RMA (5). Quotes API e Users management pendentes.  
+**Next Milestone:** Merge PRs → develop; Quotes API (Gustavo); Users management endpoints (Rafael)  
 **MVP Target:** Week 10 (8-10 weeks)

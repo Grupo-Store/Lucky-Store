@@ -69,5 +69,5 @@ class TOTPVerifyResponse(BaseModel):
 
 
 class ChangePasswordRequest(BaseModel):
-    old_password: str
+    current_password: str
     new_password: str
