@@ -158,7 +158,12 @@ export function QuoteModal({ open, onClose, quote, onSave, onDelete, nextIndex }
               <Input readOnly className="bg-muted border-border font-semibold" value={form.index} />
             </div>
             <div>
-              <Label>Cliente *</Label>
+              <Label>Empresa</Label>
+              <Input className="bg-white border-border" value={form.b2bCompany || ''}
+                onChange={e => set('b2bCompany', e.target.value)} onKeyDown={handleEnterBlur} />
+            </div>
+            <div>
+              <Label>Cliente</Label>
               <Input className="bg-white border-border" value={form.customer}
                 onChange={e => set('customer', e.target.value)} onKeyDown={handleEnterBlur} />
             </div>
