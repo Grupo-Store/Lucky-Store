@@ -93,7 +93,7 @@ export function AddOrderChooser({ open, onClose, quotes, onChooseNew, onChooseFr
     if (!picked) return;
     const chosen = (picked.items || []).filter(i => selectedItemIds.has(i.id));
     const prefill: OrderPrefill = {
-      customer: picked.customer,
+      customer: (picked.b2bCompany && picked.b2bCompany.trim()) ? picked.b2bCompany : picked.customer,
       cnpj: picked.cnpj,
       company: picked.company,
       seller: picked.seller,
