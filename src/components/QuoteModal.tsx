@@ -335,11 +335,8 @@ export function QuoteModal({ open, onClose, quote, onSave, onDelete, nextIndex }
                     onChange={d => setPhase('closed', { date: d })} />
                 </div>
                 <div>
-                  <Label className="text-xs">Valor (R$)</Label>
-                  <CurrencyInput
-                    value={form.phases.closed.value || 0}
-                    onChange={n => setPhase('closed', { value: n })}
-                  />
+                  <Label className="text-xs">Valor (R$) — auto</Label>
+                  <Input readOnly className="bg-muted border-border font-semibold" value={toBRL(totalRevenue)} />
                 </div>
               </div>
             ))}
