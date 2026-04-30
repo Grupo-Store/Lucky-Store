@@ -100,6 +100,28 @@ export function QuoteModal({ open, onClose, quote, onSave, onDelete, nextIndex }
   };
   const removeItem = (id: string) => set('items', (form.items || []).filter(i => i.id !== id));
 
+  /* ---------- Derived totals (auto-calculated) ---------- */
+  const items = form.items || [];
+  const totalCost = items.reduce((s, i) => s + (i.quoteValue || 0) * (i.quantity || 0), 0);
+  const totalRevenue = items.reduce((s, i) => s + (i.closingValue || 0) * (i.quantity || 0), 0);
+  const taxLucky = form.taxLucky || 0;
+  const taxBTech = form.taxBTech || 0;
+  const margin = totalCost > 0 ? ((totalRevenue / totalCost) - 1) * 100 : 0;
+  const grossProfit = totalRevenue - totalCost;
+  const profitBTech = (totalRevenue * ((100 - taxBTech) / 100)) - totalCost;
+  const profitLucky = (totalRevenue * ((100 - taxLucky) / 100)) - totalCost;
+
+  // Auto-sync closed phase value to sum of all Valor Final
+  useEffect(() => {
+    if ((form.phases.closed.value || 0) !== totalRevenue) {
+      setForm(prev => ({
+        ...prev,
+        phases: { ...prev.phases, closed: { ...prev.phases.closed, value: totalRevenue } },
+      }));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [totalRevenue]);
+
   const handleSave = () => {
     onSave({ ...form, id: form.id || crypto.randomUUID(), createdAt: form.createdAt || Date.now() });
     onClose();
