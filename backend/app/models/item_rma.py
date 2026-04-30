@@ -27,7 +27,7 @@ class ItemRma(Base):
 
     descricao = Column(Text, nullable=False)
     quantidade = Column(Integer, nullable=False)
-    status = Column(SQLEnum(ItemRmaStatus, native_enum=False), nullable=False, default=ItemRmaStatus.NOT_RECEIVED)
+    status = Column(SQLEnum(ItemRmaStatus, native_enum=False, values_callable=lambda x: [e.value for e in x]), nullable=False, default=ItemRmaStatus.NOT_RECEIVED)
     consertado_por = Column(String(255), nullable=True)
 
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
