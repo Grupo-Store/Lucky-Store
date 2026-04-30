@@ -252,35 +252,47 @@ export function QuoteModal({ open, onClose, quote, onSave, onDelete, nextIndex }
             </Button>
           </div>
           <div className="space-y-2">
-            {(form.items || []).map(item => (
-              <div key={item.id} className="grid grid-cols-12 gap-2 items-center border rounded-md p-2 bg-muted/20">
-                <Input placeholder="Nome do Item" className="col-span-3 bg-white border-border"
-                  value={item.name} onChange={e => updateItem(item.id, 'name', e.target.value)} onKeyDown={handleEnterBlur} />
-                <Input type="number" min={1} placeholder="Qtd" className="col-span-1 bg-white border-border"
-                  value={item.quantity} onChange={e => updateItem(item.id, 'quantity', parseInt(e.target.value) || 1)} onKeyDown={handleEnterBlur} />
-                <div className="col-span-2">
-                  <CurrencyInput value={item.quoteValue || 0} onChange={n => updateItem(item.id, 'quoteValue', n)} />
+            {(form.items || []).map(item => {
+              const lineCost = (item.quoteValue || 0) * (item.quantity || 0);
+              const lineFinal = (item.closingValue || 0) * (item.quantity || 0);
+              return (
+                <div key={item.id} className="grid grid-cols-16 gap-2 items-center border rounded-md p-2 bg-muted/20" style={{ gridTemplateColumns: 'repeat(16, minmax(0, 1fr))' }}>
+                  <Input placeholder="Nome do Item" className="bg-white border-border" style={{ gridColumn: 'span 3' }}
+                    value={item.name} onChange={e => updateItem(item.id, 'name', e.target.value)} onKeyDown={handleEnterBlur} />
+                  <Input type="number" min={1} placeholder="Qtd" className="bg-white border-border" style={{ gridColumn: 'span 1' }}
+                    value={item.quantity} onChange={e => updateItem(item.id, 'quantity', parseInt(e.target.value) || 1)} onKeyDown={handleEnterBlur} />
+                  <div style={{ gridColumn: 'span 2' }}>
+                    <CurrencyInput value={item.quoteValue || 0} onChange={n => updateItem(item.id, 'quoteValue', n)} />
+                  </div>
+                  <div style={{ gridColumn: 'span 2' }}>
+                    <Input readOnly className="bg-muted border-border font-semibold" value={toBRL(lineCost)} />
+                  </div>
+                  <div style={{ gridColumn: 'span 2' }}>
+                    <CurrencyInput value={item.closingValue || 0} onChange={n => updateItem(item.id, 'closingValue', n)} />
+                  </div>
+                  <div style={{ gridColumn: 'span 2' }}>
+                    <Input readOnly className="bg-muted border-border font-semibold" value={toBRL(lineFinal)} />
+                  </div>
+                  <Input placeholder="Fornecedor" className="bg-white border-border" style={{ gridColumn: 'span 3' }}
+                    value={item.supplier} onChange={e => updateItem(item.id, 'supplier', e.target.value)} onKeyDown={handleEnterBlur} />
+                  <Button variant="ghost" size="icon" style={{ gridColumn: 'span 1' }} onClick={() => removeItem(item.id)}>
+                    <Trash2 className="h-4 w-4 text-destructive" />
+                  </Button>
                 </div>
-                <div className="col-span-2">
-                  <CurrencyInput value={item.closingValue || 0} onChange={n => updateItem(item.id, 'closingValue', n)} />
-                </div>
-                <Input placeholder="Fornecedor" className="col-span-3 bg-white border-border"
-                  value={item.supplier} onChange={e => updateItem(item.id, 'supplier', e.target.value)} onKeyDown={handleEnterBlur} />
-                <Button variant="ghost" size="icon" className="col-span-1" onClick={() => removeItem(item.id)}>
-                  <Trash2 className="h-4 w-4 text-destructive" />
-                </Button>
-              </div>
-            ))}
+              );
+            })}
             {(form.items || []).length === 0 && (
               <p className="text-sm text-muted-foreground text-center py-4">Nenhum item adicionado</p>
             )}
             {(form.items || []).length > 0 && (
-              <div className="grid grid-cols-12 gap-2 px-2 text-[10px] uppercase tracking-wide text-muted-foreground font-semibold">
-                <span className="col-span-3">Nome</span>
-                <span className="col-span-1">Qtd</span>
-                <span className="col-span-2">Valor Cotação</span>
-                <span className="col-span-2">Valor Fechamento</span>
-                <span className="col-span-3">Fornecedor</span>
+              <div className="grid gap-2 px-2 text-[10px] uppercase tracking-wide text-muted-foreground font-semibold" style={{ gridTemplateColumns: 'repeat(16, minmax(0, 1fr))' }}>
+                <span style={{ gridColumn: 'span 3' }}>Nome</span>
+                <span style={{ gridColumn: 'span 1' }}>Qtd</span>
+                <span style={{ gridColumn: 'span 2' }}>Valor Cotação</span>
+                <span style={{ gridColumn: 'span 2' }}>Valor</span>
+                <span style={{ gridColumn: 'span 2' }}>Valor Fechamento</span>
+                <span style={{ gridColumn: 'span 2' }}>Valor Final</span>
+                <span style={{ gridColumn: 'span 3' }}>Fornecedor</span>
               </div>
             )}
           </div>
