@@ -177,7 +177,117 @@ VALUES
    'ee000001-0000-0000-0000-000000000001', now(), now());
 
 -- =============================================================
--- 6. CUSTO_PEDIDO
+-- 6. PRODUTOS
+-- Status alinhado com o status do pedido correspondente
+-- id_vendedor = vendedor do pedido | id_comprador = quem comprou o item
+-- =============================================================
+
+INSERT INTO produtos (
+  id, id_pedido, id_vendedor, id_comprador,
+  descricao, quantidade,
+  valor_projetado, valor_compra, economia,
+  fornecedor, data_compra, prazo_entrega, data_recebimento,
+  status, created_at, updated_at
+)
+VALUES
+  -- PED-001 (Delivered) — Alcides vende, Lucas comprou
+  ('ff010001-0000-0000-0000-000000000001',
+   'dd000001-0000-0000-0000-000000000001',
+   'bb000001-0000-0000-0000-000000000001',
+   'bb000002-0000-0000-0000-000000000002',
+   'Notebook Dell Inspiron 15', 2,
+   5000.00, 4500.00, 500.00,
+   'Fornecedor A', '2026-04-03', '2026-04-08', '2026-04-09',
+   'Delivered', now(), now()),
+
+  ('ff010002-0000-0000-0000-000000000002',
+   'dd000001-0000-0000-0000-000000000001',
+   'bb000001-0000-0000-0000-000000000001',
+   'bb000002-0000-0000-0000-000000000002',
+   'Monitor Samsung 24"', 2,
+   1500.00, 1300.00, 200.00,
+   'Fornecedor A', '2026-04-03', '2026-04-08', '2026-04-09',
+   'Delivered', now(), now()),
+
+  -- PED-002 (To Invoice) — Lucas vende, Pedro comprou
+  ('ff020001-0000-0000-0000-000000000001',
+   'dd000002-0000-0000-0000-000000000002',
+   'bb000002-0000-0000-0000-000000000002',
+   'bb000003-0000-0000-0000-000000000003',
+   'Teclado Mecânico Redragon', 5,
+   400.00, 350.00, 50.00,
+   'Fornecedor B', '2026-04-08', '2026-04-14', '2026-04-15',
+   'Received', now(), now()),
+
+  ('ff020002-0000-0000-0000-000000000002',
+   'dd000002-0000-0000-0000-000000000002',
+   'bb000002-0000-0000-0000-000000000002',
+   'bb000003-0000-0000-0000-000000000003',
+   'Mouse Gamer Logitech G502', 5,
+   200.00, 175.00, 25.00,
+   'Fornecedor B', '2026-04-08', '2026-04-14', '2026-04-15',
+   'Received', now(), now()),
+
+  -- PED-003 (To Buy) — Pedro vende, ainda sem comprador
+  ('ff030001-0000-0000-0000-000000000001',
+   'dd000003-0000-0000-0000-000000000003',
+   'bb000003-0000-0000-0000-000000000003',
+   null,
+   'Servidor Rack Dell PowerEdge', 1,
+   20000.00, null, null,
+   'Fornecedor C', null, '2026-05-03', null,
+   'Pending', now(), now()),
+
+  -- PED-004 (Cancelled) — Alcides
+  ('ff040001-0000-0000-0000-000000000001',
+   'dd000004-0000-0000-0000-000000000004',
+   'bb000001-0000-0000-0000-000000000001',
+   null,
+   'Headset Sony WH-1000XM5', 10,
+   300.00, null, null,
+   'Fornecedor A', null, null, null,
+   'Cancelled', now(), now()),
+
+  -- PED-005 (Out for Delivery) — Lucas vende, Alcides comprou
+  ('ff050001-0000-0000-0000-000000000001',
+   'dd000005-0000-0000-0000-000000000005',
+   'bb000002-0000-0000-0000-000000000002',
+   'bb000001-0000-0000-0000-000000000001',
+   'Switch Cisco 24 Portas', 2,
+   8000.00, 7200.00, 800.00,
+   'Fornecedor D', '2026-04-24', '2026-04-30', '2026-04-29',
+   'Shipped', now(), now()),
+
+  ('ff050002-0000-0000-0000-000000000002',
+   'dd000005-0000-0000-0000-000000000005',
+   'bb000002-0000-0000-0000-000000000002',
+   'bb000001-0000-0000-0000-000000000001',
+   'Cabo Cat6 Blindado 100m', 5,
+   500.00, 450.00, 50.00,
+   'Fornecedor D', '2026-04-24', '2026-04-30', '2026-04-29',
+   'Shipped', now(), now()),
+
+  -- PED-006 (Bought) — Pedro vende, Lucas comprou
+  ('ff060001-0000-0000-0000-000000000001',
+   'dd000006-0000-0000-0000-000000000006',
+   'bb000003-0000-0000-0000-000000000003',
+   'bb000002-0000-0000-0000-000000000002',
+   'Impressora Laser HP LaserJet', 2,
+   3500.00, 3000.00, 500.00,
+   'Fornecedor E', '2026-04-26', '2026-05-08', null,
+   'In Stock', now(), now()),
+
+  ('ff060002-0000-0000-0000-000000000002',
+   'dd000006-0000-0000-0000-000000000006',
+   'bb000003-0000-0000-0000-000000000003',
+   'bb000002-0000-0000-0000-000000000002',
+   'Toner HP 85A Original', 10,
+   250.00, 200.00, 50.00,
+   'Fornecedor E', '2026-04-26', '2026-05-08', null,
+   'In Stock', now(), now());
+
+-- =============================================================
+-- 7. CUSTO_PEDIDO
 -- =============================================================
 
 INSERT INTO custo_pedido (
@@ -259,6 +369,7 @@ UNION ALL SELECT 'vendedores',       count(*) FROM vendedores
 UNION ALL SELECT 'clientes',         count(*) FROM clientes
 UNION ALL SELECT 'users',            count(*) FROM users
 UNION ALL SELECT 'pedidos',          count(*) FROM pedidos
+UNION ALL SELECT 'produtos',         count(*) FROM produtos
 UNION ALL SELECT 'custo_pedido',     count(*) FROM custo_pedido
 UNION ALL SELECT 'pedido_forma_pag', count(*) FROM pedido_forma_pagamento
 UNION ALL SELECT 'status_history',   count(*) FROM status_history;

@@ -32,7 +32,6 @@ class AuthService:
             name=user_data.name,
             password_hash=hashed_password,
             role=user_data.role,
-            created_by=current_user.id if current_user else None
         )
         
         db.add(user)
@@ -132,3 +131,28 @@ class AuthService:
         # For now, logout is handled on frontend by removing tokens
         # In production, implement token blacklist
         return True
+
+    @staticmethod
+    def change_password(db: Session, user_id: str, current_password: str, new_password: str) -> None:
+        user = AuthService.get_user_by_id(db, user_id)
+        if not verify_password(current_password, user.password_hash):
+            raise AuthenticationException("Senha atual incorreta")
+        user.password_hash = hash_password(new_password)
+        db.commit()
+
+    @staticmethod
+    def list_users(db: Session, page: int = 1, limit: int = 20):
+        q = db.query(User).filter(User.deleted_at.is_(None))
+        total = q.count()
+        items = q.offset((page - 1) * limit).limit(limit).all()
+        return items, total
+
+    @staticmethod
+    def deactivate_user(db: Session, user_id: str, current_user: User) -> User:
+        if str(current_user.id) == user_id:
+            raise ValueError("Não é possível desativar o próprio usuário")
+        user = AuthService.get_user_by_id(db, user_id)
+        user.is_active = False
+        db.commit()
+        db.refresh(user)
+        return user

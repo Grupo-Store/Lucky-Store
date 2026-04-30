@@ -6,6 +6,7 @@ from app.schemas.user import (
     UserCreate, UserResponse, UserLogin, LoginResponse,
     TokenRefreshRequest, TokenRefreshResponse,
     TOTPSetupResponse, TOTPVerifyRequest, TOTPVerifyResponse,
+    ChangePasswordRequest,
 )
 from app.services.auth import AuthService
 from app.utils.errors import AuthenticationException, AuthorizationException, to_http_exception
@@ -107,6 +108,18 @@ def logout(current_user: User = Depends(get_current_user_dep), db: Session = Dep
 @router.get("/me", response_model=UserResponse)
 def me(current_user: User = Depends(get_current_user_dep)):
     return current_user
+
+
+@router.post("/change-password", status_code=status.HTTP_204_NO_CONTENT)
+def change_password(
+    payload: ChangePasswordRequest,
+    current_user: User = Depends(get_current_user_dep),
+    db: Session = Depends(get_db),
+):
+    try:
+        AuthService.change_password(db, str(current_user.id), payload.current_password, payload.new_password)
+    except Exception as exc:
+        raise to_http_exception(exc)
 
 
 @router.post("/2fa/setup", response_model=TOTPSetupResponse)
