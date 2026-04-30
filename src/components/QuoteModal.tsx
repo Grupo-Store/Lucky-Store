@@ -32,10 +32,11 @@ function handleEnterBlur(e: KeyboardEvent<HTMLInputElement>) {
 }
 
 const emptyQuote = (index: string): Quote => ({
-  id: '', index, createdAt: Date.now(), customer: '', cnpj: '',
+  id: '', index, createdAt: Date.now(), b2bCompany: '', customer: '', cnpj: '',
   requestNumber: '', requestDate: format(new Date(), 'yyyy-MM-dd'),
   company: '', directBilling: false, supplier: '', seller: '',
   value: 0, items: [], observations: '', phases: emptyPhases(),
+  taxLucky: 0, taxBTech: 0,
 });
 
 interface Props {
