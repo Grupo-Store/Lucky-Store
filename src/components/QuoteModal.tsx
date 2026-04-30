@@ -164,7 +164,7 @@ export function QuoteModal({ open, onClose, quote, onSave, onDelete, nextIndex }
 
   return (
     <Dialog open={open} onOpenChange={v => !v && onClose()}>
-      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto bg-card print:max-w-full print:max-h-none print:shadow-none">
+      <DialogContent className="max-w-[95vw] xl:max-w-[1400px] max-h-[90vh] overflow-y-auto bg-card print:max-w-full print:max-h-none print:shadow-none">
         <DialogHeader>
           <DialogTitle className="text-secondary text-xl">
             {isEdit ? `Editar Cotação ${form.index}` : `Nova Cotação ${form.index}`}
