@@ -1,7 +1,8 @@
 import uuid
-from datetime import datetime
-from sqlalchemy import Column, Integer, Text, DateTime, ForeignKey, Numeric, Computed
+from datetime import datetime, timezone
+from sqlalchemy import Column, String, Text, Integer, DateTime, ForeignKey
 from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.types import Numeric
 from sqlalchemy.orm import relationship
 from app.database import Base
 
@@ -14,12 +15,18 @@ class ItemCotacao(Base):
 
     descricao = Column(Text, nullable=False)
     quantidade = Column(Integer, nullable=False)
-    valor_unitario = Column(Numeric(12, 2), nullable=False)
-    valor_total = Column(Numeric(12, 2), Computed("quantidade * valor_unitario", persisted=True), nullable=False)
 
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    valor_unitario = Column(Numeric(12, 2), nullable=False)
+    # valor_total é coluna gerada no DB (quantidade * valor_unitario) — não mapeada aqui
+
+    valor_fechamento = Column(Numeric(12, 2), nullable=True)
+    # valor_total_fechamento é coluna gerada no DB (quantidade * valor_fechamento) — não mapeada aqui
+
+    fornecedor = Column(Text, nullable=True)
+
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
 
     cotacao = relationship("Cotacao", back_populates="itens")
 
     def __repr__(self):
-        return f"<ItemCotacao {self.id}>"
+        return f"<ItemCotacao {self.descricao} x{self.quantidade}>"
