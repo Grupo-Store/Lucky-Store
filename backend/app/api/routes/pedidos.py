@@ -1,17 +1,29 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
-from typing import Optional
+from typing import Optional, List
 from uuid import UUID
 from app.database import get_db
 from app.models.user import User
+from app.models.audit_log import AuditLog
+from app.models.status_history import StatusHistory, EntityType
 from app.schemas.pedido import (
     PedidoCreate, PedidoUpdate, PedidoResponse,
     PedidoDetailResponse, PedidoListResponse, StatusChangeRequest,
     StatusHistoryOut,
 )
+from app.schemas.audit_log import AuditLogResponse
+from app.schemas.status_history import StatusHistoryResponse
 from app.services.pedido import PedidoService
 from app.utils.errors import NotFoundException, BusinessLogicException, to_http_exception
 from app.api.routes.auth import get_current_user_dep
+from pydantic import BaseModel
+
+
+class OrderHistoryResponse(BaseModel):
+    order_id: UUID
+    status_history: List[StatusHistoryResponse]
+    audit_logs: List[AuditLogResponse]
+
 
 router = APIRouter(prefix="/pedidos", tags=["pedidos"])
 
@@ -49,6 +61,34 @@ def list_pedidos(
         sort_by=sort_by, sort_dir=sort_dir,
     )
     return PedidoListResponse(items=items, total=total, page=page, limit=limit, pages=pages)
+
+
+@router.get("/{pedido_id}/history", response_model=OrderHistoryResponse)
+def get_order_history(
+    pedido_id: UUID,
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_user_dep),
+):
+    status_history = (
+        db.query(StatusHistory)
+        .filter(
+            StatusHistory.entity_type == EntityType.PEDIDO,
+            StatusHistory.entity_id == pedido_id,
+        )
+        .order_by(StatusHistory.changed_at.asc())
+        .all()
+    )
+    audit_logs = (
+        db.query(AuditLog)
+        .filter(AuditLog.entity_type == "pedido", AuditLog.entity_id == pedido_id)
+        .order_by(AuditLog.changed_at.asc())
+        .all()
+    )
+    return OrderHistoryResponse(
+        order_id=pedido_id,
+        status_history=[StatusHistoryResponse.model_validate(h) for h in status_history],
+        audit_logs=[AuditLogResponse.model_validate(log) for log in audit_logs],
+    )
 
 
 @router.get("/{pedido_id}", response_model=PedidoDetailResponse)

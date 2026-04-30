@@ -1,13 +1,25 @@
 import math
+from typing import List
 from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models.user import User
+from app.models.audit_log import AuditLog
 from app.schemas.user import UserResponse
+from app.schemas.audit_log import AuditLogResponse
 from app.services.auth import AuthService
-from app.api.routes.auth import get_current_user_dep, require_admin
+from app.api.routes.auth import get_current_user_dep, require_admin, get_current_user
 from app.utils.errors import NotFoundException, to_http_exception
+from pydantic import BaseModel
+
+
+class UserDataExportResponse(BaseModel):
+    user: UserResponse
+    audit_logs: List[AuditLogResponse]
+
+    class Config:
+        from_attributes = True
 
 router = APIRouter(prefix="/users", tags=["users"])
 
@@ -43,6 +55,32 @@ def get_user(
         return AuthService.get_user_by_id(db, str(user_id))
     except NotFoundException as exc:
         raise to_http_exception(exc)
+
+
+@router.get("/{user_id}/data-export", response_model=UserDataExportResponse)
+def export_user_data(
+    user_id: UUID,
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_user),
+):
+    user = db.query(User).filter(User.id == user_id, User.deleted_at.is_(None)).first()
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+
+    audit_logs = (
+        db.query(AuditLog)
+        .filter(
+            (AuditLog.changed_by == user_id) |
+            ((AuditLog.entity_type == "user") & (AuditLog.entity_id == user_id))
+        )
+        .order_by(AuditLog.changed_at.desc())
+        .all()
+    )
+
+    return UserDataExportResponse(
+        user=UserResponse.model_validate(user),
+        audit_logs=[AuditLogResponse.model_validate(log) for log in audit_logs],
+    )
 
 
 @router.patch("/{user_id}/deactivate", response_model=UserResponse)
