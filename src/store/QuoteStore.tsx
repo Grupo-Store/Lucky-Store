@@ -46,6 +46,8 @@ export interface Quote {
   index: string;
   /** Creation timestamp (ms) — used for default newest-first sort */
   createdAt: number;
+  /** B2B Company / client name (optional) — when set, takes precedence over customer when converting to order */
+  b2bCompany?: string;
   customer: string;
   cnpj: string;
   requestNumber: string;
@@ -61,6 +63,10 @@ export interface Quote {
   /** Free-text observations */
   observations: string;
   phases: QuotePhases;
+  /** Tax % applied to Lucky Store revenue (for profitability calc) */
+  taxLucky?: number;
+  /** Tax % applied to BTech revenue (for profitability calc) */
+  taxBTech?: number;
 }
 
 export const emptyPhases = (): QuotePhases => ({
