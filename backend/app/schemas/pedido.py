@@ -178,3 +178,13 @@ class PedidoListResponse(BaseModel):
     page: int
     limit: int
     pages: int
+
+
+class FinancialsOut(BaseModel):
+    custo_total: Decimal
+    lucro_liquido: Optional[Decimal]
+    margem_bruta_pct: Optional[Decimal]
+
+
+class CustoComFinancialsOut(CustoPedidoOut):
+    financials: FinancialsOut
