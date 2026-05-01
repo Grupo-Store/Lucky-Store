@@ -1,0 +1,91 @@
+from decimal import Decimal
+from typing import Optional
+from uuid import UUID
+from sqlalchemy.orm import Session
+
+from app.models.produto import Produto
+from app.schemas.produto import ProdutoCreate
+from app.services.pedido import PedidoService
+from app.models.audit_log import AuditLog, AuditAction
+from app.utils.errors import NotFoundException
+
+
+class ItemPedidoService:
+
+    @staticmethod
+    def _get_item(db: Session, pedido_id: UUID, item_id: UUID) -> Produto:
+        """Busca item validando pertencimento ao pedido. 404 sem vazar contexto."""
+        item = db.query(Produto).filter(
+            Produto.id == item_id,
+            Produto.id_pedido == pedido_id,
+        ).first()
+        if not item:
+            raise NotFoundException(f"Item {item_id} não encontrado no pedido {pedido_id}")
+        return item
+
+    @staticmethod
+    def add_item(db: Session, pedido_id: UUID, data: ProdutoCreate, current_user_id: UUID) -> Produto:
+        PedidoService.get_by_id(db, pedido_id)  # valida que pedido existe e não está deletado
+
+        produto = Produto(
+            id_pedido=pedido_id,
+            id_vendedor=data.id_vendedor,
+            id_comprador=data.id_comprador,
+            descricao=data.descricao,
+            quantidade=data.quantidade,
+            valor_projetado=data.valor_projetado,
+            valor_compra=data.valor_compra,
+            fornecedor=data.fornecedor,
+            data_compra=data.data_compra,
+            prazo_entrega=data.prazo_entrega,
+            data_recebimento=data.data_recebimento,
+        )
+        db.add(produto)
+        db.flush()
+
+        db.add(AuditLog(
+            entity_type="produto",
+            entity_id=produto.id,
+            action=AuditAction.CREATE,
+            changed_by=current_user_id,
+            new_values={"descricao": data.descricao, "quantidade": data.quantidade},
+        ))
+
+        db.commit()
+        db.refresh(produto)
+        return produto
+
+    @staticmethod
+    def update_item_status(db: Session, pedido_id: UUID, item_id: UUID,
+                           new_status: str, current_user_id: UUID) -> Produto:
+        produto = ItemPedidoService._get_item(db, pedido_id, item_id)
+        old_status = produto.status
+        produto.status = new_status
+
+        db.add(AuditLog(
+            entity_type="produto",
+            entity_id=item_id,
+            action=AuditAction.UPDATE,
+            changed_by=current_user_id,
+            old_values={"status": old_status},
+            new_values={"status": new_status},
+        ))
+
+        db.commit()
+        db.refresh(produto)
+        return produto
+
+    @staticmethod
+    def remove_item(db: Session, pedido_id: UUID, item_id: UUID, current_user_id: UUID) -> None:
+        produto = ItemPedidoService._get_item(db, pedido_id, item_id)
+
+        db.add(AuditLog(
+            entity_type="produto",
+            entity_id=item_id,
+            action=AuditAction.DELETE,
+            changed_by=current_user_id,
+            old_values={"descricao": produto.descricao, "status": produto.status},
+        ))
+
+        db.delete(produto)
+        db.commit()
