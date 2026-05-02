@@ -3,7 +3,7 @@
 ## Project Overview
 **Orderly Hub** is a comprehensive order management system for multi-company operations (Lucky Store, BTech, AJJ) with complete audit trail, LGPD compliance, and production-ready architecture.
 
-**Status:** Auth (8 endpoints) ✅ | Orders CRUD (6 endpoints) ✅ | RMA API (5 endpoints) ✅ | Quotes API ❌ pendente | Users management ❌ pendente. Cotação V2 + seed data completo.
+**Status:** Auth (9 endpoints) ✅ | Orders CRUD (6 endpoints) ✅ | Order Items (3 endpoints) ✅ | Order Costs (2 endpoints) ✅ | Order Payments (1 endpoint) ✅ | RMA API (5 endpoints) ✅ | Users management (4 endpoints) ✅ | Quotes API ❌ pendente. Cotação V2 + seed data completo.
 
 **Team:** Rafael, Gustavo, Duda, Peu  
 **Target MVP:** 8-10 weeks  
@@ -38,6 +38,31 @@
 | 2.6 Dashboard | KPIs backend | Goals + Projections | Financial backend | Dashboard frontend |
 | 3.x Testing | Segurança + perf | Backend tests | Frontend tests | E2E |
 | 4.x Deploy | CI/CD | Railway PostgreSQL | Monitoring | Vercel |
+
+---
+
+## What's New in This Update (May 2, 2026)
+
+✅ **Users management API — 4 endpoints implementados (Rafael):**
+- `GET /api/users` — lista usuários paginada (admin only)
+- `GET /api/users/me` — perfil do usuário logado
+- `GET /api/users/{user_id}` — detalhes de um usuário (admin only)
+- `PATCH /api/users/{user_id}/deactivate` — desativar usuário (admin only, não pode desativar a si mesmo)
+
+✅ **Order Items API — 3 endpoints implementados:**
+- `POST /api/pedidos/{id}/items` — adicionar produto ao pedido
+- `PATCH /api/pedidos/{id}/items/{item_id}/status` — atualizar status do produto
+- `DELETE /api/pedidos/{id}/items/{item_id}` — remover produto do pedido
+
+✅ **Order Costs API — 2 endpoints implementados:**
+- `POST /api/pedidos/{id}/costs` — registrar custos do pedido (1:1)
+- `PUT /api/pedidos/{id}/costs` — atualizar custos
+
+✅ **Order Payments API — 1 endpoint implementado:**
+- `POST /api/pedidos/{id}/payment-methods` — registrar forma de pagamento
+
+✅ **Auth endpoint restante confirmado:**
+- `POST /api/auth/change-password` — troca de senha do usuário autenticado
 
 ---
 
@@ -239,11 +264,11 @@
 - [x] GET /api/auth/me (current user) → **Rafael** ✅
 - [x] POST /api/auth/2fa/setup → **Gustavo** ✅
 - [x] POST /api/auth/2fa/confirm → **Gustavo** ✅
-- [ ] POST /api/auth/change-password → **Rafael** (não encontrado nas rotas)
-- [ ] GET /api/users → **Rafael** (rota não implementada)
-- [ ] GET /api/users/me → **Rafael** (rota não implementada)
-- [ ] GET /api/users/:id → **Rafael** (rota não implementada)
-- [ ] PATCH /api/users/:id/deactivate → **Rafael** (rota não implementada)
+- [x] POST /api/auth/change-password → **Rafael** ✅
+- [x] GET /api/users → **Rafael** ✅
+- [x] GET /api/users/me → **Rafael** ✅
+- [x] GET /api/users/:id → **Rafael** ✅
+- [x] PATCH /api/users/:id/deactivate → **Rafael** ✅
 
 **Testing:** → **Peu** ⚠️ pendente
 - [ ] Test registration flow → **Peu**
@@ -291,18 +316,18 @@
   - [x] Set deleted_at = NOW() → **Rafael** ✅
   - [x] Record deletion in audit_logs → **Rafael** ✅
 
-**Order Items:** → **Gustavo**
-- [ ] POST /api/orders/:id/items (add item to order) → **Gustavo**
-- [ ] PATCH /api/orders/:id/items/:itemId/status (update item status) → **Gustavo**
-- [ ] DELETE /api/orders/:id/items/:itemId (remove item) → **Gustavo**
+**Order Items:** → **Rafael** ✅ COMPLETO
+- [x] POST /api/pedidos/:id/items (add item to order) → **Rafael** ✅
+- [x] PATCH /api/pedidos/:id/items/:itemId/status (update item status) → **Rafael** ✅
+- [x] DELETE /api/pedidos/:id/items/:itemId (remove item) → **Rafael** ✅
 
-**Order Costs:** → **Peu**
-- [ ] POST /api/orders/:id/costs (set costs 1:1) → **Peu**
-- [ ] PUT /api/orders/:id/costs (update costs) → **Peu**
+**Order Costs:** → **Rafael** ✅ COMPLETO
+- [x] POST /api/pedidos/:id/costs (set costs 1:1) → **Rafael** ✅
+- [x] PUT /api/pedidos/:id/costs (update costs) → **Rafael** ✅
 - [ ] Calculate financial totals and margins → **Peu**
 
-**Order Payments:** → **Peu**
-- [ ] POST /api/orders/:id/payment-methods → **Peu**
+**Order Payments:** → **Rafael** ✅ COMPLETO
+- [x] POST /api/pedidos/:id/payment-methods → **Rafael** ✅
 - [ ] Track multiple payment methods per order → **Peu**
 
 **Business Logic Validation:** → **Rafael**
@@ -1105,11 +1130,16 @@ Any delay in Week 1-3 → Delays Week 10 launch
 - [x] **FEITO:** Cotação V2 — novos campos do frontend ✅
 - [x] **FEITO:** RmaStatus + ItemRmaStatus enum fix ✅
 - [x] **FEITO:** Seed data completo com 10 produtos mock ✅
+- [x] **FEITO:** POST /auth/change-password ✅
+- [x] **FEITO:** Users management (GET /users, GET /users/me, GET /users/:id, PATCH /users/:id/deactivate) ✅
+- [x] **FEITO:** Order Items API (POST/PATCH/DELETE /pedidos/:id/items) ✅
+- [x] **FEITO:** Order Costs API (POST/PUT /pedidos/:id/costs) ✅
+- [x] **FEITO:** Order Payments API (POST /pedidos/:id/payment-methods) ✅
 - [ ] **PRÓXIMO:** Merge feature/orm-models → develop (aguardando review)
 - [ ] **PRÓXIMO:** Merge feature/auth-middleware → develop (aguardando review)
 - [ ] **PRÓXIMO:** Merge feature/orders-api → develop (aguardando review)
 - [ ] **PRÓXIMO:** Rodar MIGRATION_COTACAO_V2.sql no banco de produção
-- [ ] **PRÓXIMO:** Quotes & RMA API (1.6) → Gustavo + Duda
+- [ ] **PRÓXIMO:** Quotes API (1.6) → Gustavo + Duda
 - [ ] **PRÓXIMO:** Frontend team: API client setup (2.1)
 
 ---
@@ -1133,7 +1163,7 @@ Any delay in Week 1-3 → Delays Week 10 launch
 
 ---
 
-**Last Updated:** April 30, 2026  
-**Status:** 🚀 19 endpoints implementados — Auth (8) + Orders (6) + RMA (5). Quotes API e Users management pendentes.  
-**Next Milestone:** Merge PRs → develop; Quotes API (Gustavo); Users management endpoints (Rafael)  
+**Last Updated:** May 2, 2026  
+**Status:** 🚀 30 endpoints implementados — Auth (9) + Orders CRUD (6) + Order Items (3) + Order Costs (2) + Order Payments (1) + RMA (5) + Users (4). Única pendência de backend: Quotes API.  
+**Next Milestone:** Merge PRs → develop; Quotes API (Gustavo + Duda); Frontend API client setup (Peu)  
 **MVP Target:** Week 10 (8-10 weeks)
