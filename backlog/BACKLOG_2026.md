@@ -233,7 +233,7 @@
 - [x] Create users table with password hashing → **Rafael** ✅
 - [x] Implement registration endpoint (admin only) → **Rafael** ✅
 - [x] Implement login endpoint → **Rafael** ✅
-- [ ] Implement password reset flow → **Rafael**
+- [x] Implement password reset flow (change-password endpoint) → **Rafael** ✅
 
 **JWT Implementation:** → **Rafael**
 - [x] Generate JWT on successful login → **Rafael** ✅
@@ -270,20 +270,21 @@
 - [x] GET /api/users/:id → **Rafael** ✅
 - [x] PATCH /api/users/:id/deactivate → **Rafael** ✅
 
-**Testing:** → **Peu**
+**Testing:** → **Peu** ⚠️ pendente
 - [ ] Test registration flow → **Peu**
 - [ ] Test login + 2FA flow → **Peu**
 - [ ] Test token refresh → **Peu**
-- [ ] Test authorization (seller can't see other seller's data) → **Peu**
-- [ ] Test role-based access → **Peu**
+- [ ] Test that revoked tokens are rejected after logout → **Peu**
+- [ ] Test change-password flow → **Peu**
 
 **Effort:** 1 backend dev, 3-4 days  
 **Success Criteria:**
 - ✅ User can register (admin)
 - ✅ User can login with email/password
-- ✅ 2FA works with authenticator app
+- ✅ 2FA works with authenticator app (QR code real)
 - ✅ Tokens refresh automatically
-- ✅ Role-based authorization enforced
+- ✅ JWT middleware protects all routes
+- ✅ Logout revokes token
 
 ---
 
