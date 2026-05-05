@@ -1,0 +1,45 @@
+import uuid
+from datetime import datetime, timezone
+from decimal import Decimal
+from sqlalchemy import Column, String, Integer, Date, DateTime, Text, Numeric, ForeignKey, CheckConstraint  # type: ignore[import]
+from sqlalchemy.dialects.postgresql import UUID  # type: ignore[import]
+from sqlalchemy.orm import relationship
+from app.database import Base
+
+PRODUTO_STATUSES = [
+    "Pending", "To Purchase", "In Stock", "Received",
+    "Ready", "Shipped", "Delivered", "Delayed", "Cancelled",
+]
+
+
+class Produto(Base):
+    __tablename__ = "produtos"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    id_pedido = Column(UUID(as_uuid=True), ForeignKey("pedidos.id", ondelete="CASCADE"), nullable=False)
+    id_vendedor = Column(UUID(as_uuid=True), ForeignKey("vendedores.id"), nullable=False)
+    id_comprador = Column(UUID(as_uuid=True), ForeignKey("vendedores.id"), nullable=True)
+
+    descricao = Column(Text, nullable=False)
+    quantidade = Column(Integer, nullable=False)
+
+    valor_projetado = Column(Numeric(12, 2), nullable=False)
+    valor_compra = Column(Numeric(12, 2), nullable=True)
+    economia = Column(Numeric(12, 2), nullable=True)
+
+    fornecedor = Column(Text, nullable=True)
+    data_compra = Column(Date, nullable=True)
+    prazo_entrega = Column(Date, nullable=True)
+    data_recebimento = Column(Date, nullable=True)
+
+    status = Column(String(50), nullable=False, default="Pending")
+
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
+    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc), nullable=False)
+
+    pedido = relationship("Pedido", back_populates="produtos")
+    vendedor = relationship("Vendedor", foreign_keys=[id_vendedor], back_populates="produtos_vendidos")
+    comprador = relationship("Vendedor", foreign_keys=[id_comprador], back_populates="produtos_comprados")
+
+    def __repr__(self):
+        return f"<Produto {self.descricao[:30]} status={self.status}>"

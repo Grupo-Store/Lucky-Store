@@ -3,7 +3,7 @@
 ## Project Overview
 **Orderly Hub** is a comprehensive order management system for multi-company operations (Lucky Store, BTech, AJJ) with complete audit trail, LGPD compliance, and production-ready architecture.
 
-**Status:** Backend foundation completa e rodando. Servidor FastAPI ativo, banco conectado, auth implementado. ORM models e APIs em desenvolvimento.
+**Status:** Auth (9 endpoints) ✅ | Orders CRUD (6 endpoints) ✅ | Order Items (3 endpoints) ✅ | Order Costs (2 endpoints) ✅ | Order Payments (1 endpoint) ✅ | RMA API (5 endpoints) ✅ | Users management (4 endpoints) ✅ | Quotes API ❌ pendente. Cotação V2 + seed data completo.
 
 **Team:** Rafael, Gustavo, Duda, Peu  
 **Target MVP:** 8-10 weeks  
@@ -38,6 +38,65 @@
 | 2.6 Dashboard | KPIs backend | Goals + Projections | Financial backend | Dashboard frontend |
 | 3.x Testing | Segurança + perf | Backend tests | Frontend tests | E2E |
 | 4.x Deploy | CI/CD | Railway PostgreSQL | Monitoring | Vercel |
+
+---
+
+## What's New in This Update (May 2, 2026)
+
+✅ **Users management API — 4 endpoints implementados (Rafael):**
+- `GET /api/users` — lista usuários paginada (admin only)
+- `GET /api/users/me` — perfil do usuário logado
+- `GET /api/users/{user_id}` — detalhes de um usuário (admin only)
+- `PATCH /api/users/{user_id}/deactivate` — desativar usuário (admin only, não pode desativar a si mesmo)
+
+✅ **Order Items API — 3 endpoints implementados:**
+- `POST /api/pedidos/{id}/items` — adicionar produto ao pedido
+- `PATCH /api/pedidos/{id}/items/{item_id}/status` — atualizar status do produto
+- `DELETE /api/pedidos/{id}/items/{item_id}` — remover produto do pedido
+
+✅ **Order Costs API — 2 endpoints implementados:**
+- `POST /api/pedidos/{id}/costs` — registrar custos do pedido (1:1)
+- `PUT /api/pedidos/{id}/costs` — atualizar custos
+
+✅ **Order Payments API — 1 endpoint implementado:**
+- `POST /api/pedidos/{id}/payment-methods` — registrar forma de pagamento
+
+✅ **Auth endpoint restante confirmado:**
+- `POST /api/auth/change-password` — troca de senha do usuário autenticado
+
+---
+
+## What's New in This Update (April 30, 2026)
+
+✅ **Produto ORM Model criado:**
+- `backend/app/models/produto.py` com todos os campos (descricao, quantidade, valor_projetado, valor_compra, economia, fornecedor, datas, status)
+- Relacionamentos com Pedido (cascade delete) e dois Vendedores (vendedor + comprador)
+
+✅ **Business rules & bugfixes Orders API:**
+- Status livre: qualquer status pode ir para qualquer outro (sem restrição de transição)
+- Cannot delete order with RMA: `soft_delete` lança `BusinessLogicException` se existir Rma vinculado
+- Status values corrigidos para inglês (`To Buy`, `Bought`, etc.) para bater com constraint do DB
+- `status_history.entity_type`: SQLEnum com `values_callable` para armazenar lowercase
+- `bcrypt` rebaixado de 4.x → 3.2.2 (incompatibilidade com passlib causava 401 no login)
+
+✅ **Cotação V2 — campos alinhados com frontend:**
+- `cotacoes`: adicionados `b2b_company`, `observacao`, `pct_imposto_lucky`, `pct_imposto_btech`
+- `item_cotacao`: adicionados `valor_fechamento`, `valor_total_fechamento` (gerado pelo DB), `fornecedor`
+- `MIGRATION_COTACAO_V2.sql` pronto para rodar no pgAdmin
+- ORM models `cotacao.py` e `item_cotacao.py` recriados com todos os campos
+
+✅ **Bugfix RMA enums (CheckViolation):**
+- `RmaStatus` e `ItemRmaStatus`: adicionado `values_callable` ao `SQLEnum`
+- Sem isso, SQLAlchemy armazenava `REGISTERED` em vez de `Registered`, violando a constraint
+
+✅ **Seed data completo (`database/seed_mock_data.sql`):**
+- TRUNCATE CASCADE + 3 lojas, 3 vendedores, 3 clientes, 1 admin user
+- 6 pedidos cross-loja + 10 produtos mock com status alinhados
+- custo_pedido, pedido_forma_pagamento (lowercase), status_history completo
+
+✅ **PRs abertos:**
+- `feature/orders-api` → `develop`
+- `feature/orm-models` → `develop`
 
 ---
 
@@ -135,23 +194,23 @@
 **Priority:** P0 - BLOCKER
 
 **Generate All ORM Models:**
-- [x] Create users model with encryption → **Rafael** ✅ done
-- [ ] Create lojas model with relationships → **Rafael**
-- [ ] Create vendedores model with cascading → **Rafael**
-- [ ] Create clientes model → **Rafael**
-- [ ] Create pedidos model (main table) → **Gustavo**
-- [ ] Create produtos model (order items) → **Gustavo**
-- [ ] Create custo_pedido model → **Gustavo**
-- [ ] Create frete model → **Gustavo**
-- [ ] Create rmas model (returns) → **Duda**
-- [ ] Create item_rma model → **Duda**
-- [ ] Create cotacoes model (quotes) → **Duda**
-- [ ] Create item_cotacao model → **Duda**
-- [ ] Create venda_vendedor model → **Peu**
-- [ ] Create compra_vendedor model → **Peu**
-- [ ] Create meta_vendedor model → **Peu**
-- [ ] Create status_history model (audit) → **Peu**
-- [ ] Create audit_logs model (audit) → **Peu**
+- [x] Create users model with encryption → **Rafael** ✅
+- [x] Create lojas model with relationships → **Rafael** ✅
+- [x] Create vendedores model with cascading → **Rafael** ✅
+- [x] Create clientes model → **Rafael** ✅
+- [x] Create pedidos model (main table) → **Rafael** ✅
+- [x] Create produtos model (order items) → **Gustavo** ✅
+- [x] Create custo_pedido model → **Rafael** ✅
+- [x] Create frete model → **Rafael** ✅
+- [x] Create rmas model (returns) → **Duda** ✅
+- [x] Create item_rma model → **Duda** ✅
+- [x] Create cotacoes model (quotes) → **Duda** ✅
+- [x] Create item_cotacao model → **Duda** ✅
+- [x] Create venda_vendedor model → **Peu** ✅
+- [x] Create compra_vendedor model → **Peu** ✅
+- [x] Create meta_vendedor model → **Peu** ✅
+- [x] Create status_history model (audit) → **Peu** ✅
+- [x] Create audit_logs model (audit) → **Peu** ✅
 
 **Testing ORM:**
 - [ ] All models instantiate correctly → **Gustavo**
@@ -180,8 +239,9 @@
 - [x] Generate JWT on successful login → **Rafael** ✅
 - [x] Set token expiry (1 hour access, 7 days refresh) → **Rafael** ✅
 - [x] Implement token refresh endpoint → **Rafael** ✅
-- [x] Validate JWT on protected routes (middleware) → **Rafael** ✅
-- [x] Implement logout with token blacklisting → **Rafael** ✅
+- [x] Validate JWT on protected routes (get_current_user dependency) → **Rafael** ✅
+- [x] Implement logout with token blacklisting (in-memory) → **Rafael** ✅
+- [x] POST /api/auth/change-password → **Rafael** ✅
 
 **2FA Implementation:** → **Gustavo**
 - [x] Generate TOTP secret on user registration → **Gustavo** ✅
@@ -189,26 +249,26 @@
 - [x] Return JWT after successful 2FA → **Gustavo** ✅
 - [x] POST /api/auth/2fa/setup → **Gustavo** ✅
 - [x] POST /api/auth/2fa/confirm → **Gustavo** ✅
-- [x] Integrar QR code real com Google Authenticator → **Rafael** ✅
+- [x] QR code real em base64 PNG (Google Authenticator) → **Rafael** ✅
 
-**Authorization:** → simplificado (todos os usuários são admins, acesso total)
-- [x] Implement role-based access control (RBAC) → simplificado: JWT válido = acesso total ✅
-- [x] Create middleware to check roles → `get_current_user` em `core/dependencies.py` ✅
-- [x] Implement row-level authorization → N/A (todos veem tudo) ✅
+**Authorization:** → decisão de produto
+- [x] Todos os usuários são **admin** com acesso total ao dashboard → decisão confirmada ✅
+- [ ] RBAC granular (manager/seller/viewer) → **pós-MVP se necessário**
 
 **API Endpoints:**
-- [x] POST /api/auth/register (admin only) → **Rafael** ✅
+- [x] POST /api/auth/register (bootstrap: sem auth se DB vazio) → **Rafael** ✅
 - [x] POST /api/auth/login → **Rafael** ✅
 - [x] POST /api/auth/verify-2fa → **Gustavo** ✅
 - [x] POST /api/auth/refresh-token → **Rafael** ✅
-- [x] POST /api/auth/logout → **Rafael** ✅
+- [x] POST /api/auth/logout (blacklist token) → **Rafael** ✅
 - [x] GET /api/auth/me (current user) → **Rafael** ✅
 - [x] POST /api/auth/2fa/setup → **Gustavo** ✅
 - [x] POST /api/auth/2fa/confirm → **Gustavo** ✅
 - [x] POST /api/auth/change-password → **Rafael** ✅
 - [x] GET /api/users → **Rafael** ✅
-- [x] GET /api/users/{id} → **Rafael** ✅
-- [x] PATCH /api/users/{id}/deactivate → **Rafael** ✅
+- [x] GET /api/users/me → **Rafael** ✅
+- [x] GET /api/users/:id → **Rafael** ✅
+- [x] PATCH /api/users/:id/deactivate → **Rafael** ✅
 
 **Testing:** → **Peu** ⚠️ pendente
 - [ ] Test registration flow → **Peu**
@@ -232,50 +292,50 @@
 **Priority:** P0 - BLOCKER
 
 **Orders CRUD:** → **Rafael**
-- [ ] POST /api/orders (create new order) → **Rafael**
-  - [ ] Validate input with Pydantic → **Rafael**
-  - [ ] Calculate economia (valor_projetado - valor_compra) → **Rafael**
-  - [ ] Create in pedidos table → **Rafael**
-  - [ ] Track in audit_logs → **Rafael**
-- [ ] GET /api/orders (list with filters, pagination) → **Rafael**
-  - [ ] Filter by status, date range, vendor, store → **Rafael**
-  - [ ] Pagination (page, limit) → **Rafael**
-  - [ ] Sorting (by date, status, value) → **Rafael**
-  - [ ] Exclude soft-deleted records (WHERE deleted_at IS NULL) → **Rafael**
-- [ ] GET /api/orders/:id (get order details) → **Rafael**
-  - [ ] Return complete order with items and costs → **Rafael**
-  - [ ] Include status history → **Rafael**
-- [ ] PUT /api/orders/:id (update order) → **Rafael**
-  - [ ] Validate business rules → **Rafael**
-  - [ ] Track changes in audit_logs → **Rafael**
-- [ ] PATCH /api/orders/:id/status (change status only) → **Duda**
-  - [ ] Validate status transition is allowed → **Duda**
-  - [ ] Record in status_history table → **Duda**
-  - [ ] Track in audit_logs → **Duda**
-- [ ] DELETE /api/orders/:id (soft delete) → **Rafael**
-  - [ ] Set deleted_at = NOW() → **Rafael**
-  - [ ] Record deletion in audit_logs → **Rafael**
+- [x] POST /api/pedidos (create new order) → **Rafael** ✅
+  - [x] Validate input with Pydantic → **Rafael** ✅
+  - [x] Calculate economia (valor_venda - custo_produto_final - custo_servico) → **Rafael** ✅
+  - [x] Create in pedidos table → **Rafael** ✅
+  - [x] Track in audit_logs → **Rafael** ✅
+- [x] GET /api/pedidos (list with filters, pagination) → **Rafael** ✅
+  - [x] Filter by status, date range, vendor, store → **Rafael** ✅
+  - [x] Pagination (page, limit) → **Rafael** ✅
+  - [x] Sorting (by date, status, value) → **Rafael** ✅
+  - [x] Exclude soft-deleted records (WHERE deleted_at IS NULL) → **Rafael** ✅
+- [x] GET /api/pedidos/:id (get order details) → **Rafael** ✅
+  - [x] Return complete order with items and costs → **Rafael** ✅
+  - [x] Include status history → **Rafael** ✅
+- [x] PUT /api/pedidos/:id (update order) → **Rafael** ✅
+  - [x] Validate business rules → **Rafael** ✅
+  - [x] Track changes in audit_logs → **Rafael** ✅
+- [x] PATCH /api/pedidos/:id/status (change status only) → **Rafael** ✅
+  - [x] Validate status transition is allowed → **Rafael** ✅
+  - [x] Record in status_history table → **Rafael** ✅
+  - [x] Track in audit_logs → **Rafael** ✅
+- [x] DELETE /api/pedidos/:id (soft delete) → **Rafael** ✅
+  - [x] Set deleted_at = NOW() → **Rafael** ✅
+  - [x] Record deletion in audit_logs → **Rafael** ✅
 
-**Order Items:** → **Gustavo**
-- [ ] POST /api/orders/:id/items (add item to order) → **Gustavo**
-- [ ] PATCH /api/orders/:id/items/:itemId/status (update item status) → **Gustavo**
-- [ ] DELETE /api/orders/:id/items/:itemId (remove item) → **Gustavo**
+**Order Items:** → **Rafael** ✅ COMPLETO
+- [x] POST /api/pedidos/:id/items (add item to order) → **Rafael** ✅
+- [x] PATCH /api/pedidos/:id/items/:itemId/status (update item status) → **Rafael** ✅
+- [x] DELETE /api/pedidos/:id/items/:itemId (remove item) → **Rafael** ✅
 
-**Order Costs:** → **Peu**
-- [ ] POST /api/orders/:id/costs (set costs 1:1) → **Peu**
-- [ ] PUT /api/orders/:id/costs (update costs) → **Peu**
+**Order Costs:** → **Rafael** ✅ COMPLETO
+- [x] POST /api/pedidos/:id/costs (set costs 1:1) → **Rafael** ✅
+- [x] PUT /api/pedidos/:id/costs (update costs) → **Rafael** ✅
 - [ ] Calculate financial totals and margins → **Peu**
 
-**Order Payments:** → **Peu**
-- [ ] POST /api/orders/:id/payment-methods → **Peu**
+**Order Payments:** → **Rafael** ✅ COMPLETO
+- [x] POST /api/pedidos/:id/payment-methods → **Rafael** ✅
 - [ ] Track multiple payment methods per order → **Peu**
 
 **Business Logic Validation:** → **Rafael**
-- [ ] Unique numero_nf per store (UNIQUE constraint enforced) → **Rafael**
-- [ ] One status per order → **Rafael**
-- [ ] Valid status transitions only → **Duda**
-- [ ] Cannot delete order with RMA (FK constraint) → **Duda**
-- [ ] Financial values must be DECIMAL(12,2) → **Peu**
+- [x] Unique numero_nf per store (UNIQUE constraint enforced via DB) → **Rafael** ✅
+- [x] One status per order → **Rafael** ✅
+- [x] Status livre (qualquer → qualquer, sem restrição de transição) → **Rafael** ✅
+- [x] Cannot delete order with RMA (FK constraint) → **Duda** ✅
+- [x] Financial values must be DECIMAL(12,2) → **Rafael** ✅
 
 **Testing:** → **Gustavo + Peu**
 - [ ] Test complete order creation flow → **Gustavo**
@@ -311,12 +371,12 @@
 - [ ] POST /api/quotes/:id/items → **Peu**
 - [ ] DELETE /api/quotes/:id/items/:itemId → **Peu**
 
-**RMA API:** → **Duda**
-- [ ] POST /api/rma (create from existing order) → **Duda**
-- [ ] GET /api/rma (list RMA requests) → **Duda**
-- [ ] GET /api/rma/:id (RMA details) → **Duda**
-- [ ] PATCH /api/rma/:id/items/:itemId/status → **Duda**
-- [ ] PATCH /api/rma/:id/close (complete RMA) → **Duda**
+**RMA API:** → **Duda** ✅ COMPLETO
+- [x] POST /api/rma (create from existing order) → **Duda** ✅
+- [x] GET /api/rma (list RMA requests) → **Duda** ✅
+- [x] GET /api/rma/:id (RMA details) → **Duda** ✅
+- [x] PATCH /api/rma/:id/items/:itemId/status → **Duda** ✅
+- [x] PATCH /api/rma/:id/close (complete RMA) → **Duda** ✅
 
 **Testing:** → **Peu**
 - [ ] Quote creation works → **Peu**
@@ -336,18 +396,18 @@
 ### 1.7 Audit & Compliance Features (Days 8-10)
 **Priority:** P0 - BLOCKER (LGPD Requirement)
 
-**Status History Tracking:** → **Peu**
-- [ ] Insert into status_history on every status change → **Peu**
-- [ ] Track entity_type, entity_id, old_status, new_status → **Peu**
-- [ ] Record changed_by (user) and reason → **Peu**
+**Status History Tracking:** → **Rafael** ✅ (implementado junto com Orders)
+- [x] Insert into status_history on every status change → **Rafael** ✅
+- [x] Track entity_type, entity_id, old_status, new_status → **Rafael** ✅
+- [x] Record changed_by (user) and reason → **Rafael** ✅
 - [ ] Verify data in status_history table → **Peu**
 
 **Audit Log Implementation:** → **Rafael**
-- [ ] Insert into audit_logs on CREATE → **Rafael**
-- [ ] Insert into audit_logs on UPDATE → **Rafael**
-  - [ ] Store old_values as JSONB → **Rafael**
-  - [ ] Store new_values as JSONB → **Rafael**
-- [ ] Insert into audit_logs on DELETE (soft delete) → **Rafael**
+- [x] Insert into audit_logs on CREATE → **Rafael** ✅
+- [x] Insert into audit_logs on UPDATE → **Rafael** ✅
+  - [x] Store old_values as JSONB → **Rafael** ✅
+  - [x] Store new_values as JSONB → **Rafael** ✅
+- [x] Insert into audit_logs on DELETE (soft delete) → **Rafael** ✅
 - [ ] Capture ip_address and user_agent → **Rafael**
 - [ ] Set 6+ month retention policy → **Rafael**
 
@@ -1059,12 +1119,28 @@ Any delay in Week 1-3 → Delays Week 10 launch
 - [x] **CRITICAL:** Set up PostgreSQL + conectar banco ✅
 - [x] **CRITICAL:** Servidor FastAPI rodando (localhost:8000/docs) ✅
 - [x] **CRITICAL:** Alembic configurado com baseline ✅
-- [ ] **CRITICAL:** Testar endpoints de auth via Swagger (register → login → 2FA)
-- [ ] **CRITICAL:** Run DATABASE_INIT.sql para verificar todas as 16 tabelas
-- [ ] **CRITICAL:** Run verification checklist (DATABASE_SETUP_GUIDE.md)
-- [ ] **PRÓXIMO:** Gerar os 15 ORM models restantes (1.3)
-- [ ] **PRÓXIMO:** Implementar RBAC middleware (1.4)
-- [ ] Frontend team: Start API client setup
+- [x] **CRÍTICO:** Auth completo (login, 2FA, blacklist, change-password) ✅
+- [x] **CRÍTICO:** ORM models 100% gerados ✅
+- [x] **CRÍTICO:** Orders CRUD completo (6 endpoints) ✅
+- [x] **CRÍTICO:** Audit log + status history integrados aos pedidos ✅
+- [x] **FEITO:** Push + PR feature/orders-api → develop ✅
+- [x] **FEITO:** Produto ORM model criado ✅
+- [x] **FEITO:** Cannot delete order with RMA implementado ✅
+- [x] **FEITO:** Status livre (qualquer → qualquer) implementado ✅
+- [x] **FEITO:** Cotação V2 — novos campos do frontend ✅
+- [x] **FEITO:** RmaStatus + ItemRmaStatus enum fix ✅
+- [x] **FEITO:** Seed data completo com 10 produtos mock ✅
+- [x] **FEITO:** POST /auth/change-password ✅
+- [x] **FEITO:** Users management (GET /users, GET /users/me, GET /users/:id, PATCH /users/:id/deactivate) ✅
+- [x] **FEITO:** Order Items API (POST/PATCH/DELETE /pedidos/:id/items) ✅
+- [x] **FEITO:** Order Costs API (POST/PUT /pedidos/:id/costs) ✅
+- [x] **FEITO:** Order Payments API (POST /pedidos/:id/payment-methods) ✅
+- [ ] **PRÓXIMO:** Merge feature/orm-models → develop (aguardando review)
+- [ ] **PRÓXIMO:** Merge feature/auth-middleware → develop (aguardando review)
+- [ ] **PRÓXIMO:** Merge feature/orders-api → develop (aguardando review)
+- [ ] **PRÓXIMO:** Rodar MIGRATION_COTACAO_V2.sql no banco de produção
+- [ ] **PRÓXIMO:** Quotes API (1.6) → Gustavo + Duda
+- [ ] **PRÓXIMO:** Frontend team: API client setup (2.1)
 
 ---
 
@@ -1087,7 +1163,7 @@ Any delay in Week 1-3 → Delays Week 10 launch
 
 ---
 
-**Last Updated:** April 26, 2026  
-**Status:** 🚀 Backend foundation rodando — fase de ORM models + RBAC iniciando  
-**Next Milestone:** Auth testado + 15 ORM models gerados  
+**Last Updated:** May 2, 2026  
+**Status:** 🚀 30 endpoints implementados — Auth (9) + Orders CRUD (6) + Order Items (3) + Order Costs (2) + Order Payments (1) + RMA (5) + Users (4). Única pendência de backend: Quotes API.  
+**Next Milestone:** Merge PRs → develop; Quotes API (Gustavo + Duda); Frontend API client setup (Peu)  
 **MVP Target:** Week 10 (8-10 weeks)

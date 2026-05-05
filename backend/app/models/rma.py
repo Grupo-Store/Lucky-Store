@@ -32,7 +32,7 @@ class Rma(Base):
     data_registro = Column(Date, nullable=False)
     prazo_entrega = Column(Date, nullable=True)
 
-    status = Column(SQLEnum(RmaStatus, native_enum=False), nullable=False, default=RmaStatus.REGISTERED)
+    status = Column(SQLEnum(RmaStatus, native_enum=False, values_callable=lambda x: [e.value for e in x]), nullable=False, default=RmaStatus.REGISTERED)
 
     created_by = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)

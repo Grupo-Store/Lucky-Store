@@ -92,3 +92,35 @@ class AuthService:
             "access_token": create_access_token(subject=user_id),
             "token_type": "bearer",
         }
+    
+    @staticmethod
+    def logout_user(db: Session, user_id: str) -> bool:
+        """Logout user (can implement token blacklist if needed)."""
+        # For now, logout is handled on frontend by removing tokens
+        # In production, implement token blacklist
+        return True
+
+    @staticmethod
+    def change_password(db: Session, user_id: str, current_password: str, new_password: str) -> None:
+        user = AuthService.get_user_by_id(db, user_id)
+        if not verify_password(current_password, user.password_hash):
+            raise AuthenticationException("Senha atual incorreta")
+        user.password_hash = hash_password(new_password)
+        db.commit()
+
+    @staticmethod
+    def list_users(db: Session, page: int = 1, limit: int = 20):
+        q = db.query(User).filter(User.deleted_at.is_(None))
+        total = q.count()
+        items = q.offset((page - 1) * limit).limit(limit).all()
+        return items, total
+
+    @staticmethod
+    def deactivate_user(db: Session, user_id: str, current_user: User) -> User:
+        if str(current_user.id) == user_id:
+            raise ValueError("Não é possível desativar o próprio usuário")
+        user = AuthService.get_user_by_id(db, user_id)
+        user.is_active = False
+        db.commit()
+        db.refresh(user)
+        return user

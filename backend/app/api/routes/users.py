@@ -1,25 +1,35 @@
+import math
+from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
-from uuid import UUID
-from typing import List
 from app.database import get_db
 from app.models.user import User
 from app.schemas.user import UserResponse
-from app.core.dependencies import get_current_user
+from app.services.auth import AuthService
+from app.api.routes.auth import get_current_user_dep, require_admin
+from app.utils.errors import NotFoundException, to_http_exception
 
 router = APIRouter(prefix="/users", tags=["users"])
 
 
-@router.get("", response_model=List[UserResponse])
+@router.get("", response_model=dict)
 def list_users(
+    page: int = 1,
+    limit: int = 20,
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_user),
+    _: User = Depends(require_admin),
 ):
-    return db.query(User).filter(User.deleted_at.is_(None)).all()
+    items, total = AuthService.list_users(db, page=page, limit=limit)
+    return {
+        "items": [UserResponse.model_validate(u) for u in items],
+        "total": total,
+        "page": page,
+        "pages": math.ceil(total / limit) if total else 0,
+    }
 
 
 @router.get("/me", response_model=UserResponse)
-def get_me(current_user: User = Depends(get_current_user)):
+def get_me(current_user: User = Depends(get_current_user_dep)):
     return current_user
 
 
@@ -27,26 +37,23 @@ def get_me(current_user: User = Depends(get_current_user)):
 def get_user(
     user_id: UUID,
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_user),
+    _: User = Depends(require_admin),
 ):
-    user = db.query(User).filter(User.id == user_id, User.deleted_at.is_(None)).first()
-    if not user:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
-    return user
+    try:
+        return AuthService.get_user_by_id(db, str(user_id))
+    except NotFoundException as exc:
+        raise to_http_exception(exc)
 
 
 @router.patch("/{user_id}/deactivate", response_model=UserResponse)
 def deactivate_user(
     user_id: UUID,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_admin),
 ):
-    if str(current_user.id) == str(user_id):
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot deactivate yourself")
-    user = db.query(User).filter(User.id == user_id).first()
-    if not user:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
-    user.is_active = False
-    db.commit()
-    db.refresh(user)
-    return user
+    try:
+        return AuthService.deactivate_user(db, str(user_id), current_user)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+    except NotFoundException as exc:
+        raise to_http_exception(exc)
