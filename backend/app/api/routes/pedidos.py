@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy.orm import Session
 from typing import Optional, List
 from uuid import UUID
@@ -30,12 +30,15 @@ router = APIRouter(prefix="/pedidos", tags=["pedidos"])
 
 @router.post("", response_model=PedidoResponse, status_code=status.HTTP_201_CREATED)
 def create_pedido(
+    request: Request,
     data: PedidoCreate,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user_dep),
 ):
+    ip = request.client.host if request.client else None
+    ua = request.headers.get("user-agent")
     try:
-        return PedidoService.create(db, data, current_user.id)
+        return PedidoService.create(db, data, current_user.id, ip_address=ip, user_agent=ua)
     except Exception as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
 
@@ -109,13 +112,16 @@ def get_pedido(
 
 @router.put("/{pedido_id}", response_model=PedidoResponse)
 def update_pedido(
+    request: Request,
     pedido_id: UUID,
     data: PedidoUpdate,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user_dep),
 ):
+    ip = request.client.host if request.client else None
+    ua = request.headers.get("user-agent")
     try:
-        return PedidoService.update(db, pedido_id, data, current_user.id)
+        return PedidoService.update(db, pedido_id, data, current_user.id, ip_address=ip, user_agent=ua)
     except NotFoundException as exc:
         raise to_http_exception(exc)
     except Exception as exc:
@@ -124,13 +130,19 @@ def update_pedido(
 
 @router.patch("/{pedido_id}/status", response_model=PedidoResponse)
 def change_status(
+    request: Request,
     pedido_id: UUID,
     data: StatusChangeRequest,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user_dep),
 ):
+    ip = request.client.host if request.client else None
+    ua = request.headers.get("user-agent")
     try:
-        return PedidoService.change_status(db, pedido_id, data.new_status, current_user.id, data.reason)
+        return PedidoService.change_status(
+            db, pedido_id, data.new_status, current_user.id, data.reason,
+            ip_address=ip, user_agent=ua,
+        )
     except NotFoundException as exc:
         raise to_http_exception(exc)
     except BusinessLogicException as exc:
@@ -141,11 +153,14 @@ def change_status(
 
 @router.delete("/{pedido_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_pedido(
+    request: Request,
     pedido_id: UUID,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user_dep),
 ):
+    ip = request.client.host if request.client else None
+    ua = request.headers.get("user-agent")
     try:
-        PedidoService.soft_delete(db, pedido_id, current_user.id)
+        PedidoService.soft_delete(db, pedido_id, current_user.id, ip_address=ip, user_agent=ua)
     except NotFoundException as exc:
         raise to_http_exception(exc)

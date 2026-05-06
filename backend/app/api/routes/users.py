@@ -9,6 +9,7 @@ from app.models.audit_log import AuditLog
 from app.schemas.user import UserResponse
 from app.schemas.audit_log import AuditLogResponse
 from app.services.auth import AuthService
+from app.services.lgpd import LgpdService
 from app.api.routes.auth import get_current_user_dep, require_admin, get_current_user
 from app.utils.errors import NotFoundException, to_http_exception
 from pydantic import BaseModel
@@ -81,6 +82,15 @@ def export_user_data(
         user=UserResponse.model_validate(user),
         audit_logs=[AuditLogResponse.model_validate(log) for log in audit_logs],
     )
+
+
+@router.delete("/{user_id}/delete-data", status_code=status.HTTP_200_OK)
+def delete_user_data(
+    user_id: UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin),
+):
+    return LgpdService.delete_user_data(db, user_id, current_user.id)
 
 
 @router.patch("/{user_id}/deactivate", response_model=UserResponse)

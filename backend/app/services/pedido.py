@@ -19,16 +19,18 @@ def _generate_numero_os(db: Session) -> str:
 
 
 def _audit(db: Session, action: AuditAction, entity_id, changed_by: UUID,
-           old_values: dict = None, new_values: dict = None):
-    entry = AuditLog(
+           old_values: dict = None, new_values: dict = None,
+           ip_address: str = None, user_agent: str = None):
+    db.add(AuditLog(
         entity_type="pedido",
         entity_id=entity_id,
         action=action,
         changed_by=changed_by,
         old_values=old_values,
         new_values=new_values,
-    )
-    db.add(entry)
+        ip_address=ip_address,
+        user_agent=user_agent,
+    ))
 
 
 def _economia(pedido: Pedido) -> Optional[Decimal]:
@@ -41,7 +43,8 @@ def _economia(pedido: Pedido) -> Optional[Decimal]:
 class PedidoService:
 
     @staticmethod
-    def create(db: Session, data: PedidoCreate, current_user_id: UUID) -> Pedido:
+    def create(db: Session, data: PedidoCreate, current_user_id: UUID,
+               ip_address: str = None, user_agent: str = None) -> Pedido:
         pedido = Pedido(
             id_loja=data.id_loja,
             id_vendedor=data.id_vendedor,
@@ -72,7 +75,8 @@ class PedidoService:
             db.add(CustoPedido(id_pedido=pedido.id, **data.custo.model_dump()))
 
         _audit(db, AuditAction.CREATE, pedido.id, current_user_id,
-               new_values={"status": pedido.status, "numero_os": pedido.numero_os})
+               new_values={"status": pedido.status, "numero_os": pedido.numero_os},
+               ip_address=ip_address, user_agent=user_agent)
 
         db.add(StatusHistory(
             entity_type=EntityType.PEDIDO,
@@ -146,7 +150,8 @@ class PedidoService:
         )
 
     @staticmethod
-    def update(db: Session, pedido_id: UUID, data: PedidoUpdate, current_user_id: UUID) -> Pedido:
+    def update(db: Session, pedido_id: UUID, data: PedidoUpdate, current_user_id: UUID,
+               ip_address: str = None, user_agent: str = None) -> Pedido:
         pedido = PedidoService.get_by_id(db, pedido_id)
 
         old_values = {
@@ -165,7 +170,8 @@ class PedidoService:
         }
 
         _audit(db, AuditAction.UPDATE, pedido.id, current_user_id,
-               old_values=old_values, new_values=new_values)
+               old_values=old_values, new_values=new_values,
+               ip_address=ip_address, user_agent=user_agent)
 
         db.commit()
         db.refresh(pedido)
@@ -174,7 +180,8 @@ class PedidoService:
 
     @staticmethod
     def change_status(db: Session, pedido_id: UUID, new_status: str,
-                      current_user_id: UUID, reason: Optional[str] = None) -> Pedido:
+                      current_user_id: UUID, reason: Optional[str] = None,
+                      ip_address: str = None, user_agent: str = None) -> Pedido:
         pedido = PedidoService.get_by_id(db, pedido_id)
         old_status = pedido.status
         pedido.status = new_status
@@ -191,7 +198,8 @@ class PedidoService:
         ))
 
         _audit(db, AuditAction.UPDATE, pedido.id, current_user_id,
-               old_values={"status": old_status}, new_values={"status": new_status})
+               old_values={"status": old_status}, new_values={"status": new_status},
+               ip_address=ip_address, user_agent=user_agent)
 
         db.commit()
         db.refresh(pedido)
@@ -199,7 +207,8 @@ class PedidoService:
         return pedido
 
     @staticmethod
-    def soft_delete(db: Session, pedido_id: UUID, current_user_id: UUID) -> None:
+    def soft_delete(db: Session, pedido_id: UUID, current_user_id: UUID,
+                    ip_address: str = None, user_agent: str = None) -> None:
         pedido = PedidoService.get_by_id(db, pedido_id)
 
         has_rma = db.query(Rma).filter(Rma.id_pedido_origem == pedido_id).first()
@@ -209,6 +218,7 @@ class PedidoService:
         pedido.deleted_at = datetime.now(timezone.utc)
 
         _audit(db, AuditAction.DELETE, pedido.id, current_user_id,
-               old_values={"status": pedido.status, "numero_os": pedido.numero_os})
+               old_values={"status": pedido.status, "numero_os": pedido.numero_os},
+               ip_address=ip_address, user_agent=user_agent)
 
         db.commit()
