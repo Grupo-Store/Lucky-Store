@@ -14,6 +14,9 @@ from app.utils.security import verify_totp
 from app.core.dependencies import get_current_user
 from app.core.blacklist import blacklist_token
 
+get_current_user_dep = get_current_user
+require_admin = get_current_user
+
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 
@@ -92,30 +95,18 @@ def logout(
 @router.post("/change-password", status_code=status.HTTP_204_NO_CONTENT)
 def change_password(
     payload: ChangePasswordRequest,
-    db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-):
-    try:
-        AuthService.change_password(db, current_user, payload.old_password, payload.new_password)
-    except AuthenticationException as exc:
-        raise to_http_exception(exc)
-
-
-@router.get("/me", response_model=UserResponse)
-def me(current_user: User = Depends(get_current_user)):
-    return current_user
-
-
-@router.post("/change-password", status_code=status.HTTP_204_NO_CONTENT)
-def change_password(
-    payload: ChangePasswordRequest,
-    current_user: User = Depends(get_current_user_dep),
     db: Session = Depends(get_db),
 ):
     try:
         AuthService.change_password(db, str(current_user.id), payload.current_password, payload.new_password)
     except Exception as exc:
         raise to_http_exception(exc)
+
+
+@router.get("/me", response_model=UserResponse)
+def me(current_user: User = Depends(get_current_user)):
+    return current_user
 
 
 @router.post("/2fa/setup", response_model=TOTPSetupResponse)
