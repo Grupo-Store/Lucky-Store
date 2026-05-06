@@ -358,18 +358,18 @@
 ### 1.6 Core API Endpoints - Quotes & RMA (Days 7-9)
 **Priority:** P0 - BLOCKER
 
-**Quotes API:** → **Gustavo**
-- [ ] POST /api/quotes (create quote) → **Gustavo**
-- [ ] GET /api/quotes (list quotes) → **Gustavo**
-- [ ] GET /api/quotes/:id (quote details) → **Gustavo**
-- [ ] PUT /api/quotes/:id (update quote) → **Gustavo**
-- [ ] PATCH /api/quotes/:id/phase (update phase) → **Gustavo**
-- [ ] DELETE /api/quotes/:id (soft delete) → **Gustavo**
-- [ ] POST /api/quotes/:id/convert (convert quote to order) → **Gustavo**
+**Quotes API:** → **Rafael** ✅ COMPLETO
+- [x] POST /api/cotacoes (create quote) → **Rafael** ✅
+- [x] GET /api/cotacoes (list quotes) → **Rafael** ✅
+- [x] GET /api/cotacoes/:id (quote details) → **Rafael** ✅
+- [x] PUT /api/cotacoes/:id (update quote) → **Rafael** ✅
+- [x] PATCH /api/cotacoes/:id/fase (update phase) → **Rafael** ✅
+- [x] DELETE /api/cotacoes/:id (soft delete) → **Rafael** ✅
+- [x] POST /api/cotacoes/:id/converter (convert quote to order, auto OS number) → **Rafael** ✅
 
-**Quote Items:** → **Peu**
-- [ ] POST /api/quotes/:id/items → **Peu**
-- [ ] DELETE /api/quotes/:id/items/:itemId → **Peu**
+**Quote Items:** → **Rafael** ✅ COMPLETO
+- [x] POST /api/cotacoes/:id/itens → **Rafael** ✅
+- [x] DELETE /api/cotacoes/:id/itens/:itemId → **Rafael** ✅
 
 **RMA API:** → **Duda** ✅ COMPLETO
 - [x] POST /api/rma (create from existing order) → **Duda** ✅
@@ -453,7 +453,7 @@
 - [ ] Test pagination and filtering → **Duda**
 
 **API Documentation:** → **Peu**
-- [ ] Create Swagger/OpenAPI documentation → **Peu**
+- [x] Create Swagger/OpenAPI documentation (auto-gerado via FastAPI) → **Peu** ✅
 - [ ] Document all endpoints with examples → **Peu**
 - [ ] Document error responses → **Peu**
 - [ ] Document authentication requirements → **Peu**
@@ -477,14 +477,14 @@
 ### 2.1 API Client Setup (Days 1-2)
 **Priority:** P0 - BLOCKER
 
-**Frontend Team Tasks:** → **Peu**
-- [ ] Create API client module (src/api/) → **Peu**
-- [ ] Configure axios with interceptors → **Gustavo**
-  - [ ] Auto-attach Authorization header → **Gustavo**
-  - [ ] Auto-refresh tokens on 401 → **Gustavo**
-  - [ ] Retry failed requests → **Gustavo**
-- [ ] Implement error handling → **Peu**
-- [ ] Create API endpoint constants → **Peu**
+**Frontend Team Tasks:** → **Peu** ✅ COMPLETO
+- [x] Create API client module (src/api/) → **Peu** ✅
+- [x] Configure axios with interceptors → **Peu** ✅
+  - [x] Auto-attach Authorization header → **Peu** ✅
+  - [x] Auto-refresh tokens on 401 → **Peu** ✅
+  - [x] Retry failed requests → **Peu** ✅
+- [x] Implement error handling → **Peu** ✅
+- [x] Create API endpoint constants → **Peu** ✅
 - [ ] Mock API responses for development → **Duda**
 
 **Effort:** 2 frontend devs, 1-2 days  
@@ -1135,12 +1135,15 @@ Any delay in Week 1-3 → Delays Week 10 launch
 - [x] **FEITO:** Order Items API (POST/PATCH/DELETE /pedidos/:id/items) ✅
 - [x] **FEITO:** Order Costs API (POST/PUT /pedidos/:id/costs) ✅
 - [x] **FEITO:** Order Payments API (POST /pedidos/:id/payment-methods) ✅
-- [ ] **PRÓXIMO:** Merge feature/orm-models → develop (aguardando review)
-- [ ] **PRÓXIMO:** Merge feature/auth-middleware → develop (aguardando review)
-- [ ] **PRÓXIMO:** Merge feature/orders-api → develop (aguardando review)
-- [ ] **PRÓXIMO:** Rodar MIGRATION_COTACAO_V2.sql no banco de produção
-- [ ] **PRÓXIMO:** Quotes API (1.6) → Gustavo + Duda
-- [ ] **PRÓXIMO:** Frontend team: API client setup (2.1)
+- [x] **FEITO:** Merge feature/orm-models → develop ✅
+- [x] **FEITO:** Merge feature/auth-middleware → develop ✅
+- [x] **FEITO:** Merge feature/orders-api → develop ✅
+- [x] **FEITO:** Quotes & RMA API (1.6) → Rafael + Duda ✅
+- [x] **FEITO:** Frontend API client setup (2.1) → Peu ✅
+- [ ] **PRÓXIMO:** Merge feature/quotes-api → develop
+- [ ] **PRÓXIMO:** Rodar MIGRATION_PEDIDOS_V2.sql e V3.sql no banco de produção
+- [ ] **PRÓXIMO:** React Query integration (2.2) → Gustavo
+- [ ] **PRÓXIMO:** Modal integration (2.3) → Duda + Rafael
 
 ---
 
