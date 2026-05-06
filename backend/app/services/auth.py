@@ -45,13 +45,6 @@ class AuthService:
         return user
 
     @staticmethod
-    def change_password(db: Session, user: User, old_password: str, new_password: str) -> None:
-        if not verify_password(old_password, user.password_hash):
-            raise AuthenticationException("Current password is incorrect")
-        user.password_hash = hash_password(new_password)
-        db.commit()
-
-    @staticmethod
     def setup_totp(db: Session, user_id: str) -> dict:
         user = AuthService.get_user_by_id(db, user_id)
         secret = generate_totp_secret()
@@ -92,13 +85,6 @@ class AuthService:
             "access_token": create_access_token(subject=user_id),
             "token_type": "bearer",
         }
-    
-    @staticmethod
-    def logout_user(db: Session, user_id: str) -> bool:
-        """Logout user (can implement token blacklist if needed)."""
-        # For now, logout is handled on frontend by removing tokens
-        # In production, implement token blacklist
-        return True
 
     @staticmethod
     def change_password(db: Session, user_id: str, current_password: str, new_password: str) -> None:

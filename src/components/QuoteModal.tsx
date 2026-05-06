@@ -32,10 +32,11 @@ function handleEnterBlur(e: KeyboardEvent<HTMLInputElement>) {
 }
 
 const emptyQuote = (index: string): Quote => ({
-  id: '', index, createdAt: Date.now(), customer: '', cnpj: '',
+  id: '', index, createdAt: Date.now(), b2bCompany: '', customer: '', cnpj: '',
   requestNumber: '', requestDate: format(new Date(), 'yyyy-MM-dd'),
   company: '', directBilling: false, supplier: '', seller: '',
   value: 0, items: [], observations: '', phases: emptyPhases(),
+  taxLucky: 0, taxBTech: 0,
 });
 
 interface Props {
@@ -99,6 +100,28 @@ export function QuoteModal({ open, onClose, quote, onSave, onDelete, nextIndex }
   };
   const removeItem = (id: string) => set('items', (form.items || []).filter(i => i.id !== id));
 
+  /* ---------- Derived totals (auto-calculated) ---------- */
+  const items = form.items || [];
+  const totalCost = items.reduce((s, i) => s + (i.quoteValue || 0) * (i.quantity || 0), 0);
+  const totalRevenue = items.reduce((s, i) => s + (i.closingValue || 0) * (i.quantity || 0), 0);
+  const taxLucky = form.taxLucky || 0;
+  const taxBTech = form.taxBTech || 0;
+  const margin = totalCost > 0 ? ((totalRevenue / totalCost) - 1) * 100 : 0;
+  const grossProfit = totalRevenue - totalCost;
+  const profitBTech = (totalRevenue * ((100 - taxBTech) / 100)) - totalCost;
+  const profitLucky = (totalRevenue * ((100 - taxLucky) / 100)) - totalCost;
+
+  // Auto-sync closed phase value to sum of all Valor Final
+  useEffect(() => {
+    if ((form.phases.closed.value || 0) !== totalRevenue) {
+      setForm(prev => ({
+        ...prev,
+        phases: { ...prev.phases, closed: { ...prev.phases.closed, value: totalRevenue } },
+      }));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [totalRevenue]);
+
   const handleSave = () => {
     onSave({ ...form, id: form.id || crypto.randomUUID(), createdAt: form.createdAt || Date.now() });
     onClose();
@@ -141,7 +164,7 @@ export function QuoteModal({ open, onClose, quote, onSave, onDelete, nextIndex }
 
   return (
     <Dialog open={open} onOpenChange={v => !v && onClose()}>
-      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto bg-card print:max-w-full print:max-h-none print:shadow-none">
+      <DialogContent className="max-w-[95vw] xl:max-w-[1400px] max-h-[90vh] overflow-y-auto bg-card print:max-w-full print:max-h-none print:shadow-none">
         <DialogHeader>
           <DialogTitle className="text-secondary text-xl">
             {isEdit ? `Editar Cotação ${form.index}` : `Nova Cotação ${form.index}`}
@@ -157,7 +180,12 @@ export function QuoteModal({ open, onClose, quote, onSave, onDelete, nextIndex }
               <Input readOnly className="bg-muted border-border font-semibold" value={form.index} />
             </div>
             <div>
-              <Label>Cliente *</Label>
+              <Label>Empresa</Label>
+              <Input className="bg-white border-border" value={form.b2bCompany || ''}
+                onChange={e => set('b2bCompany', e.target.value)} onKeyDown={handleEnterBlur} />
+            </div>
+            <div>
+              <Label>Cliente</Label>
               <Input className="bg-white border-border" value={form.customer}
                 onChange={e => set('customer', e.target.value)} onKeyDown={handleEnterBlur} />
             </div>
@@ -224,35 +252,47 @@ export function QuoteModal({ open, onClose, quote, onSave, onDelete, nextIndex }
             </Button>
           </div>
           <div className="space-y-2">
-            {(form.items || []).map(item => (
-              <div key={item.id} className="grid grid-cols-12 gap-2 items-center border rounded-md p-2 bg-muted/20">
-                <Input placeholder="Nome do Item" className="col-span-3 bg-white border-border"
-                  value={item.name} onChange={e => updateItem(item.id, 'name', e.target.value)} onKeyDown={handleEnterBlur} />
-                <Input type="number" min={1} placeholder="Qtd" className="col-span-1 bg-white border-border"
-                  value={item.quantity} onChange={e => updateItem(item.id, 'quantity', parseInt(e.target.value) || 1)} onKeyDown={handleEnterBlur} />
-                <div className="col-span-2">
-                  <CurrencyInput value={item.quoteValue || 0} onChange={n => updateItem(item.id, 'quoteValue', n)} />
+            {(form.items || []).map(item => {
+              const lineCost = (item.quoteValue || 0) * (item.quantity || 0);
+              const lineFinal = (item.closingValue || 0) * (item.quantity || 0);
+              return (
+                <div key={item.id} className="grid grid-cols-16 gap-2 items-center border rounded-md p-2 bg-muted/20" style={{ gridTemplateColumns: 'repeat(16, minmax(0, 1fr))' }}>
+                  <Input placeholder="Nome do Item" className="bg-white border-border" style={{ gridColumn: 'span 3' }}
+                    value={item.name} onChange={e => updateItem(item.id, 'name', e.target.value)} onKeyDown={handleEnterBlur} />
+                  <Input type="number" min={1} placeholder="Qtd" className="bg-white border-border" style={{ gridColumn: 'span 1' }}
+                    value={item.quantity} onChange={e => updateItem(item.id, 'quantity', parseInt(e.target.value) || 1)} onKeyDown={handleEnterBlur} />
+                  <div style={{ gridColumn: 'span 2' }}>
+                    <CurrencyInput value={item.quoteValue || 0} onChange={n => updateItem(item.id, 'quoteValue', n)} />
+                  </div>
+                  <div style={{ gridColumn: 'span 2' }}>
+                    <Input readOnly className="bg-muted border-border font-semibold" value={toBRL(lineCost)} />
+                  </div>
+                  <div style={{ gridColumn: 'span 2' }}>
+                    <CurrencyInput value={item.closingValue || 0} onChange={n => updateItem(item.id, 'closingValue', n)} />
+                  </div>
+                  <div style={{ gridColumn: 'span 2' }}>
+                    <Input readOnly className="bg-muted border-border font-semibold" value={toBRL(lineFinal)} />
+                  </div>
+                  <Input placeholder="Fornecedor" className="bg-white border-border" style={{ gridColumn: 'span 3' }}
+                    value={item.supplier} onChange={e => updateItem(item.id, 'supplier', e.target.value)} onKeyDown={handleEnterBlur} />
+                  <Button variant="ghost" size="icon" style={{ gridColumn: 'span 1' }} onClick={() => removeItem(item.id)}>
+                    <Trash2 className="h-4 w-4 text-destructive" />
+                  </Button>
                 </div>
-                <div className="col-span-2">
-                  <CurrencyInput value={item.closingValue || 0} onChange={n => updateItem(item.id, 'closingValue', n)} />
-                </div>
-                <Input placeholder="Fornecedor" className="col-span-3 bg-white border-border"
-                  value={item.supplier} onChange={e => updateItem(item.id, 'supplier', e.target.value)} onKeyDown={handleEnterBlur} />
-                <Button variant="ghost" size="icon" className="col-span-1" onClick={() => removeItem(item.id)}>
-                  <Trash2 className="h-4 w-4 text-destructive" />
-                </Button>
-              </div>
-            ))}
+              );
+            })}
             {(form.items || []).length === 0 && (
               <p className="text-sm text-muted-foreground text-center py-4">Nenhum item adicionado</p>
             )}
             {(form.items || []).length > 0 && (
-              <div className="grid grid-cols-12 gap-2 px-2 text-[10px] uppercase tracking-wide text-muted-foreground font-semibold">
-                <span className="col-span-3">Nome</span>
-                <span className="col-span-1">Qtd</span>
-                <span className="col-span-2">Valor Cotação</span>
-                <span className="col-span-2">Valor Fechamento</span>
-                <span className="col-span-3">Fornecedor</span>
+              <div className="grid gap-2 px-2 text-[10px] uppercase tracking-wide text-muted-foreground font-semibold" style={{ gridTemplateColumns: 'repeat(16, minmax(0, 1fr))' }}>
+                <span style={{ gridColumn: 'span 3' }}>Nome</span>
+                <span style={{ gridColumn: 'span 1' }}>Qtd</span>
+                <span style={{ gridColumn: 'span 2' }}>Valor Cotação</span>
+                <span style={{ gridColumn: 'span 2' }}>Valor</span>
+                <span style={{ gridColumn: 'span 2' }}>Valor Fechamento</span>
+                <span style={{ gridColumn: 'span 2' }}>Valor Final</span>
+                <span style={{ gridColumn: 'span 3' }}>Fornecedor</span>
               </div>
             )}
           </div>
@@ -295,11 +335,8 @@ export function QuoteModal({ open, onClose, quote, onSave, onDelete, nextIndex }
                     onChange={d => setPhase('closed', { date: d })} />
                 </div>
                 <div>
-                  <Label className="text-xs">Valor (R$)</Label>
-                  <CurrencyInput
-                    value={form.phases.closed.value || 0}
-                    onChange={n => setPhase('closed', { value: n })}
-                  />
+                  <Label className="text-xs">Valor (R$) — auto</Label>
+                  <Input readOnly className="bg-muted border-border font-semibold" value={toBRL(totalRevenue)} />
                 </div>
               </div>
             ))}
@@ -310,6 +347,54 @@ export function QuoteModal({ open, onClose, quote, onSave, onDelete, nextIndex }
                   onChange={d => setPhase('dropped', { date: d })} />
               </div>
             ))}
+          </div>
+        </section>
+
+        {/* ============== 5. IMPOSTOS ============== */}
+        <section className="border rounded-lg p-4">
+          <h3 className="text-sm font-bold text-secondary uppercase tracking-wide mb-3">Impostos</h3>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <Label>Imposto Lucky Store (%)</Label>
+              <Input type="number" step="0.01" min={0} className="bg-white border-border"
+                value={form.taxLucky ?? 0}
+                onChange={e => set('taxLucky', parseFloat(e.target.value) || 0)}
+                onKeyDown={handleEnterBlur} />
+            </div>
+            <div>
+              <Label>Imposto BTech (%)</Label>
+              <Input type="number" step="0.01" min={0} className="bg-white border-border"
+                value={form.taxBTech ?? 0}
+                onChange={e => set('taxBTech', parseFloat(e.target.value) || 0)}
+                onKeyDown={handleEnterBlur} />
+            </div>
+          </div>
+        </section>
+
+        {/* ============== 6. RESUMO DE LUCRATIVIDADE ============== */}
+        <section className="border-2 border-secondary/40 rounded-lg p-4 bg-secondary/5">
+          <h3 className="text-sm font-bold text-secondary uppercase tracking-wide mb-3">Resumo de Lucratividade</h3>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div>
+              <Label className="text-xs text-muted-foreground">Margem</Label>
+              <Input readOnly className="bg-white border-border font-bold text-secondary"
+                value={`${margin.toFixed(2)}%`} />
+            </div>
+            <div>
+              <Label className="text-xs text-muted-foreground">Lucro Bruto</Label>
+              <Input readOnly className="bg-white border-border font-bold text-secondary"
+                value={toBRL(grossProfit)} />
+            </div>
+            <div>
+              <Label className="text-xs text-muted-foreground">Lucro BTech</Label>
+              <Input readOnly className="bg-white border-border font-bold text-secondary"
+                value={toBRL(profitBTech)} />
+            </div>
+            <div>
+              <Label className="text-xs text-muted-foreground">Lucro Lucky</Label>
+              <Input readOnly className="bg-white border-border font-bold text-secondary"
+                value={toBRL(profitLucky)} />
+            </div>
           </div>
         </section>
 

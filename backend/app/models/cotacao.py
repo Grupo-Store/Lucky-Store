@@ -26,8 +26,10 @@ class Cotacao(Base):
     status_enviada = Column(Boolean, default=False)
     data_envio = Column(Date, nullable=True)
     status_em_fechamento = Column(Boolean, default=False)
+    data_prevista_fechamento = Column(Date, nullable=True)
     status_fechada = Column(Boolean, default=False)
     data_fechamento = Column(Date, nullable=True)
+    valor_fechamento = Column(Numeric(12, 2), nullable=True)
     status_caida = Column(Boolean, default=False)
     data_queda = Column(Date, nullable=True)
 

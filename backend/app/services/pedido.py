@@ -4,13 +4,18 @@ from decimal import Decimal
 from typing import Optional
 from uuid import UUID
 from sqlalchemy.orm import Session
-from sqlalchemy import asc, desc
+from sqlalchemy import asc, desc, text
 from app.models.pedido import Pedido, PedidoFormaPagamento, CustoPedido
 from app.models.rma import Rma
 from app.models.status_history import StatusHistory, EntityType
 from app.models.audit_log import AuditLog, AuditAction
 from app.schemas.pedido import PedidoCreate, PedidoUpdate
 from app.utils.errors import NotFoundException, BusinessLogicException
+
+
+def _generate_numero_os(db: Session) -> str:
+    num = db.execute(text("SELECT nextval('pedido_os_seq')")).scalar()
+    return f"OS-{str(num).zfill(3)}"
 
 
 def _audit(db: Session, action: AuditAction, entity_id, changed_by: UUID,
@@ -41,7 +46,7 @@ class PedidoService:
             id_loja=data.id_loja,
             id_vendedor=data.id_vendedor,
             id_cliente=data.id_cliente,
-            numero_os=data.numero_os,
+            numero_os=data.numero_os or _generate_numero_os(db),
             numero_nf=data.numero_nf,
             numero_oc=data.numero_oc,
             data_pedido=data.data_pedido,

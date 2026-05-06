@@ -15,7 +15,7 @@ class Pedido(Base):
     id_cliente = Column(UUID(as_uuid=True), ForeignKey("clientes.id"), nullable=False)
 
     numero_os = Column(String(50), nullable=False)
-    numero_nf = Column(String(50), nullable=False)
+    numero_nf = Column(String(50), nullable=True)
     numero_oc = Column(String(50), nullable=True)
 
     data_pedido = Column(Date, nullable=False)

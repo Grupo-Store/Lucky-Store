@@ -71,8 +71,8 @@ class PedidoCreate(BaseModel):
     id_loja: UUID
     id_vendedor: UUID
     id_cliente: UUID
-    numero_os: str
-    numero_nf: str
+    numero_os: Optional[str] = None
+    numero_nf: Optional[str] = None
     numero_oc: Optional[str] = None
     data_pedido: date
     data_entrega: date
@@ -144,7 +144,7 @@ class PedidoResponse(BaseModel):
     id_vendedor: UUID
     id_cliente: UUID
     numero_os: str
-    numero_nf: str
+    numero_nf: Optional[str]
     numero_oc: Optional[str]
     data_pedido: date
     data_entrega: date
