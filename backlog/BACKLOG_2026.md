@@ -3,7 +3,7 @@
 ## Project Overview
 **Orderly Hub** is a comprehensive order management system for multi-company operations (Lucky Store, BTech, AJJ) with complete audit trail, LGPD compliance, and production-ready architecture.
 
-**Status:** Auth (9 endpoints) ✅ | Orders CRUD (6 endpoints) ✅ | Order Items (3 endpoints) ✅ | Order Costs (2 endpoints) ✅ | Order Payments (1 endpoint) ✅ | RMA API (5 endpoints) ✅ | Users management (4 endpoints) ✅ | Quotes API ❌ pendente. Cotação V2 + seed data completo.
+**Status:** Auth (9 endpoints) ✅ | Orders CRUD (6 endpoints) ✅ | Order Items (3 endpoints) ✅ | Order Costs (2 endpoints) ✅ | Order Payments (1 endpoint) ✅ | RMA API (5 endpoints) ✅ | Users management (4 endpoints) ✅ | Quotes API ✅ | Audit & LGPD (3 endpoints) ✅
 
 **Team:** Rafael, Gustavo, Duda, Peu  
 **Target MVP:** 8-10 weeks  
@@ -38,6 +38,18 @@
 | 2.6 Dashboard | KPIs backend | Goals + Projections | Financial backend | Dashboard frontend |
 | 3.x Testing | Segurança + perf | Backend tests | Frontend tests | E2E |
 | 4.x Deploy | CI/CD | Railway PostgreSQL | Monitoring | Vercel |
+
+---
+
+## What's New in This Update (May 6, 2026)
+
+✅ **Phase 1.7 — Audit & LGPD completo (Rafael):**
+- `GET /api/pedidos/{id}/history` — histórico de status + audit logs do pedido
+- `GET /api/users/{id}/data-export` — exportação de dados do usuário (LGPD)
+- `DELETE /api/users/{id}/delete-data` — anonimização + soft-delete via `LgpdService`
+- `ip_address` + `user_agent` capturados em todas as rotas de mutação de pedidos
+- `MIGRATION_AUDIT_RETENTION.sql` com política pg_cron de retenção 6 meses
+- 20 testes unitários cobrindo `LgpdService`, `PedidoService` (ip/ua) e as 3 novas rotas
 
 ---
 
@@ -408,25 +420,25 @@
   - [x] Store old_values as JSONB → **Rafael** ✅
   - [x] Store new_values as JSONB → **Rafael** ✅
 - [x] Insert into audit_logs on DELETE (soft delete) → **Rafael** ✅
-- [ ] Capture ip_address and user_agent → **Rafael**
-- [ ] Set 6+ month retention policy → **Rafael**
+- [x] Capture ip_address and user_agent → **Rafael** ✅
+- [x] Set 6+ month retention policy → **Rafael** ✅ (MIGRATION_AUDIT_RETENTION.sql)
 
-**LGPD Data Export API (Preparation):** → **Duda**
-- [ ] Design GET /api/users/:id/data-export endpoint (returns all user's data) → **Duda**
-- [ ] Design GET /api/orders/:id/history endpoint (returns all changes) → **Duda**
-- [ ] Include audit_logs in exports → **Duda**
+**LGPD Data Export API:** → **Rafael** ✅ COMPLETO
+- [x] GET /api/users/:id/data-export endpoint (returns all user's data) → **Rafael** ✅
+- [x] GET /api/pedidos/:id/history endpoint (returns all changes) → **Rafael** ✅
+- [x] Include audit_logs in exports → **Rafael** ✅
 
-**LGPD Data Deletion API (Preparation):** → **Gustavo**
-- [ ] Design POST /api/users/:id/delete-data endpoint → **Gustavo**
-- [ ] Soft-delete all user's records → **Gustavo**
-- [ ] Anonymize personal data → **Gustavo**
+**LGPD Data Deletion API:** → **Rafael** ✅ COMPLETO
+- [x] DELETE /api/users/:id/delete-data endpoint → **Rafael** ✅
+- [x] Soft-delete all user's records → **Rafael** ✅
+- [x] Anonymize personal data → **Rafael** ✅
 
 **Verification:** → **Peu**
 - [ ] All CRUD operations create audit trail → **Peu**
 - [ ] Status changes recorded in status_history → **Peu**
 - [ ] Old/new values captured in audit_logs → **Peu**
-- [ ] IP addresses logged → **Peu**
-- [ ] Data exports return complete history → **Duda**
+- [x] IP addresses logged → **Rafael** ✅
+- [x] Data exports return complete history → **Rafael** ✅
 
 **Effort:** 1 backend dev, 2-3 days  
 **Success Criteria:**
@@ -589,10 +601,10 @@
 - [ ] Display: who changed it, when, and why → **Duda**
 - [ ] Add to order details page → **Duda**
 
-**Backend Tasks:** → **Peu**
-- [ ] GET /api/orders/:id/history endpoint → **Peu**
-- [ ] Return status_history records → **Peu**
-- [ ] Include user info (who made change) → **Peu**
+**Backend Tasks:** → **Rafael** ✅ COMPLETO
+- [x] GET /api/pedidos/:id/history endpoint → **Rafael** ✅
+- [x] Return status_history records → **Rafael** ✅
+- [x] Include user info (who made change) → **Rafael** ✅
 
 **Effort:** 1 frontend + 1 backend dev, 2 days  
 **Success Criteria:**
@@ -627,11 +639,11 @@
 ### 2.5.3 LGPD Data Export (Days 5-7)
 **Priority:** P1 - LGPD Requirement
 
-**Backend Tasks:** → **Duda**
-- [ ] Implement GET /api/users/:id/data-export → **Duda**
-- [ ] Return JSON with all user's data → **Duda**
-- [ ] Include all audit logs → **Duda**
-- [ ] Download as JSON file → **Duda**
+**Backend Tasks:** → **Rafael** ✅ COMPLETO
+- [x] Implement GET /api/users/:id/data-export → **Rafael** ✅
+- [x] Return JSON with all user's data → **Rafael** ✅
+- [x] Include all audit logs → **Rafael** ✅
+- [ ] Download as JSON file → **Duda** (frontend)
 
 **Frontend Tasks:** → **Duda**
 - [ ] Create data export button → **Duda**
@@ -649,11 +661,11 @@
 ### 2.5.4 Data Deletion (Days 7-10)
 **Priority:** P1 - LGPD Requirement
 
-**Backend Tasks:** → **Gustavo**
-- [ ] Implement POST /api/users/:id/delete-data → **Gustavo**
-- [ ] Soft-delete all user's records → **Gustavo**
-- [ ] Anonymize personal info → **Gustavo**
-- [ ] Keep audit trail → **Gustavo**
+**Backend Tasks:** → **Rafael** ✅ COMPLETO
+- [x] Implement DELETE /api/users/:id/delete-data → **Rafael** ✅
+- [x] Soft-delete all user's records → **Rafael** ✅
+- [x] Anonymize personal info → **Rafael** ✅
+- [x] Keep audit trail → **Rafael** ✅
 
 **Frontend Tasks:** → **Peu**
 - [ ] Create delete account form → **Peu**
@@ -1140,8 +1152,13 @@ Any delay in Week 1-3 → Delays Week 10 launch
 - [x] **FEITO:** Merge feature/orders-api → develop ✅
 - [x] **FEITO:** Quotes & RMA API (1.6) → Rafael + Duda ✅
 - [x] **FEITO:** Frontend API client setup (2.1) → Peu ✅
+- [x] **FEITO:** Audit history + LGPD endpoints (1.7) → Rafael ✅
+- [x] **FEITO:** ip/ua capture em pedidos (1.7) → Rafael ✅
+- [x] **FEITO:** LgpdService + retenção audit_logs (1.7) → Rafael ✅
+- [x] **FEITO:** 20 testes unitários (1.7) → Rafael ✅
+- [ ] **PRÓXIMO:** Merge feature/data-export-and-audit-history → develop
 - [ ] **PRÓXIMO:** Merge feature/quotes-api → develop
-- [ ] **PRÓXIMO:** Rodar MIGRATION_PEDIDOS_V2.sql e V3.sql no banco de produção
+- [ ] **PRÓXIMO:** Rodar MIGRATION_PEDIDOS_V2.sql, V3.sql e MIGRATION_AUDIT_RETENTION.sql no banco de produção
 - [ ] **PRÓXIMO:** React Query integration (2.2) → Gustavo
 - [ ] **PRÓXIMO:** Modal integration (2.3) → Duda + Rafael
 
@@ -1166,7 +1183,7 @@ Any delay in Week 1-3 → Delays Week 10 launch
 
 ---
 
-**Last Updated:** May 2, 2026  
-**Status:** 🚀 30 endpoints implementados — Auth (9) + Orders CRUD (6) + Order Items (3) + Order Costs (2) + Order Payments (1) + RMA (5) + Users (4). Única pendência de backend: Quotes API.  
-**Next Milestone:** Merge PRs → develop; Quotes API (Gustavo + Duda); Frontend API client setup (Peu)  
+**Last Updated:** May 6, 2026  
+**Status:** 🚀 33 endpoints implementados — Auth (9) + Orders CRUD (6) + Order Items (3) + Order Costs (2) + Order Payments (1) + RMA (5) + Users (4) + Quotes (7) + Audit/LGPD (3). Backend fase 1 completo.  
+**Next Milestone:** Merge PRs pendentes → develop; Rodar migrations; React Query + Modal integration (frontend)  
 **MVP Target:** Week 10 (8-10 weeks)
