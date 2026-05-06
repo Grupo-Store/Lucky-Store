@@ -467,11 +467,11 @@
 - [ ] Test audit logging → **Peu**
 - [ ] Test pagination and filtering → **Duda**
 
-**API Documentation:** → **Peu**
+**API Documentation:** → **Peu** ✅
 - [x] Create Swagger/OpenAPI documentation (auto-gerado via FastAPI) → **Peu** ✅
-- [ ] Document all endpoints with examples → **Peu**
-- [ ] Document error responses → **Peu**
-- [ ] Document authentication requirements → **Peu**
+- [x] Document all endpoints with examples → **Peu** ✅
+- [x] Document error responses → **Peu** ✅
+- [x] Document authentication requirements → **Peu** ✅
 
 **Performance Tests:** → **Rafael**
 - [ ] Measure API response times (target: <200ms) → **Rafael**
