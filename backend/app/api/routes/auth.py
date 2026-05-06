@@ -109,6 +109,18 @@ def me(current_user: User = Depends(get_current_user)):
     return current_user
 
 
+@router.post("/change-password", status_code=status.HTTP_204_NO_CONTENT)
+def change_password(
+    payload: ChangePasswordRequest,
+    current_user: User = Depends(get_current_user_dep),
+    db: Session = Depends(get_db),
+):
+    try:
+        AuthService.change_password(db, str(current_user.id), payload.current_password, payload.new_password)
+    except Exception as exc:
+        raise to_http_exception(exc)
+
+
 @router.post("/2fa/setup", response_model=TOTPSetupResponse)
 def setup_2fa(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     return AuthService.setup_totp(db, str(current_user.id))
