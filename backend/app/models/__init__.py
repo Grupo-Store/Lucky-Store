@@ -14,6 +14,7 @@ from app.models.compra_vendedor import CompraVendedor
 from app.models.meta_vendedor import MetaVendedor
 from app.models.status_history import StatusHistory, EntityType
 from app.models.audit_log import AuditLog, AuditAction
+from app.models.email_verification import EmailVerificationCode
 
 __all__ = [
     "User",
@@ -31,4 +32,5 @@ __all__ = [
     "AuditLog", "AuditAction",
     "Pedido", "PedidoFormaPagamento", "CustoPedido", "Frete",
     "Produto",
+    "EmailVerificationCode",
 ]

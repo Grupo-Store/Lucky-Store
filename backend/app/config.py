@@ -24,10 +24,18 @@ class Settings(BaseSettings):
     # CORS
     ALLOWED_ORIGINS: list = ["http://localhost:3000", "http://localhost:5173"]
     
-    # TOTP (2FA)
+    # TOTP (2FA) — mantido para compatibilidade com dados existentes
     TOTP_ISSUER: str = "OrderlyHub"
     TOTP_WINDOW: int = 1
-    
+
+    # Email (2FA via email)
+    MAIL_USERNAME: str = ""
+    MAIL_PASSWORD: str = ""
+    MAIL_FROM: str = ""
+    MAIL_SERVER: str = "smtp.gmail.com"
+    MAIL_PORT: int = 587
+    EMAIL_CODE_EXPIRE_MINUTES: int = 5
+
     class Config:
         env_file = ".env"
         case_sensitive = True

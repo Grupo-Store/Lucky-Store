@@ -1,12 +1,27 @@
+import random
+import string
+from datetime import datetime, timedelta, timezone
+
 from sqlalchemy.orm import Session
+
+from app.config import get_settings
+from app.models.email_verification import EmailVerificationCode
 from app.models.user import User
 from app.schemas.user import UserCreate
-from app.utils.security import (
-    hash_password, verify_password, create_access_token,
-    create_refresh_token, verify_token, generate_totp_secret,
-    verify_totp, get_totp_provisioning_uri, generate_qr_code_base64,
-)
 from app.utils.errors import AuthenticationException, NotFoundException
+from app.utils.security import (
+    create_access_token,
+    create_refresh_token,
+    generate_qr_code_base64,
+    generate_totp_secret,
+    get_totp_provisioning_uri,
+    hash_password,
+    verify_password,
+    verify_token,
+    verify_totp,
+)
+
+settings = get_settings()
 
 
 class AuthService:
@@ -44,29 +59,52 @@ class AuthService:
             raise NotFoundException(f"User {user_id} not found")
         return user
 
-    @staticmethod
-    def setup_totp(db: Session, user_id: str) -> dict:
-        user = AuthService.get_user_by_id(db, user_id)
-        secret = generate_totp_secret()
-        provisioning_uri = get_totp_provisioning_uri(secret, user.email)
-        user.totp_secret = secret
-        db.commit()
-        return {
-            "secret": secret,
-            "provisioning_uri": provisioning_uri,
-            "qr_code_url": generate_qr_code_base64(provisioning_uri),
-        }
+    # ── Email 2FA ────────────────────────────────────────────────────────────
 
     @staticmethod
-    def verify_totp_setup(db: Session, user_id: str, token: str) -> bool:
-        user = AuthService.get_user_by_id(db, user_id)
-        if not user.totp_secret:
-            raise ValueError("TOTP setup not initiated")
-        if not verify_totp(user.totp_secret, token):
-            raise AuthenticationException("Invalid TOTP token")
-        user.totp_enabled = True
+    def create_email_verification_code(db: Session, user_id: str) -> str:
+        """Invalida códigos anteriores, gera um novo de 6 dígitos e persiste."""
+        db.query(EmailVerificationCode).filter(
+            EmailVerificationCode.user_id == user_id,
+            EmailVerificationCode.used.is_(False),
+        ).update({"used": True})
+
+        code = "".join(random.choices(string.digits, k=6))
+        expires_at = datetime.now(timezone.utc) + timedelta(
+            minutes=settings.EMAIL_CODE_EXPIRE_MINUTES
+        )
+        record = EmailVerificationCode(user_id=user_id, code=code, expires_at=expires_at)
+        db.add(record)
         db.commit()
-        return True
+        return code
+
+    @staticmethod
+    def verify_email_code(db: Session, email: str, code: str) -> User:
+        """Valida o código de email e retorna o usuário se correto."""
+        user = db.query(User).filter(User.email == email).first()
+        if not user:
+            raise AuthenticationException("Invalid email or code")
+
+        now = datetime.now(timezone.utc)
+        record = (
+            db.query(EmailVerificationCode)
+            .filter(
+                EmailVerificationCode.user_id == user.id,
+                EmailVerificationCode.code == code,
+                EmailVerificationCode.used.is_(False),
+                EmailVerificationCode.expires_at > now,
+            )
+            .order_by(EmailVerificationCode.created_at.desc())
+            .first()
+        )
+        if not record:
+            raise AuthenticationException("Invalid or expired code")
+
+        record.used = True
+        db.commit()
+        return user
+
+    # ── Tokens ───────────────────────────────────────────────────────────────
 
     @staticmethod
     def create_tokens(user: User) -> dict:
@@ -110,3 +148,29 @@ class AuthService:
         db.commit()
         db.refresh(user)
         return user
+
+    # ── TOTP (legado — mantido para usuários com totp_enabled existente) ──────
+
+    @staticmethod
+    def setup_totp(db: Session, user_id: str) -> dict:
+        user = AuthService.get_user_by_id(db, user_id)
+        secret = generate_totp_secret()
+        provisioning_uri = get_totp_provisioning_uri(secret, user.email)
+        user.totp_secret = secret
+        db.commit()
+        return {
+            "secret": secret,
+            "provisioning_uri": provisioning_uri,
+            "qr_code_url": generate_qr_code_base64(provisioning_uri),
+        }
+
+    @staticmethod
+    def verify_totp_setup(db: Session, user_id: str, token: str) -> bool:
+        user = AuthService.get_user_by_id(db, user_id)
+        if not user.totp_secret:
+            raise ValueError("TOTP setup not initiated")
+        if not verify_totp(user.totp_secret, token):
+            raise AuthenticationException("Invalid TOTP token")
+        user.totp_enabled = True
+        db.commit()
+        return True

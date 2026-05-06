@@ -50,6 +50,15 @@ class TokenRefreshResponse(BaseModel):
     token_type: str = "bearer"
 
 
+# ── Email 2FA ─────────────────────────────────────────────────────────────────
+
+class EmailCodeVerifyRequest(BaseModel):
+    email: EmailStr
+    code: str
+
+
+# ── TOTP (legado) ─────────────────────────────────────────────────────────────
+
 class TOTPSetupResponse(BaseModel):
     secret: str
     provisioning_uri: str
@@ -59,13 +68,6 @@ class TOTPSetupResponse(BaseModel):
 class TOTPVerifyRequest(BaseModel):
     token: str
     email: EmailStr
-
-
-class TOTPVerifyResponse(BaseModel):
-    access_token: str
-    refresh_token: str
-    token_type: str = "bearer"
-    user: UserResponse
 
 
 class ChangePasswordRequest(BaseModel):
