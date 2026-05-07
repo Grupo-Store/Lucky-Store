@@ -1,56 +1,61 @@
-import axios from "axios"
-import type { ApiError } from "./types"
+import axios from 'axios';
 
-const MAX_NETWORK_RETRIES = 3
+const MAX_NETWORK_RETRIES = 3;
+
+const BASE_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:8000/api';
 
 export const apiClient = axios.create({
-  baseURL: import.meta.env.VITE_API_URL ?? "http://localhost:8000/api",
-  headers: { "Content-Type": "application/json" },
-})
+  baseURL: BASE_URL,
+  headers: { 'Content-Type': 'application/json' },
+});
 
-// request interceptor — attach Bearer token
 apiClient.interceptors.request.use((config) => {
-  const token = localStorage.getItem("access_token")
-  if (token) config.headers.Authorization = `Bearer ${token}`
-  return config
-})
+  const token = localStorage.getItem('access_token');
+  if (token) config.headers.Authorization = `Bearer ${token}`;
+  return config;
+});
 
-// response interceptor — refresh on 401, retry on network errors
 apiClient.interceptors.response.use(
   (res) => res,
   async (error) => {
-    const original = error.config
+    const original = error.config;
 
-    // auto-refresh on 401
     if (error.response?.status === 401 && !original._retry) {
-      original._retry = true
+      original._retry = true;
       try {
-        const refresh = localStorage.getItem("refresh_token")
-        const { data } = await apiClient.post("/auth/refresh-token", { refresh_token: refresh })
-        localStorage.setItem("access_token", data.access_token)
-        original.headers.Authorization = `Bearer ${data.access_token}`
-        return apiClient(original)
+        const refresh = localStorage.getItem('refresh_token');
+        const { data } = await axios.post(`${BASE_URL}/auth/refresh-token`, {
+          refresh_token: refresh,
+        });
+        localStorage.setItem('access_token', data.access_token);
+        original.headers.Authorization = `Bearer ${data.access_token}`;
+        return apiClient(original);
       } catch {
-        localStorage.clear()
-        window.location.href = "/login"
-        return Promise.reject(error)
+        localStorage.clear();
+        window.location.href = '/login';
+        return Promise.reject(error);
       }
     }
 
-    // retry only on network errors (no response), never on 4xx/5xx
-    const isNetworkError = !error.response
-    original._retryCount = original._retryCount ?? 0
+    // Retry on network errors (no response) with exponential backoff
+    const isNetworkError = !error.response;
+    original._retryCount = original._retryCount ?? 0;
     if (isNetworkError && original._retryCount < MAX_NETWORK_RETRIES) {
-      original._retryCount += 1
-      const delay = 2 ** original._retryCount * 500
-      await new Promise((resolve) => setTimeout(resolve, delay))
-      return apiClient(original)
+      original._retryCount += 1;
+      const delay = 2 ** original._retryCount * 500;
+      await new Promise((resolve) => setTimeout(resolve, delay));
+      return apiClient(original);
     }
 
-    const apiError: ApiError = {
-      status: error.response?.status ?? 0,
-      detail: error.response?.data?.detail ?? error.message,
-    }
-    return Promise.reject(apiError)
-  },
-)
+    return Promise.reject(error);
+  }
+);
+
+export function getApiError(error: unknown): string {
+  if (axios.isAxiosError(error)) {
+    const detail = error.response?.data?.detail;
+    if (typeof detail === 'string') return detail;
+    if (typeof detail === 'object') return JSON.stringify(detail);
+  }
+  return 'Erro desconhecido. Tente novamente.';
+}
