@@ -22,7 +22,7 @@ class Settings(BaseSettings):
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
     
     # CORS
-    ALLOWED_ORIGINS: list = ["http://localhost:3000", "http://localhost:5173"]
+    ALLOWED_ORIGINS: list = ["http://localhost:3000", "http://localhost:5173", "http://localhost:8080"]
     
     # TOTP (2FA) — mantido para compatibilidade com dados existentes
     TOTP_ISSUER: str = "OrderlyHub"

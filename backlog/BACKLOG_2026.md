@@ -537,10 +537,10 @@
   - [ ] Handle loading state → **Duda**
   - [ ] Display error messages → **Duda**
   - [ ] Show success notification → **Duda**
-- [ ] Update QuoteModal to call API → **Rafael**
-- [ ] Update RmaModal to call API → **Peu**
-- [ ] Implement optimistic updates (UI updates before API confirms) → **Gustavo**
-- [ ] Implement refetch on success → **Gustavo**
+- [ ] Update QuoteModal to call API → **Duda**
+- [ ] Update RmaModal to call API → **Duda**
+- [ ] Implement optimistic updates (UI updates before API confirms) → **Duda**
+- [ ] Implement refetch on success → **Duda**
 
 **Effort:** 2 frontend devs, 2-3 days  
 **Success Criteria:**
@@ -555,14 +555,14 @@
 **Priority:** P0 - BLOCKER
 
 **Frontend Team Tasks:**
-- [ ] Update Sales page to fetch orders from API → **Rafael**
-  - [ ] Implement filtering → **Rafael**
-  - [ ] Implement pagination → **Rafael**
-  - [ ] Implement sorting → **Rafael**
-  - [ ] Show loading skeleton → **Duda**
+- [ ] Update Sales page to fetch orders from API → **Peu**
+  - [ ] Implement filtering → **Peu**
+  - [ ] Implement pagination → **Peu**
+  - [ ] Implement sorting → **Peu**
+  - [ ] Show loading skeleton → **Peu**
 - [ ] Update Dashboard to fetch analytics from API → **Gustavo**
 - [ ] Implement real-time updates (refetch on interval) → **Gustavo**
-- [ ] Display order status history in UI → **Duda**
+- [ ] Display order status history in UI → **Gustavo**
 
 **Effort:** 2 frontend devs, 2-3 days  
 **Success Criteria:**

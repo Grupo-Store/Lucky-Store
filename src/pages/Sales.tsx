@@ -80,7 +80,7 @@ type SortField = 'os' | 'deliveryDate';
 type SortDir = 'asc' | 'desc';
 
 export default function Sales() {
-  const { orders, addOrder, updateOrder, deleteOrder, updateItemStatus, nextOS, nextRmaNumber } = useOrders();
+const { orders, addOrder, updateOrder, deleteOrder, updateItemStatus, nextOS, nextRmaNumber } = useOrders();
   const { quotes, addQuote, updateQuote, deleteQuote, nextIndex } = useQuotes();
   const [tab, setTab] = useState('orders');
   const [modalOpen, setModalOpen] = useState(false);

@@ -37,7 +37,7 @@ apiClient.interceptors.response.use(
       }
     }
 
-    // Retry on network errors (no response) with exponential backoff
+    // Retry on network errors (no response)
     const isNetworkError = !error.response;
     original._retryCount = original._retryCount ?? 0;
     if (isNetworkError && original._retryCount < MAX_NETWORK_RETRIES) {
