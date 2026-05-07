@@ -13,12 +13,16 @@ import { ArrowLeft, CalendarIcon, Search, ChevronRight, Plus, Trash2, Printer } 
 import { format, addDays } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
+import { toast } from 'sonner';
 import {
   Order, RmaItem, RmaItemStatus, FreightCard,
   Company, Seller, SELLERS,
   RMA_ITEM_STATUSES, RMA_STATUS_LABELS, RMA_STATUS_COLORS,
   calcFreightTotal,
 } from '@/store/OrderStore';
+import { useCreateRma } from '@/api/hooks/useRma';
+import { getApiError } from '@/api/client';
+import type { CreateRmaPayload } from '@/types/api';
 
 function toBRL(v: number) { return v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }); }
 function parseBRL(s: string): number { return parseFloat(s.replace(/[R$\s.]/g, '').replace(',', '.')) || 0; }
@@ -46,6 +50,8 @@ interface Props {
 export function RmaModal({ open, onClose, orders, rma, onSave, nextRmaNumber }: Props) {
   const isEdit = !!rma;
   const [step, setStep] = useState<Step>(isEdit ? 'form' : 'pick-order');
+
+  const { mutate: createRma, isPending } = useCreateRma();
   const [search, setSearch] = useState('');
   const [parent, setParent] = useState<Order | null>(null);
   const [selectedItemIds, setSelectedItemIds] = useState<Set<string>>(new Set());
@@ -194,8 +200,32 @@ export function RmaModal({ open, onClose, orders, rma, onSave, nextRmaNumber }: 
       rmaItems,
       rmaFreight: freight,
     };
-    onSave(newOrder);
-    onClose();
+
+    if (isEdit) {
+      // Sem endpoint de update para RMA — mantém comportamento local
+      onSave(newOrder);
+      onClose();
+      return;
+    }
+
+    const payload: CreateRmaPayload = {
+      id_pedido_origem: parent.id,
+      prazo_entrega: deliveryDate || undefined,
+      itens: rmaItems.map(i => ({
+        id_produto_origem: i.sourceItemId,
+        descricao: i.name,
+        quantidade: i.quantity,
+      })),
+    };
+
+    createRma(payload, {
+      onSuccess: () => {
+        toast.success('RMA criado com sucesso');
+        onSave(newOrder);
+        onClose();
+      },
+      onError: (err) => toast.error(getApiError(err)),
+    });
   };
 
   return (
@@ -477,8 +507,8 @@ export function RmaModal({ open, onClose, orders, rma, onSave, nextRmaNumber }: 
               <Button variant="outline" onClick={() => window.print()} className="gap-1.5">
                 <Printer className="h-4 w-4" /> Imprimir
               </Button>
-              <Button onClick={handleSave} className="bg-secondary hover:bg-secondary/90">
-                {isEdit ? 'Salvar Alterações' : 'Criar RMA'}
+              <Button onClick={handleSave} disabled={isPending} className="bg-secondary hover:bg-secondary/90">
+                {isPending ? 'Salvando...' : (isEdit ? 'Salvar Alterações' : 'Criar RMA')}
               </Button>
             </div>
           </>

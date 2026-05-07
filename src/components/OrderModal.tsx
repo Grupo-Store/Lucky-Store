@@ -22,6 +22,10 @@ import {
   calcFinalCost, calcProfit, calcFreightTotal,
 } from '@/store/OrderStore';
 import type { OrderPrefill } from '@/components/AddOrderChooser';
+import { useCreateOrder, useUpdateOrder } from '@/api/hooks/useOrders';
+import { getApiError } from '@/api/client';
+import type { CreatePedidoPayload, UpdatePedidoPayload, PedidoStatus } from '@/types/api';
+import { LOJA_IDS, DEFAULT_VENDEDOR_ID } from '@/api/storeConfig';
 
 const emptyOrder = (os: string): Partial<Order> => ({
   os, createdAt: Date.now(),
@@ -63,6 +67,10 @@ interface Props {
 export function OrderModal({ open, onClose, order, onSave, nextOS, prefill }: Props) {
   const [form, setForm] = useState<Partial<Order>>(() => emptyOrder(nextOS?.() || ''));
   const isEdit = !!order;
+
+  const { mutate: createOrder, isPending: isCreating } = useCreateOrder();
+  const { mutate: updateOrder, isPending: isUpdating } = useUpdateOrder(order?.id ?? '');
+  const isPending = isCreating || isUpdating;
 
   const [editingField, setEditingField] = useState<string | null>(null);
   const [editingValue, setEditingValue] = useState('');
@@ -215,8 +223,42 @@ export function OrderModal({ open, onClose, order, onSave, nextOS, prefill }: Pr
       paymentInstallments: form.paymentInstallments || 1,
       paymentInstallmentPlan: form.paymentInstallmentPlan || [],
     };
-    onSave(o);
-    onClose();
+
+    const onApiSuccess = () => {
+      toast.success(isEdit ? 'Pedido atualizado com sucesso' : 'Pedido criado com sucesso');
+      onSave(o);
+      onClose();
+    };
+    const onApiError = (err: unknown) => toast.error(getApiError(err));
+
+    if (isEdit) {
+      const payload: UpdatePedidoPayload = {
+        data_pedido: o.orderDate,
+        data_entrega: o.deliveryDate,
+        status: o.status as PedidoStatus,
+        valor_venda: String(o.salesValue),
+        observacao: o.observations || undefined,
+        numero_oc: o.ocAfPed || undefined,
+        is_direct_billing: o.directBilling,
+        formas_pagamento: o.paymentMethods.map(m => ({ forma: m })),
+      };
+      updateOrder(payload, { onSuccess: onApiSuccess, onError: onApiError });
+    } else {
+      const payload: CreatePedidoPayload = {
+        id_loja: LOJA_IDS[o.company] ?? '',
+        id_vendedor: DEFAULT_VENDEDOR_ID,
+        id_cliente: crypto.randomUUID(), // TODO: substituir com lookup real de cliente
+        data_pedido: o.orderDate,
+        data_entrega: o.deliveryDate,
+        status: o.status as PedidoStatus,
+        valor_venda: String(o.salesValue),
+        observacao: o.observations || undefined,
+        numero_oc: o.ocAfPed || undefined,
+        is_direct_billing: o.directBilling,
+        formas_pagamento: o.paymentMethods.map(m => ({ forma: m })),
+      };
+      createOrder(payload, { onSuccess: onApiSuccess, onError: onApiError });
+    }
   };
 
   /* ---------------- Currency input renderer ---------------- */
@@ -586,8 +628,8 @@ export function OrderModal({ open, onClose, order, onSave, nextOS, prefill }: Pr
             <Printer className="h-4 w-4 mr-1" /> Imprimir
           </Button>
           <Button variant="outline" onClick={onClose}>Cancelar</Button>
-          <Button onClick={handleSave} className="bg-secondary hover:bg-secondary/90">
-            {isEdit ? 'Salvar Alterações' : 'Criar Pedido'}
+          <Button onClick={handleSave} disabled={isPending} className="bg-secondary hover:bg-secondary/90">
+            {isPending ? 'Salvando...' : (isEdit ? 'Salvar Alterações' : 'Criar Pedido')}
           </Button>
         </div>
       </DialogContent>

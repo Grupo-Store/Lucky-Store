@@ -13,11 +13,16 @@ import { CalendarIcon, Plus, Trash2, Printer } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
+import { toast } from 'sonner';
 import { Company, Seller, SELLERS } from '@/store/OrderStore';
 import {
   Quote, QuoteItem, QuotePhases, QuotePhaseKey,
   QUOTE_PHASE_COLORS, QUOTE_PHASE_LABELS, emptyPhases,
 } from '@/store/QuoteStore';
+import { useCreateQuote, useUpdateQuote } from '@/api/hooks/useQuotes';
+import { getApiError } from '@/api/client';
+import type { CreateCotacaoPayload, UpdateCotacaoPayload } from '@/types/api';
+import { LOJA_IDS, DEFAULT_VENDEDOR_ID } from '@/api/storeConfig';
 
 function toBRL(v: number) { return v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }); }
 function parseBRL(s: string): number {
@@ -71,6 +76,10 @@ export function QuoteModal({ open, onClose, quote, onSave, onDelete, nextIndex }
   const [datePopover, setDatePopover] = useState<string | null>(null);
   const isEdit = !!quote;
 
+  const { mutate: createQuote, isPending: isCreating } = useCreateQuote();
+  const { mutate: updateQuote, isPending: isUpdating } = useUpdateQuote(quote?.id ?? '');
+  const isPending = isCreating || isUpdating;
+
   useEffect(() => {
     if (quote) {
       setForm({
@@ -123,8 +132,53 @@ export function QuoteModal({ open, onClose, quote, onSave, onDelete, nextIndex }
   }, [totalRevenue]);
 
   const handleSave = () => {
-    onSave({ ...form, id: form.id || crypto.randomUUID(), createdAt: form.createdAt || Date.now() });
-    onClose();
+    const q: Quote = { ...form, id: form.id || crypto.randomUUID(), createdAt: form.createdAt || Date.now() };
+
+    const onApiSuccess = () => {
+      toast.success(isEdit ? 'Cotação atualizada com sucesso' : 'Cotação criada com sucesso');
+      onSave(q);
+      onClose();
+    };
+    const onApiError = (err: unknown) => toast.error(getApiError(err));
+
+    if (isEdit) {
+      const payload: UpdateCotacaoPayload = {
+        cliente: q.customer,
+        data_cotacao: q.requestDate,
+        cnpj_cliente: q.cnpj || undefined,
+        numero_requisicao: q.requestNumber || undefined,
+        b2b_company: q.b2bCompany || undefined,
+        fornecedor: q.directBilling ? (q.supplier || undefined) : undefined,
+        valor_total: String(q.value),
+        pct_imposto_lucky: q.taxLucky != null ? String(q.taxLucky) : undefined,
+        pct_imposto_btech: q.taxBTech != null ? String(q.taxBTech) : undefined,
+        observacao: q.observations || undefined,
+      };
+      updateQuote(payload, { onSuccess: onApiSuccess, onError: onApiError });
+    } else {
+      const payload: CreateCotacaoPayload = {
+        id_loja: LOJA_IDS[q.company] ?? '',
+        id_vendedor: DEFAULT_VENDEDOR_ID,
+        cliente: q.customer,
+        data_cotacao: q.requestDate,
+        cnpj_cliente: q.cnpj || undefined,
+        numero_requisicao: q.requestNumber || undefined,
+        b2b_company: q.b2bCompany || undefined,
+        fornecedor: q.directBilling ? (q.supplier || undefined) : undefined,
+        valor_total: String(q.value),
+        pct_imposto_lucky: q.taxLucky != null ? String(q.taxLucky) : undefined,
+        pct_imposto_btech: q.taxBTech != null ? String(q.taxBTech) : undefined,
+        observacao: q.observations || undefined,
+        itens: (q.items || []).map(i => ({
+          descricao: i.name,
+          quantidade: i.quantity,
+          valor_unitario: String(i.quoteValue ?? 0),
+          valor_fechamento: i.closingValue != null ? String(i.closingValue) : undefined,
+          fornecedor: i.supplier || undefined,
+        })),
+      };
+      createQuote(payload, { onSuccess: onApiSuccess, onError: onApiError });
+    }
   };
 
   const DateField = ({ phaseKey, value, onChange }: { phaseKey: string; value?: string; onChange: (iso?: string) => void }) => (
@@ -412,8 +466,8 @@ export function QuoteModal({ open, onClose, quote, onSave, onDelete, nextIndex }
               <Printer className="h-4 w-4 mr-1" /> Imprimir
             </Button>
             <Button variant="outline" onClick={onClose}>Cancelar</Button>
-            <Button onClick={handleSave} className="bg-secondary hover:bg-secondary/90">
-              {isEdit ? 'Salvar Alterações' : 'Criar Cotação'}
+            <Button onClick={handleSave} disabled={isPending} className="bg-secondary hover:bg-secondary/90">
+              {isPending ? 'Salvando...' : (isEdit ? 'Salvar Alterações' : 'Criar Cotação')}
             </Button>
           </div>
         </div>
