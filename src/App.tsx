@@ -15,7 +15,22 @@ import Financial from "@/pages/Financial";
 import Dashboard from "@/pages/Dashboard";
 import NotFound from "./pages/NotFound.tsx";
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      // Dados são considerados frescos por 30s antes de re-buscar em background
+      staleTime: 30_000,
+      // Cache mantido por 5 minutos após o componente desmontar
+      gcTime: 5 * 60_000,
+      // Não retentar em erros 4xx (são erros de negócio, não falhas transitórias)
+      retry: (failureCount, error: any) => {
+        if (error?.response?.status >= 400 && error?.response?.status < 500) return false;
+        return failureCount < 2;
+      },
+      refetchOnWindowFocus: false,
+    },
+  },
+});
 
 function AuthGate() {
   const { isLoggedIn } = useAuth();
