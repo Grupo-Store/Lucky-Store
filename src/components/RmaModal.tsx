@@ -212,7 +212,6 @@ export function RmaModal({ open, onClose, orders, rma, onSave, nextRmaNumber }: 
       id_pedido_origem: parent.id,
       prazo_entrega: deliveryDate || undefined,
       itens: rmaItems.map(i => ({
-        id_produto_origem: i.sourceItemId,
         descricao: i.name,
         quantidade: i.quantity,
       })),

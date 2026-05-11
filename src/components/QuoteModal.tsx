@@ -22,7 +22,7 @@ import {
 import { useCreateQuote, useUpdateQuote } from '@/api/hooks/useQuotes';
 import { getApiError } from '@/api/client';
 import type { CreateCotacaoPayload, UpdateCotacaoPayload } from '@/types/api';
-import { LOJA_IDS, DEFAULT_VENDEDOR_ID } from '@/api/storeConfig';
+import { LOJA_IDS, VENDEDOR_IDS } from '@/api/storeConfig';
 
 function toBRL(v: number) { return v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }); }
 function parseBRL(s: string): number {
@@ -134,11 +134,6 @@ export function QuoteModal({ open, onClose, quote, onSave, onDelete, nextIndex }
   const handleSave = () => {
     const q: Quote = { ...form, id: form.id || crypto.randomUUID(), createdAt: form.createdAt || Date.now() };
 
-    const onApiSuccess = () => {
-      toast.success(isEdit ? 'Cotação atualizada com sucesso' : 'Cotação criada com sucesso');
-      onSave(q);
-      onClose();
-    };
     const onApiError = (err: unknown) => toast.error(getApiError(err));
 
     if (isEdit) {
@@ -154,11 +149,18 @@ export function QuoteModal({ open, onClose, quote, onSave, onDelete, nextIndex }
         pct_imposto_btech: q.taxBTech != null ? String(q.taxBTech) : undefined,
         observacao: q.observations || undefined,
       };
-      updateQuote(payload, { onSuccess: onApiSuccess, onError: onApiError });
+      updateQuote(payload, {
+        onSuccess: () => {
+          toast.success('Cotação atualizada com sucesso');
+          onSave(q);
+          onClose();
+        },
+        onError: onApiError,
+      });
     } else {
       const payload: CreateCotacaoPayload = {
         id_loja: LOJA_IDS[q.company] ?? '',
-        id_vendedor: DEFAULT_VENDEDOR_ID,
+        id_vendedor: VENDEDOR_IDS[q.seller] ?? '',
         cliente: q.customer,
         data_cotacao: q.requestDate,
         cnpj_cliente: q.cnpj || undefined,
@@ -177,7 +179,14 @@ export function QuoteModal({ open, onClose, quote, onSave, onDelete, nextIndex }
           fornecedor: i.supplier || undefined,
         })),
       };
-      createQuote(payload, { onSuccess: onApiSuccess, onError: onApiError });
+      createQuote(payload, {
+        onSuccess: (data) => {
+          toast.success('Cotação criada com sucesso');
+          onSave({ ...q, id: data.id });
+          onClose();
+        },
+        onError: onApiError,
+      });
     }
   };
 

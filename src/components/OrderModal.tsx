@@ -25,7 +25,7 @@ import type { OrderPrefill } from '@/components/AddOrderChooser';
 import { useCreateOrder, useUpdateOrder } from '@/api/hooks/useOrders';
 import { getApiError } from '@/api/client';
 import type { CreatePedidoPayload, UpdatePedidoPayload, PedidoStatus } from '@/types/api';
-import { LOJA_IDS, DEFAULT_VENDEDOR_ID } from '@/api/storeConfig';
+import { LOJA_IDS, VENDEDOR_IDS, FORMA_PAGAMENTO_MAP } from '@/api/storeConfig';
 
 const emptyOrder = (os: string): Partial<Order> => ({
   os, createdAt: Date.now(),
@@ -194,6 +194,7 @@ export function OrderModal({ open, onClose, order, onSave, nextOS, prefill }: Pr
       directBilling: !!form.directBilling,
       supplier: form.supplier || '',
       invoice: form.invoice || '',
+      invoiceSupplier: form.invoiceSupplier || '',
       paymentMethods: form.paymentMethods || [],
       installments: form.installments || 1,
       deliveryDate: form.deliveryDate || '',
@@ -224,11 +225,6 @@ export function OrderModal({ open, onClose, order, onSave, nextOS, prefill }: Pr
       paymentInstallmentPlan: form.paymentInstallmentPlan || [],
     };
 
-    const onApiSuccess = () => {
-      toast.success(isEdit ? 'Pedido atualizado com sucesso' : 'Pedido criado com sucesso');
-      onSave(o);
-      onClose();
-    };
     const onApiError = (err: unknown) => toast.error(getApiError(err));
 
     if (isEdit) {
@@ -238,26 +234,45 @@ export function OrderModal({ open, onClose, order, onSave, nextOS, prefill }: Pr
         status: o.status as PedidoStatus,
         valor_venda: String(o.salesValue),
         observacao: o.observations || undefined,
+        numero_nf: o.invoice || undefined,
+        nota_fiscal_fornecedor: o.invoiceSupplier || undefined,
         numero_oc: o.ocAfPed || undefined,
         is_direct_billing: o.directBilling,
-        formas_pagamento: o.paymentMethods.map(m => ({ forma: m })),
+        formas_pagamento: o.paymentMethods.map(m => ({ forma: FORMA_PAGAMENTO_MAP[m] ?? m })),
       };
-      updateOrder(payload, { onSuccess: onApiSuccess, onError: onApiError });
+      updateOrder(payload, {
+        onSuccess: () => {
+          toast.success('Pedido atualizado com sucesso');
+          onSave(o);
+          onClose();
+        },
+        onError: onApiError,
+      });
     } else {
       const payload: CreatePedidoPayload = {
         id_loja: LOJA_IDS[o.company] ?? '',
-        id_vendedor: DEFAULT_VENDEDOR_ID,
-        id_cliente: crypto.randomUUID(), // TODO: substituir com lookup real de cliente
+        id_vendedor: VENDEDOR_IDS[o.seller] ?? '',
+        nome_cliente: o.customer,
+        cpf_cnpj: o.cnpj || undefined,
         data_pedido: o.orderDate,
         data_entrega: o.deliveryDate,
         status: o.status as PedidoStatus,
         valor_venda: String(o.salesValue),
         observacao: o.observations || undefined,
+        numero_nf: o.invoice || undefined,
+        nota_fiscal_fornecedor: o.invoiceSupplier || undefined,
         numero_oc: o.ocAfPed || undefined,
         is_direct_billing: o.directBilling,
-        formas_pagamento: o.paymentMethods.map(m => ({ forma: m })),
+        formas_pagamento: o.paymentMethods.map(m => ({ forma: FORMA_PAGAMENTO_MAP[m] ?? m })),
       };
-      createOrder(payload, { onSuccess: onApiSuccess, onError: onApiError });
+      createOrder(payload, {
+        onSuccess: (data) => {
+          toast.success('Pedido criado com sucesso');
+          onSave({ ...o, id: data.id });
+          onClose();
+        },
+        onError: onApiError,
+      });
     }
   };
 
@@ -385,6 +400,11 @@ export function OrderModal({ open, onClose, order, onSave, nextOS, prefill }: Pr
             {/* Sales Value (moved from summary) */}
             {renderCurrencyInput('salesValue', 'Valor de Venda')}
 
+            <div>
+              <Label>Nota Fiscal</Label>
+              <Input className="bg-white border-border" value={form.invoice || ''} onChange={e => set('invoice', e.target.value)} onKeyDown={handleEnterBlur} placeholder="Número da NF" />
+            </div>
+
             {/* Direct billing toggle */}
             <div className="flex items-end">
               <label className="flex items-center gap-2 cursor-pointer pb-2">
@@ -399,8 +419,8 @@ export function OrderModal({ open, onClose, order, onSave, nextOS, prefill }: Pr
                   <Input className="bg-white border-border" value={form.supplier || ''} onChange={e => set('supplier', e.target.value)} onKeyDown={handleEnterBlur} />
                 </div>
                 <div>
-                  <Label>Nota Fiscal (NF)</Label>
-                  <Input className="bg-white border-border" value={form.invoice || ''} onChange={e => set('invoice', e.target.value)} onKeyDown={handleEnterBlur} />
+                  <Label>NF Fornecedor</Label>
+                  <Input className="bg-white border-border" value={form.invoiceSupplier || ''} onChange={e => set('invoiceSupplier', e.target.value)} onKeyDown={handleEnterBlur} placeholder="Número da NF do fornecedor" />
                 </div>
               </>
             )}

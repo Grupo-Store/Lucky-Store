@@ -23,7 +23,7 @@ class ItemRma(Base):
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     id_rma = Column(UUID(as_uuid=True), ForeignKey("rmas.id", ondelete="CASCADE"), nullable=False)
-    id_produto_origem = Column(UUID(as_uuid=True), ForeignKey("produtos.id"), nullable=False)
+    id_produto_origem = Column(UUID(as_uuid=True), ForeignKey("produtos.id"), nullable=True)
 
     descricao = Column(Text, nullable=False)
     quantidade = Column(Integer, nullable=False)

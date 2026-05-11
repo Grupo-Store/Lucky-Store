@@ -7,7 +7,7 @@ from app.models.rma import RmaStatus
 
 
 class ItemRmaCreate(BaseModel):
-    id_produto_origem: UUID
+    id_produto_origem: Optional[UUID] = None
     descricao: str
     quantidade: int
 
@@ -27,7 +27,7 @@ class ItemRmaStatusUpdate(BaseModel):
 class ItemRmaResponse(BaseModel):
     id: UUID
     id_rma: UUID
-    id_produto_origem: UUID
+    id_produto_origem: Optional[UUID] = None
     descricao: str
     quantidade: int
     status: ItemRmaStatus
