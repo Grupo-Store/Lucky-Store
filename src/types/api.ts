@@ -89,6 +89,7 @@ export interface PedidoResponse {
   parcelas: number | null;
   observacao: string | null;
   fornecedor_principal: string | null;
+  nota_fiscal_fornecedor: string | null;
   economia: string | null;
   formas_pagamento: FormaPagamento[];
   custo: CustoPedido | null;
@@ -101,20 +102,22 @@ export interface PedidoResponse {
 export interface CreatePedidoPayload {
   id_loja: string;
   id_vendedor: string;
-  id_cliente: string;
+  nome_cliente: string;
+  cpf_cnpj?: string;
   data_pedido: string;
   data_entrega: string;
   status: PedidoStatus;
   valor_venda?: string;
   observacao?: string;
   numero_nf?: string;
+  nota_fiscal_fornecedor?: string;
   numero_oc?: string;
   is_direct_billing?: boolean;
   formas_pagamento?: { forma: string }[];
   custo?: Partial<Omit<CustoPedido, 'id' | 'id_pedido'>>;
 }
 
-export type UpdatePedidoPayload = Partial<Omit<CreatePedidoPayload, 'id_loja' | 'id_vendedor' | 'id_cliente'>>;
+export type UpdatePedidoPayload = Partial<Omit<CreatePedidoPayload, 'id_loja' | 'id_vendedor' | 'nome_cliente'>>;
 
 export interface PedidoFilters {
   page?: number;
@@ -246,7 +249,7 @@ export type ItemRmaStatus =
 export interface ItemRma {
   id: string;
   id_rma: string;
-  id_produto_origem: string;
+  id_produto_origem: string | null;
   descricao: string;
   quantidade: number;
   status: ItemRmaStatus;
@@ -272,7 +275,7 @@ export interface CreateRmaPayload {
   id_pedido_origem: string;
   prazo_entrega?: string;
   itens: {
-    id_produto_origem: string;
+    id_produto_origem?: string;
     descricao: string;
     quantidade: number;
   }[];

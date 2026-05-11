@@ -1,0 +1,120 @@
+import { renderHook, waitFor, act } from '@testing-library/react';
+import { createElement } from 'react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { vi, describe, it, expect, beforeEach } from 'vitest';
+import { useCreateOrder, useUpdateOrder, useDeleteOrder } from '@/api/hooks/useOrders';
+import { apiClient } from '@/api/client';
+
+vi.mock('@/api/client', () => ({
+  apiClient: {
+    get: vi.fn(),
+    post: vi.fn(),
+    put: vi.fn(),
+    patch: vi.fn(),
+    delete: vi.fn(),
+  },
+  getApiError: vi.fn((e: unknown) => String(e)),
+}));
+
+const mockPost = (apiClient as any).post as ReturnType<typeof vi.fn>;
+const mockPut = (apiClient as any).put as ReturnType<typeof vi.fn>;
+const mockDelete = (apiClient as any).delete as ReturnType<typeof vi.fn>;
+
+const makeWrapper = () => {
+  const qc = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
+  return ({ children }: { children: React.ReactNode }) =>
+    createElement(QueryClientProvider, { client: qc }, children);
+};
+
+const mockOrder = {
+  id: 'backend-uuid-abc',
+  status: 'To Buy',
+  numero_os: '1001',
+};
+
+describe('useCreateOrder', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('calls POST /pedidos with the payload', async () => {
+    mockPost.mockResolvedValueOnce({ data: mockOrder });
+
+    const { result } = renderHook(() => useCreateOrder(), { wrapper: makeWrapper() });
+
+    const payload = {
+      id_loja: 'loja-1',
+      id_vendedor: 'vendedor-1',
+      nome_cliente: 'Test Client',
+      data_pedido: '2026-05-11',
+      data_entrega: '2026-05-20',
+      status: 'To Buy' as const,
+    };
+
+    await act(async () => {
+      result.current.mutate(payload);
+    });
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(mockPost).toHaveBeenCalledWith('/pedidos', payload);
+  });
+
+  it('returns the created order data on success', async () => {
+    mockPost.mockResolvedValueOnce({ data: mockOrder });
+    const { result } = renderHook(() => useCreateOrder(), { wrapper: makeWrapper() });
+
+    let data: typeof mockOrder | undefined;
+    await act(async () => {
+      result.current.mutate(
+        { id_loja: '', id_vendedor: '', nome_cliente: 'X', data_pedido: '', data_entrega: '', status: 'To Buy' },
+        { onSuccess: (d) => { data = d as any; } },
+      );
+    });
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(data).toEqual(mockOrder);
+  });
+
+  it('exposes error on API failure', async () => {
+    mockPost.mockRejectedValueOnce(new Error('Network Error'));
+    const { result } = renderHook(() => useCreateOrder(), { wrapper: makeWrapper() });
+
+    await act(async () => {
+      result.current.mutate({ id_loja: '', id_vendedor: '', nome_cliente: '', data_pedido: '', data_entrega: '', status: 'To Buy' });
+    });
+
+    await waitFor(() => expect(result.current.isError).toBe(true));
+  });
+});
+
+describe('useUpdateOrder', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('calls PUT /pedidos/:id with the payload', async () => {
+    const updated = { ...mockOrder, status: 'Bought' };
+    mockPut.mockResolvedValueOnce({ data: updated });
+
+    const { result } = renderHook(() => useUpdateOrder('backend-uuid-abc'), { wrapper: makeWrapper() });
+
+    await act(async () => {
+      result.current.mutate({ status: 'Bought' as const });
+    });
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(mockPut).toHaveBeenCalledWith('/pedidos/backend-uuid-abc', { status: 'Bought' });
+  });
+});
+
+describe('useDeleteOrder', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('calls DELETE /pedidos/:id', async () => {
+    mockDelete.mockResolvedValueOnce({ data: undefined });
+    const { result } = renderHook(() => useDeleteOrder(), { wrapper: makeWrapper() });
+
+    await act(async () => {
+      result.current.mutate('backend-uuid-abc');
+    });
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(mockDelete).toHaveBeenCalledWith('/pedidos/backend-uuid-abc');
+  });
+});

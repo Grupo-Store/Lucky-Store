@@ -6,6 +6,7 @@ from uuid import UUID
 from sqlalchemy.orm import Session
 from sqlalchemy import asc, desc, text
 from app.models.pedido import Pedido, PedidoFormaPagamento, CustoPedido
+from app.models.cliente import Cliente
 from app.models.rma import Rma
 from app.models.status_history import StatusHistory, EntityType
 from app.models.audit_log import AuditLog, AuditAction
@@ -40,15 +41,30 @@ def _economia(pedido: Pedido) -> Optional[Decimal]:
     return pedido.valor_venda - custo_total
 
 
+def _get_or_create_cliente(db: Session, nome: str, cpf_cnpj: Optional[str]) -> UUID:
+    if cpf_cnpj:
+        cliente = db.query(Cliente).filter(
+            Cliente.cnpj == cpf_cnpj,
+            Cliente.deleted_at.is_(None),
+        ).first()
+        if cliente:
+            return cliente.id
+    cliente = Cliente(nome=nome, cnpj=cpf_cnpj or None)
+    db.add(cliente)
+    db.flush()
+    return cliente.id
+
+
 class PedidoService:
 
     @staticmethod
     def create(db: Session, data: PedidoCreate, current_user_id: UUID,
                ip_address: str = None, user_agent: str = None) -> Pedido:
+        id_cliente = _get_or_create_cliente(db, data.nome_cliente, data.cpf_cnpj)
         pedido = Pedido(
             id_loja=data.id_loja,
             id_vendedor=data.id_vendedor,
-            id_cliente=data.id_cliente,
+            id_cliente=id_cliente,
             numero_os=data.numero_os or _generate_numero_os(db),
             numero_nf=data.numero_nf,
             numero_oc=data.numero_oc,

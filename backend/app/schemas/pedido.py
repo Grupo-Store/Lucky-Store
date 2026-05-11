@@ -70,7 +70,8 @@ class CustoPedidoOut(CustoPedidoIn):
 class PedidoCreate(BaseModel):
     id_loja: UUID
     id_vendedor: UUID
-    id_cliente: UUID
+    nome_cliente: str
+    cpf_cnpj: Optional[str] = None
     numero_os: Optional[str] = None
     numero_nf: Optional[str] = None
     numero_oc: Optional[str] = None

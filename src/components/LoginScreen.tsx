@@ -29,17 +29,18 @@ const BrandHeader = () => (
 
 /* -------------------- LOGIN STAGE -------------------- */
 function LoginStage() {
-  const { login } = useAuth();
-  const [user, setUser] = useState('');
+  const { login, isPending } = useAuth();
+  const [email, setEmail] = useState('');
   const [pass, setPass] = useState('');
   const [error, setError] = useState('');
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!login(user, pass)) {
-      setError('Por favor, informe usuário e senha.');
+    setError('');
+    const err = await login(email, pass);
+    if (err) {
+      setError(err);
     } else {
-      setError('');
       toast.success('Código enviado para o e-mail cadastrado.');
     }
   };
@@ -51,11 +52,12 @@ function LoginStage() {
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
       <div>
-        <Label className="text-xs uppercase tracking-wider text-secondary font-bold">Usuário</Label>
+        <Label className="text-xs uppercase tracking-wider text-secondary font-bold">Email</Label>
         <Input
-          placeholder="Digite seu usuário"
-          value={user}
-          onChange={e => setUser(e.target.value)}
+          type="email"
+          placeholder="Digite seu email"
+          value={email}
+          onChange={e => setEmail(e.target.value)}
           className="bg-white border-secondary/20 mt-1"
           autoFocus
         />
@@ -71,8 +73,8 @@ function LoginStage() {
         />
       </div>
       {error && <p className="text-destructive text-sm">{error}</p>}
-      <Button type="submit" className="w-full bg-secondary hover:bg-secondary/90 text-secondary-foreground h-11 text-base font-semibold">
-        Entrar
+      <Button type="submit" disabled={isPending} className="w-full bg-secondary hover:bg-secondary/90 text-secondary-foreground h-11 text-base font-semibold">
+        {isPending ? 'Entrando...' : 'Entrar'}
       </Button>
       <button
         type="button"
@@ -87,15 +89,15 @@ function LoginStage() {
 
 /* -------------------- VERIFY STAGE -------------------- */
 function VerifyStage() {
-  const { username, verifyCode, resetToLogin } = useAuth();
+  const { email, verifyCode, resetToLogin, isPending } = useAuth();
   const [code, setCode] = useState('');
   const [error, setError] = useState('');
 
-  const handleVerify = (e?: React.FormEvent) => {
+  const handleVerify = async (e?: React.FormEvent) => {
     e?.preventDefault();
-    if (!verifyCode(code)) {
-      setError('Código inválido. Digite os 6 dígitos enviados ao e-mail.');
-    }
+    setError('');
+    const err = await verifyCode(code);
+    if (err) setError(err);
   };
 
   return (
@@ -108,7 +110,7 @@ function VerifyStage() {
         <p className="text-sm text-muted-foreground inline-flex items-center gap-1.5">
           <Mail className="h-4 w-4" />
           Enviamos um código de 6 dígitos para o e-mail cadastrado de
-          <span className="font-semibold text-foreground"> {username}</span>
+          <span className="font-semibold text-foreground"> {email}</span>
         </p>
       </div>
 
@@ -129,10 +131,10 @@ function VerifyStage() {
 
       <Button
         type="submit"
-        disabled={code.length !== 6}
+        disabled={code.length !== 6 || isPending}
         className="w-full bg-secondary hover:bg-secondary/90 text-secondary-foreground h-11 text-base font-semibold"
       >
-        Verificar
+        {isPending ? 'Verificando...' : 'Verificar'}
       </Button>
 
       <button

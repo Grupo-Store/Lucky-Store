@@ -159,6 +159,7 @@ export interface Order {
   directBilling: boolean;
   supplier: string;
   invoice: string;
+  invoiceSupplier: string;
   paymentMethods: PaymentMethod[];
   installments: number;
   deliveryDate: string;
@@ -295,7 +296,7 @@ export function calcTotal(o: Partial<Order>): number {
 
 const baseOrder = (over: Partial<Order>): Order => ({
   id: '', os: '', createdAt: Date.now(), orderDate: '', customer: '', cnpj: '', company: '', seller: '',
-  ocAfPed: '', directBilling: false, supplier: '', invoice: '',
+  ocAfPed: '', directBilling: false, supplier: '', invoice: '', invoiceSupplier: '',
   paymentMethods: [], installments: 1, deliveryDate: '', status: 'To Buy',
   isRMA: false, cancelled: false, observations: '',
   initialProductCost: 0, finalProductCost: 0, boletoCost: 0, giftCost: 0,

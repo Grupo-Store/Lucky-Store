@@ -22,8 +22,13 @@ apiClient.interceptors.response.use(
 
     if (error.response?.status === 401 && !original._retry) {
       original._retry = true;
+      const refresh = localStorage.getItem('refresh_token');
+      if (!refresh) {
+        localStorage.clear();
+        window.location.replace('/');
+        return Promise.reject(error);
+      }
       try {
-        const refresh = localStorage.getItem('refresh_token');
         const { data } = await axios.post(`${BASE_URL}/auth/refresh-token`, {
           refresh_token: refresh,
         });
@@ -32,7 +37,7 @@ apiClient.interceptors.response.use(
         return apiClient(original);
       } catch {
         localStorage.clear();
-        window.location.href = '/login';
+        window.location.replace('/');
         return Promise.reject(error);
       }
     }

@@ -22,6 +22,10 @@ import {
   calcFinalCost, calcProfit, calcFreightTotal,
 } from '@/store/OrderStore';
 import type { OrderPrefill } from '@/components/AddOrderChooser';
+import { useCreateOrder, useUpdateOrder } from '@/api/hooks/useOrders';
+import { getApiError } from '@/api/client';
+import type { CreatePedidoPayload, UpdatePedidoPayload, PedidoStatus } from '@/types/api';
+import { LOJA_IDS, VENDEDOR_IDS, FORMA_PAGAMENTO_MAP } from '@/api/storeConfig';
 
 const emptyOrder = (os: string): Partial<Order> => ({
   os, createdAt: Date.now(),
@@ -63,6 +67,10 @@ interface Props {
 export function OrderModal({ open, onClose, order, onSave, nextOS, prefill }: Props) {
   const [form, setForm] = useState<Partial<Order>>(() => emptyOrder(nextOS?.() || ''));
   const isEdit = !!order;
+
+  const { mutate: createOrder, isPending: isCreating } = useCreateOrder();
+  const { mutate: updateOrder, isPending: isUpdating } = useUpdateOrder(order?.id ?? '');
+  const isPending = isCreating || isUpdating;
 
   const [editingField, setEditingField] = useState<string | null>(null);
   const [editingValue, setEditingValue] = useState('');
@@ -186,6 +194,7 @@ export function OrderModal({ open, onClose, order, onSave, nextOS, prefill }: Pr
       directBilling: !!form.directBilling,
       supplier: form.supplier || '',
       invoice: form.invoice || '',
+      invoiceSupplier: form.invoiceSupplier || '',
       paymentMethods: form.paymentMethods || [],
       installments: form.installments || 1,
       deliveryDate: form.deliveryDate || '',
@@ -215,8 +224,56 @@ export function OrderModal({ open, onClose, order, onSave, nextOS, prefill }: Pr
       paymentInstallments: form.paymentInstallments || 1,
       paymentInstallmentPlan: form.paymentInstallmentPlan || [],
     };
-    onSave(o);
-    onClose();
+
+    const onApiError = (err: unknown) => toast.error(getApiError(err));
+
+    if (isEdit) {
+      const payload: UpdatePedidoPayload = {
+        data_pedido: o.orderDate,
+        data_entrega: o.deliveryDate,
+        status: o.status as PedidoStatus,
+        valor_venda: String(o.salesValue),
+        observacao: o.observations || undefined,
+        numero_nf: o.invoice || undefined,
+        nota_fiscal_fornecedor: o.invoiceSupplier || undefined,
+        numero_oc: o.ocAfPed || undefined,
+        is_direct_billing: o.directBilling,
+        formas_pagamento: o.paymentMethods.map(m => ({ forma: FORMA_PAGAMENTO_MAP[m] ?? m })),
+      };
+      updateOrder(payload, {
+        onSuccess: () => {
+          toast.success('Pedido atualizado com sucesso');
+          onSave(o);
+          onClose();
+        },
+        onError: onApiError,
+      });
+    } else {
+      const payload: CreatePedidoPayload = {
+        id_loja: LOJA_IDS[o.company] ?? '',
+        id_vendedor: VENDEDOR_IDS[o.seller] ?? '',
+        nome_cliente: o.customer,
+        cpf_cnpj: o.cnpj || undefined,
+        data_pedido: o.orderDate,
+        data_entrega: o.deliveryDate,
+        status: o.status as PedidoStatus,
+        valor_venda: String(o.salesValue),
+        observacao: o.observations || undefined,
+        numero_nf: o.invoice || undefined,
+        nota_fiscal_fornecedor: o.invoiceSupplier || undefined,
+        numero_oc: o.ocAfPed || undefined,
+        is_direct_billing: o.directBilling,
+        formas_pagamento: o.paymentMethods.map(m => ({ forma: FORMA_PAGAMENTO_MAP[m] ?? m })),
+      };
+      createOrder(payload, {
+        onSuccess: (data) => {
+          toast.success('Pedido criado com sucesso');
+          onSave({ ...o, id: data.id });
+          onClose();
+        },
+        onError: onApiError,
+      });
+    }
   };
 
   /* ---------------- Currency input renderer ---------------- */
@@ -343,6 +400,11 @@ export function OrderModal({ open, onClose, order, onSave, nextOS, prefill }: Pr
             {/* Sales Value (moved from summary) */}
             {renderCurrencyInput('salesValue', 'Valor de Venda')}
 
+            <div>
+              <Label>Nota Fiscal</Label>
+              <Input className="bg-white border-border" value={form.invoice || ''} onChange={e => set('invoice', e.target.value)} onKeyDown={handleEnterBlur} placeholder="Número da NF" />
+            </div>
+
             {/* Direct billing toggle */}
             <div className="flex items-end">
               <label className="flex items-center gap-2 cursor-pointer pb-2">
@@ -357,8 +419,8 @@ export function OrderModal({ open, onClose, order, onSave, nextOS, prefill }: Pr
                   <Input className="bg-white border-border" value={form.supplier || ''} onChange={e => set('supplier', e.target.value)} onKeyDown={handleEnterBlur} />
                 </div>
                 <div>
-                  <Label>Nota Fiscal (NF)</Label>
-                  <Input className="bg-white border-border" value={form.invoice || ''} onChange={e => set('invoice', e.target.value)} onKeyDown={handleEnterBlur} />
+                  <Label>NF Fornecedor</Label>
+                  <Input className="bg-white border-border" value={form.invoiceSupplier || ''} onChange={e => set('invoiceSupplier', e.target.value)} onKeyDown={handleEnterBlur} placeholder="Número da NF do fornecedor" />
                 </div>
               </>
             )}
@@ -586,8 +648,8 @@ export function OrderModal({ open, onClose, order, onSave, nextOS, prefill }: Pr
             <Printer className="h-4 w-4 mr-1" /> Imprimir
           </Button>
           <Button variant="outline" onClick={onClose}>Cancelar</Button>
-          <Button onClick={handleSave} className="bg-secondary hover:bg-secondary/90">
-            {isEdit ? 'Salvar Alterações' : 'Criar Pedido'}
+          <Button onClick={handleSave} disabled={isPending} className="bg-secondary hover:bg-secondary/90">
+            {isPending ? 'Salvando...' : (isEdit ? 'Salvar Alterações' : 'Criar Pedido')}
           </Button>
         </div>
       </DialogContent>

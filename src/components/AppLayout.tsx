@@ -56,7 +56,7 @@ function SectionTabs() {
 }
 
 export function AppLayout() {
-  const { username } = useAuth();
+  const { email } = useAuth();
   const { pathname } = useLocation();
   const { mode } = useDashboardFilters();
   const showDashHeader = pathname.startsWith('/dashboard');
@@ -79,7 +79,7 @@ export function AppLayout() {
             )}
             <div className="flex items-center gap-2 text-sm font-medium text-foreground">
               <UserCircle className="h-7 w-7 text-secondary" />
-              <span>{username}</span>
+              <span>{email}</span>
             </div>
           </header>
           <main className="flex-1 p-4 md:p-6 bg-background overflow-auto">
