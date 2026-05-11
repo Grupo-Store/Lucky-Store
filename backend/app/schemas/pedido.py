@@ -173,8 +173,25 @@ class PedidoDetailResponse(PedidoResponse):
     status_history: List[StatusHistoryOut] = []
 
 
+class PedidoListItemResponse(BaseModel):
+    id: UUID
+    numero_os: str
+    data_pedido: date
+    data_entrega: date
+    status: str
+    is_rma: Optional[bool] = None
+    is_cancelled: Optional[bool] = None
+    valor_venda: Optional[Decimal] = None
+    nome_cliente: Optional[str] = None
+    nome_loja: Optional[str] = None
+    nome_vendedor: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+
 class PedidoListResponse(BaseModel):
-    items: List[PedidoResponse]
+    items: List[PedidoListItemResponse]
     total: int
     page: int
     limit: int
