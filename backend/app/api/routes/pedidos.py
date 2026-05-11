@@ -8,8 +8,8 @@ from app.models.audit_log import AuditLog
 from app.models.status_history import StatusHistory, EntityType
 from app.schemas.pedido import (
     PedidoCreate, PedidoUpdate, PedidoResponse,
-    PedidoDetailResponse, PedidoListResponse, StatusChangeRequest,
-    StatusHistoryOut,
+    PedidoDetailResponse, PedidoListResponse, PedidoListItemResponse,
+    StatusChangeRequest, StatusHistoryOut,
 )
 from app.schemas.audit_log import AuditLogResponse
 from app.schemas.status_history import StatusHistoryResponse
@@ -63,7 +63,23 @@ def list_pedidos(
         data_inicio=data_inicio, data_fim=data_fim,
         sort_by=sort_by, sort_dir=sort_dir,
     )
-    return PedidoListResponse(items=items, total=total, page=page, limit=limit, pages=pages)
+    items_out = [
+        PedidoListItemResponse(
+            id=p.id,
+            numero_os=p.numero_os,
+            data_pedido=p.data_pedido,
+            data_entrega=p.data_entrega,
+            status=p.status,
+            is_rma=p.is_rma,
+            is_cancelled=p.is_cancelled,
+            valor_venda=p.valor_venda,
+            nome_cliente=p.cliente.nome if p.cliente else None,
+            nome_loja=p.loja.nome if p.loja else None,
+            nome_vendedor=p.vendedor.nome if p.vendedor else None,
+        )
+        for p in items
+    ]
+    return PedidoListResponse(items=items_out, total=total, page=page, limit=limit, pages=pages)
 
 
 @router.get("/{pedido_id}/history", response_model=OrderHistoryResponse)

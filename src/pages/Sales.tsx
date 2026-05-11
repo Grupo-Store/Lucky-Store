@@ -1,4 +1,7 @@
 import { useState, useMemo, memo } from 'react';
+import { Skeleton } from '@/components/ui/skeleton';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { useOrdersQuery, OrderFilters } from '@/hooks/use-orders-query';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -12,8 +15,8 @@ import { cn } from '@/lib/utils';
 import {
   useOrders, Order, OrderItem, OrderStatus, ItemStatus,
   ORDER_STATUS_COLORS, ORDER_STATUS_LABELS, ITEM_STATUS_COLORS,
-  WARN_STATUSES, isOpenOrder, calcTotal, calcItemLatestDelivery,
-  RMA_STATUS_LABELS, RMA_STATUS_COLORS, RMA_ITEM_STATUSES, calcRmaParentStatus,
+  WARN_STATUSES, isOpenOrder, calcItemLatestDelivery,
+  RMA_STATUS_LABELS, RMA_STATUS_COLORS, RMA_ITEM_STATUSES,
 } from '@/store/OrderStore';
 import {
   useQuotes, Quote, QuotePhaseKey, QUOTE_PHASE_LABELS, QUOTE_PHASE_COLORS,
@@ -70,14 +73,6 @@ function isInRange(iso: string, range: DateRange): boolean {
   return d >= from && d <= to;
 }
 
-function shouldWarnDelivery(o: Order): boolean {
-  if (!WARN_STATUSES.includes(o.status)) return false;
-  const days = differenceInCalendarDays(new Date(o.deliveryDate + 'T12:00:00'), new Date());
-  return days <= 3;
-}
-
-type SortField = 'os' | 'deliveryDate';
-type SortDir = 'asc' | 'desc';
 
 export default function Sales() {
 const { orders, addOrder, updateOrder, deleteOrder, updateItemStatus, nextOS, nextRmaNumber } = useOrders();
@@ -99,11 +94,25 @@ const { orders, addOrder, updateOrder, deleteOrder, updateItemStatus, nextOS, ne
   const [orderDateField, setOrderDateField] = useState<'orderDate' | 'deliveryDate'>('deliveryDate');
   const [orderRange, setOrderRange] = useState<DateRange>({});
   const [orderView, setOrderView] = useState<'all' | 'open' | 'rma'>('all');
-  const [orderStatusFilter, setOrderStatusFilter] = useState<string>('all');
   const [orderAlertsOnly, setOrderAlertsOnly] = useState(false);
-  const [sortField, setSortField] = useState<SortField | null>(null);
-  const [sortDir, setSortDir] = useState<SortDir>('asc');
-  const [orderPage, setOrderPage] = useState(1);
+  const [filters, setFilters] = useState<OrderFilters>({
+    page: 1, limit: 20, sort_by: 'data_pedido', sort_dir: 'desc',
+  });
+  const { data, isLoading, isError, refetch } = useOrdersQuery(filters);
+
+  const displayedOrders = useMemo(() => {
+    const items = data?.items ?? [];
+    return items
+      .filter(item => {
+        if (orderView === 'open') return item.is_rma === false && isOpenOrder(item.status as OrderStatus);
+        if (orderView === 'rma') return item.is_rma === true;
+        return true;
+      })
+      .filter(item => !orderAlertsOnly || (
+        WARN_STATUSES.includes(item.status as OrderStatus) &&
+        differenceInCalendarDays(new Date(item.data_entrega + 'T12:00:00'), new Date()) <= 3
+      ));
+  }, [data, orderView, orderAlertsOnly]);
 
   /* ---------- Products tab state ---------- */
   const [prodSearch, setProdSearch] = useState('');
@@ -121,55 +130,14 @@ const { orders, addOrder, updateOrder, deleteOrder, updateItemStatus, nextOS, ne
   const [quoteStatusFilter, setQuoteStatusFilter] = useState<string>('all');
   const [quotePage, setQuotePage] = useState(1);
 
-  const toggleSort = (field: SortField) => {
-    if (sortField === field) setSortDir(d => d === 'asc' ? 'desc' : 'asc');
-    else { setSortField(field); setSortDir('asc'); }
+  const toggleSort = (field: string) => {
+    setFilters(f => ({
+      ...f,
+      sort_by: field,
+      sort_dir: f.sort_by === field && f.sort_dir === 'asc' ? 'desc' : 'asc',
+      page: 1,
+    }));
   };
-
-  /* ---------- Orders filter ---------- */
-  const filteredOrders = useMemo(() => {
-    const q = orderSearch.toLowerCase().trim();
-    let list = [...orders];
-    if (orderView === 'open') list = list.filter(o => isOpenOrder(o.status));
-    if (orderView === 'rma') list = list.filter(o => o.isRMA);
-    else if (orderView === 'all') {
-      // 'all' shows everything (including RMAs)
-    }
-    if (orderStatusFilter !== 'all') {
-      if (orderView === 'rma') {
-        list = list.filter(o => calcRmaParentStatus(o.rmaItems) === orderStatusFilter);
-      } else {
-        list = list.filter(o => o.status === orderStatusFilter);
-      }
-    }
-    if (orderAlertsOnly) list = list.filter(o => shouldWarnDelivery(o));
-    if (q) list = list.filter(o =>
-      o.os.toLowerCase().includes(q) ||
-      o.customer.toLowerCase().includes(q) ||
-      o.cnpj.toLowerCase().includes(q) ||
-      (o.company || '').toLowerCase().includes(q) ||
-      (o.seller || '').toLowerCase().includes(q)
-    );
-    list = list.filter(o => isInRange(o[orderDateField], orderRange));
-    if (sortField) {
-      list.sort((a, b) => {
-        const cmp = sortField === 'os'
-          ? a.os.localeCompare(b.os, undefined, { numeric: true })
-          : a.deliveryDate.localeCompare(b.deliveryDate);
-        return sortDir === 'asc' ? cmp : -cmp;
-      });
-    } else {
-      // Default: newest created on top
-      list.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
-    }
-    return list;
-  }, [orders, orderSearch, orderView, orderStatusFilter, orderAlertsOnly, orderDateField, orderRange, sortField, sortDir]);
-
-  const orderPageCount = Math.max(1, Math.ceil(filteredOrders.length / PAGE_SIZE));
-  const pagedOrders = useMemo(
-    () => filteredOrders.slice((orderPage - 1) * PAGE_SIZE, orderPage * PAGE_SIZE),
-    [filteredOrders, orderPage]
-  );
 
   /* ---------- Quotes ---------- */
   const filteredQuotes = useMemo(() => {
@@ -250,13 +218,9 @@ const { orders, addOrder, updateOrder, deleteOrder, updateItemStatus, nextOS, ne
     }
   };
 
-  const handleStatusChange = (order: Order, newStatus: OrderStatus) => {
-    updateOrder({ ...order, status: newStatus });
-  };
-
-  const SortArrow = ({ field }: { field: SortField }) => {
-    const active = sortField === field;
-    const Icon = active && sortDir === 'desc' ? ArrowDown : ArrowUp;
+  const SortArrow = ({ field }: { field: string }) => {
+    const active = filters.sort_by === field;
+    const Icon = active && filters.sort_dir === 'desc' ? ArrowDown : ArrowUp;
     return (
       <Button variant="ghost" size="icon" className={cn('h-6 w-6', active && 'text-secondary')} onClick={() => toggleSort(field)}>
         <Icon className="h-3.5 w-3.5" />
@@ -265,16 +229,6 @@ const { orders, addOrder, updateOrder, deleteOrder, updateItemStatus, nextOS, ne
   };
 
   const ALL_STATUSES = Object.keys(ORDER_STATUS_LABELS) as OrderStatus[];
-
-  const handleRowClick = (order: Order) => {
-    if (order.isRMA) {
-      setEditRma(order);
-      setRmaModalOpen(true);
-    } else {
-      setEditOrder(order);
-      setModalOpen(true);
-    }
-  };
 
   return (
     <TooltipProvider>
@@ -393,7 +347,7 @@ const { orders, addOrder, updateOrder, deleteOrder, updateItemStatus, nextOS, ne
                     ] as const).map(opt => (
                       <button
                         key={opt.v}
-                        onClick={() => { setOrderView(opt.v); setOrderStatusFilter('all'); }}
+                        onClick={() => { setOrderView(opt.v); setFilters(f => ({ ...f, status: undefined, page: 1 })); }}
                         className={cn(
                           'px-4 py-1.5 rounded-full text-sm font-medium transition-all',
                           orderView === opt.v ? 'bg-secondary text-secondary-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
@@ -412,13 +366,30 @@ const { orders, addOrder, updateOrder, deleteOrder, updateItemStatus, nextOS, ne
                     </Button>
                     <DateFilter
                       field={orderDateField}
-                      onFieldChange={v => setOrderDateField(v as any)}
+                      onFieldChange={v => {
+                        setOrderDateField(v as any);
+                        setOrderRange({});
+                        setFilters(f => ({ ...f, data_inicio: undefined, data_fim: undefined, page: 1 }));
+                      }}
                       fieldOptions={[{ value: 'orderDate', label: 'Data do Pedido' }, { value: 'deliveryDate', label: 'Data de Entrega' }]}
                       range={orderRange}
-                      onRangeChange={setOrderRange}
+                      onRangeChange={range => {
+                        setOrderRange(range);
+                        if (orderDateField === 'orderDate') {
+                          setFilters(f => ({
+                            ...f,
+                            data_inicio: range.from || undefined,
+                            data_fim: range.to || range.from || undefined,
+                            page: 1,
+                          }));
+                        }
+                      }}
                     />
-                    {(orderSearch || orderRange.from || orderAlertsOnly) && (
-                      <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => { setOrderSearch(''); setOrderRange({}); setOrderAlertsOnly(false); }}>
+                    {(orderSearch || orderRange.from || orderAlertsOnly || filters.status) && (
+                      <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => {
+                        setOrderSearch(''); setOrderRange({}); setOrderAlertsOnly(false);
+                        setFilters(f => ({ ...f, status: undefined, data_inicio: undefined, data_fim: undefined, page: 1 }));
+                      }}>
                         <X className="h-4 w-4" />
                       </Button>
                     )}
@@ -426,7 +397,7 @@ const { orders, addOrder, updateOrder, deleteOrder, updateItemStatus, nextOS, ne
                 </div>
 
                 <div className="flex justify-between items-center mb-4">
-                  <Select value={orderStatusFilter} onValueChange={setOrderStatusFilter}>
+                  <Select value={filters.status ?? 'all'} onValueChange={v => setFilters(f => ({ ...f, status: v === 'all' ? undefined : v, page: 1 }))}>
                     <SelectTrigger className="w-64 bg-white"><SelectValue placeholder="Filtrar por Status" /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="all">Todos os Status</SelectItem>
@@ -453,25 +424,41 @@ const { orders, addOrder, updateOrder, deleteOrder, updateItemStatus, nextOS, ne
                   </div>
                 </div>
 
+                {isError && (
+                  <Alert variant="destructive" className="mb-4">
+                    <AlertDescription className="flex items-center justify-between">
+                      <span>Falha ao carregar pedidos.</span>
+                      <Button variant="outline" size="sm" onClick={() => refetch()}>Tentar novamente</Button>
+                    </AlertDescription>
+                  </Alert>
+                )}
                 <div className="overflow-x-auto rounded-lg border">
                   <Table>
                     <TableHeader>
                       <TableRow className="bg-secondary/10">
-                        <TableHead><div className="flex items-center gap-1">OS <SortArrow field="os" /></div></TableHead>
+                        <TableHead><div className="flex items-center gap-1">OS <SortArrow field="numero_os" /></div></TableHead>
                         <TableHead>Cliente</TableHead>
-                        <TableHead>Empresa</TableHead>
+                        <TableHead>Loja</TableHead>
                         <TableHead>Vendedor</TableHead>
-                        <TableHead><div className="flex items-center gap-1">Data de Entrega <SortArrow field="deliveryDate" /></div></TableHead>
+                        <TableHead><div className="flex items-center gap-1">Data de Entrega <SortArrow field="data_entrega" /></div></TableHead>
                         <TableHead>Status</TableHead>
                         <TableHead className="text-right">Valor</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {pagedOrders.map(order => {
-                        const warn = shouldWarnDelivery(order);
-                        const rmaParentStatus = order.isRMA ? calcRmaParentStatus(order.rmaItems) : null;
+                      {isLoading ? (
+                        Array.from({ length: 5 }).map((_, i) => (
+                          <TableRow key={i}>
+                            {Array.from({ length: 7 }).map((_, j) => (
+                              <TableCell key={j}><Skeleton className="h-4 w-full" /></TableCell>
+                            ))}
+                          </TableRow>
+                        ))
+                      ) : displayedOrders.map(item => {
+                        const warn = WARN_STATUSES.includes(item.status as OrderStatus) &&
+                          differenceInCalendarDays(new Date(item.data_entrega + 'T12:00:00'), new Date()) <= 3;
                         return (
-                          <TableRow key={order.id} className="cursor-pointer hover:bg-muted/50" onClick={() => handleRowClick(order)}>
+                          <TableRow key={item.id} className="hover:bg-muted/50">
                             <TableCell className="font-medium">
                               <div className="flex items-center gap-1.5">
                                 {warn && (
@@ -482,49 +469,41 @@ const { orders, addOrder, updateOrder, deleteOrder, updateItemStatus, nextOS, ne
                                     <TooltipContent>Entrega em ≤ 3 dias</TooltipContent>
                                   </Tooltip>
                                 )}
-                                {order.os}
-                                {order.isRMA && <span className="ml-1 text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground font-semibold">RMA</span>}
+                                {item.numero_os}
+                                {item.is_rma && <span className="ml-1 text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground font-semibold">RMA</span>}
                               </div>
                             </TableCell>
-                            <TableCell>{order.customer}</TableCell>
-                            <TableCell>{order.company || '—'}</TableCell>
-                            <TableCell>{order.seller || '—'}</TableCell>
-                            <TableCell>{fmtDate(order.deliveryDate)}</TableCell>
-                            <TableCell onClick={e => e.stopPropagation()}>
-                              {order.isRMA ? (
-                                rmaParentStatus ? (
-                                  <span className={cn('px-2 py-0.5 rounded text-xs font-semibold border', RMA_STATUS_COLORS[rmaParentStatus])}>
-                                    {RMA_STATUS_LABELS[rmaParentStatus]}
-                                  </span>
-                                ) : <span className="text-muted-foreground text-xs">—</span>
-                              ) : (
-                                <Select value={order.status} onValueChange={v => handleStatusChange(order, v as OrderStatus)}>
-                                  <SelectTrigger className={cn('w-56 text-xs font-semibold border', ORDER_STATUS_COLORS[order.status])}>
-                                    <SelectValue />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    {ALL_STATUSES.map(s => (
-                                      <SelectItem key={s} value={s}>
-                                        <span className={cn('px-2 py-0.5 rounded text-xs font-medium', ORDER_STATUS_COLORS[s])}>{ORDER_STATUS_LABELS[s]}</span>
-                                      </SelectItem>
-                                    ))}
-                                  </SelectContent>
-                                </Select>
-                              )}
+                            <TableCell>{item.nome_cliente || '—'}</TableCell>
+                            <TableCell>{item.nome_loja || '—'}</TableCell>
+                            <TableCell>{item.nome_vendedor || '—'}</TableCell>
+                            <TableCell>{fmtDate(item.data_entrega)}</TableCell>
+                            <TableCell>
+                              <span className={cn(
+                                'px-2 py-0.5 rounded text-xs font-semibold border',
+                                item.is_rma
+                                  ? (RMA_STATUS_COLORS[item.status as ItemStatus] ?? '')
+                                  : (ORDER_STATUS_COLORS[item.status as OrderStatus] ?? ''),
+                              )}>
+                                {item.is_rma
+                                  ? (RMA_STATUS_LABELS[item.status as ItemStatus] ?? item.status)
+                                  : (ORDER_STATUS_LABELS[item.status as OrderStatus] ?? item.status)}
+                              </span>
                             </TableCell>
                             <TableCell className="text-right font-semibold">
-                              {order.isRMA ? <span className="text-muted-foreground">—</span> : formatBRL(calcTotal(order))}
+                              {item.is_rma || item.valor_venda == null
+                                ? <span className="text-muted-foreground">—</span>
+                                : formatBRL(item.valor_venda)}
                             </TableCell>
                           </TableRow>
                         );
                       })}
-                      {pagedOrders.length === 0 && (
+                      {!isLoading && displayedOrders.length === 0 && (
                         <TableRow><TableCell colSpan={7} className="text-center py-8 text-muted-foreground">Nenhum pedido encontrado</TableCell></TableRow>
                       )}
                     </TableBody>
                   </Table>
                 </div>
-                <Pagination page={orderPage} pageCount={orderPageCount} total={filteredOrders.length} pageSize={PAGE_SIZE} onPageChange={setOrderPage} />
+                <Pagination page={filters.page} pageCount={data?.pages ?? 1} total={data?.total ?? 0} pageSize={20} onPageChange={p => setFilters(f => ({ ...f, page: p }))} />
               </CardContent>
             </Card>
           </TabsContent>
