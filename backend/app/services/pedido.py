@@ -3,7 +3,7 @@ from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Optional
 from uuid import UUID
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import asc, desc, text
 from app.models.pedido import Pedido, PedidoFormaPagamento, CustoPedido
 from app.models.cliente import Cliente
@@ -121,7 +121,11 @@ class PedidoService:
         sort_by: str = "data_pedido",
         sort_dir: str = "desc",
     ):
-        q = db.query(Pedido).filter(Pedido.deleted_at.is_(None))
+        q = db.query(Pedido).options(
+            joinedload(Pedido.loja),
+            joinedload(Pedido.vendedor),
+            joinedload(Pedido.cliente),
+        ).filter(Pedido.deleted_at.is_(None))
 
         if status:
             q = q.filter(Pedido.status == status)
