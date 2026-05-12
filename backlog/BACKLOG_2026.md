@@ -41,6 +41,33 @@
 
 ---
 
+## What's New in This Update (May 11, 2026)
+
+✅ **Phase 2.2 — React Query Integration completo:**
+- `@tanstack/react-query` instalado e configurado
+- Custom hooks: `useOrders`, `useQuotes`, `useRma` com queries + mutations
+- Mutations: `useCreateOrder`, `useUpdateOrder`, `useDeleteOrder`, `useCreateQuote`, `useUpdateQuote`, `useCreateRma`
+- Loading e error states encapsulados nos hooks
+
+✅ **Phase 2.3 — Modal Integration completo:**
+- `OrderModal` chama `POST /orders` (create) e `PUT /orders/:id` (update) via `useCreateOrder`/`useUpdateOrder`
+- `QuoteModal` chama `POST /quotes` (create) e `PUT /quotes/:id` (update) via `useCreateQuote`/`useUpdateQuote`
+- `RmaModal` chama `POST /rma` via `useCreateRma`; bug corrigido: `id_produto_origem` não é enviado nos itens
+- Loading states: botões desabilitados enquanto mutation está pendente
+- Error display: `toast.error` com mensagem da API via `getApiError`
+- Success notification: `toast.success` + `onSave(data)` com ID do backend (não UUID local)
+
+✅ **Testes Phase 2.3 — 51 unit tests + 5 E2E tests:**
+- `src/test/api/useOrders.test.tsx` — 5 testes (POST/PUT/DELETE hooks)
+- `src/test/api/useQuotes.test.tsx` — 4 testes (POST/PUT hooks)
+- `src/test/api/useRma.test.tsx` — 4 testes (POST hook + validação sem id_produto_origem)
+- `src/test/components/OrderModal.test.tsx` — 10 testes (create + edit mode)
+- `src/test/components/QuoteModal.test.tsx` — 9 testes (create + edit mode)
+- `src/test/components/RmaModal.test.tsx` — 10 testes (steps 1/2/3 + payload)
+- `e2e/modal-integration.spec.ts` — 5 testes Playwright (login flow, OrderModal, QuoteModal)
+
+---
+
 ## What's New in This Update (May 6, 2026)
 
 ✅ **Phase 1.7 — Audit & LGPD completo (Rafael):**
@@ -514,11 +541,11 @@
 **Priority:** P0 - BLOCKER
 
 **Frontend Team Tasks:** → **Gustavo**
-- [ ] Install and configure React Query → **Gustavo**
-- [ ] Create custom hooks (useOrders, useQuotes, useRMA) → **Gustavo**
-- [ ] Set up caching strategy → **Gustavo**
-- [ ] Implement mutations (useCreateOrder, useUpdateOrder, etc.) → **Peu**
-- [ ] Handle loading and error states → **Peu**
+- [x] Install and configure React Query → **Gustavo** ✅
+- [x] Create custom hooks (useOrders, useQuotes, useRMA) → **Gustavo** ✅
+- [x] Set up caching strategy → **Gustavo** ✅
+- [x] Implement mutations (useCreateOrder, useUpdateOrder, etc.) → **Peu** ✅
+- [x] Handle loading and error states → **Peu** ✅
 
 **Effort:** 2 frontend devs, 1-2 days  
 **Success Criteria:**
@@ -532,15 +559,15 @@
 **Priority:** P0 - BLOCKER
 
 **Frontend Team Tasks:**
-- [ ] Update OrderModal to call API → **Duda**
-  - [ ] POST /api/orders on submit → **Duda**
-  - [ ] Handle loading state → **Duda**
-  - [ ] Display error messages → **Duda**
-  - [ ] Show success notification → **Duda**
-- [ ] Update QuoteModal to call API → **Duda**
-- [ ] Update RmaModal to call API → **Duda**
+- [x] Update OrderModal to call API → **Duda** ✅
+  - [x] POST /api/orders on submit → **Duda** ✅
+  - [x] Handle loading state → **Duda** ✅
+  - [x] Display error messages → **Duda** ✅
+  - [x] Show success notification → **Duda** ✅
+- [x] Update QuoteModal to call API → **Duda** ✅
+- [x] Update RmaModal to call API → **Duda** ✅
 - [ ] Implement optimistic updates (UI updates before API confirms) → **Duda**
-- [ ] Implement refetch on success → **Duda**
+- [x] Implement refetch on success → **Duda** ✅
 
 **Effort:** 2 frontend devs, 2-3 days  
 **Success Criteria:**
@@ -863,9 +890,9 @@
 - [ ] Database tests (constraints, transactions) → **Rafael**
 
 **Frontend Testing:**
-- [ ] Component tests (all components) → **Duda + Peu**
-- [ ] Integration tests (API calls) → **Gustavo + Peu**
-- [ ] E2E tests (critical user flows) → **Peu**
+- [x] Component tests (all components) → **Duda + Peu** ✅ (OrderModal, QuoteModal, RmaModal — 29 testes)
+- [x] Integration tests (API calls) → **Gustavo + Peu** ✅ (useOrders, useQuotes, useRma — 13 testes)
+- [x] E2E tests (critical user flows) → **Peu** ✅ (5 testes Playwright — login, OrderModal, QuoteModal)
 - [ ] Accessibility tests (WCAG compliance) → **Gustavo**
 
 **Effort:** 4 devs, 5 days  
@@ -1164,8 +1191,12 @@ Any delay in Week 1-3 → Delays Week 10 launch
 - [ ] **PRÓXIMO:** Merge feature/data-export-and-audit-history → develop
 - [ ] **PRÓXIMO:** Merge feature/quotes-api → develop
 - [ ] **PRÓXIMO:** Rodar MIGRATION_PEDIDOS_V2.sql, V3.sql e MIGRATION_AUDIT_RETENTION.sql no banco de produção
-- [ ] **PRÓXIMO:** React Query integration (2.2) → Gustavo
-- [ ] **PRÓXIMO:** Modal integration (2.3) → Duda + Rafael
+- [x] **FEITO:** React Query integration (2.2) → hooks + mutations completos ✅
+- [x] **FEITO:** Modal integration (2.3) → OrderModal, QuoteModal, RmaModal chamando API ✅
+- [x] **FEITO:** Testes unitários Phase 2.3 (13 hook + 29 component = 42 unit tests) ✅
+- [x] **FEITO:** Testes E2E Phase 2.3 (5 testes Playwright — login, create order, cancel quote) ✅
+- [ ] **PRÓXIMO:** List View integration (2.4) → Peu
+- [ ] **PRÓXIMO:** Dashboard APIs (2.6.1) → Rafael + Gustavo
 
 ---
 
@@ -1188,7 +1219,7 @@ Any delay in Week 1-3 → Delays Week 10 launch
 
 ---
 
-**Last Updated:** May 6, 2026  
-**Status:** 🚀 33 endpoints + 196 testes unitários (100% aprovação). Backend fases 1.1–1.8 completos.  
-**Next Milestone:** Merge PRs pendentes → develop; Rodar migrations; React Query + Modal integration (frontend)  
+**Last Updated:** May 11, 2026  
+**Status:** 🚀 33 endpoints + 196 testes backend (100% aprovação). Frontend fases 2.1–2.3 completos — modais integrados com API, 42 unit tests + 5 E2E tests.  
+**Next Milestone:** List View integration (2.4); Dashboard APIs (2.6.1)  
 **MVP Target:** Week 10 (8-10 weeks)
