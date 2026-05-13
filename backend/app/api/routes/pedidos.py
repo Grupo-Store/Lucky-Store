@@ -10,7 +10,10 @@ from app.schemas.pedido import (
     PedidoCreate, PedidoUpdate, PedidoResponse,
     PedidoDetailResponse, PedidoListResponse, PedidoListItemResponse,
     StatusChangeRequest, StatusHistoryOut,
+    FormaPagamentoOut, FreteCreate, FreteOut,
 )
+from app.schemas.produto import ProdutoResponse
+from app.models.pedido import Frete
 from app.schemas.audit_log import AuditLogResponse
 from app.schemas.status_history import StatusHistoryResponse
 from app.services.pedido import PedidoService
@@ -46,7 +49,7 @@ def create_pedido(
 @router.get("", response_model=PedidoListResponse)
 def list_pedidos(
     page: int = Query(default=1, ge=1),
-    limit: int = Query(default=20, ge=1, le=100),
+    limit: int = Query(default=20, ge=1, le=500),
     status_filter: Optional[str] = Query(default=None, alias="status"),
     id_loja: Optional[UUID] = Query(default=None),
     id_vendedor: Optional[UUID] = Query(default=None),
@@ -72,10 +75,21 @@ def list_pedidos(
             status=p.status,
             is_rma=p.is_rma,
             is_cancelled=p.is_cancelled,
+            is_direct_billing=p.is_direct_billing,
             valor_venda=p.valor_venda,
+            parcelas=p.parcelas,
             nome_cliente=p.cliente.nome if p.cliente else None,
+            cnpj_cliente=p.cliente.cnpj if p.cliente else None,
             nome_loja=p.loja.nome if p.loja else None,
             nome_vendedor=p.vendedor.nome if p.vendedor else None,
+            numero_oc=p.numero_oc,
+            numero_nf=p.numero_nf,
+            nota_fiscal_fornecedor=p.nota_fiscal_fornecedor,
+            observacao=p.observacao,
+            fornecedor_principal=p.fornecedor_principal,
+            formas_pagamento=[FormaPagamentoOut.model_validate(fp) for fp in (p.formas_pagamento or [])],
+            fretes=[FreteOut.model_validate(f) for f in (p.fretes or [])],
+            produtos=[ProdutoResponse.model_validate(prod) for prod in (p.produtos or [])],
         )
         for p in items
     ]
@@ -180,3 +194,56 @@ def delete_pedido(
         PedidoService.soft_delete(db, pedido_id, current_user.id, ip_address=ip, user_agent=ua)
     except NotFoundException as exc:
         raise to_http_exception(exc)
+
+
+# ── Frete CRUD ────────────────────────────────────────────────────────────────
+
+@router.post("/{pedido_id}/fretes", response_model=FreteOut, status_code=status.HTTP_201_CREATED)
+def add_frete(
+    pedido_id: UUID,
+    data: FreteCreate,
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_user_dep),
+):
+    try:
+        PedidoService.get_by_id(db, pedido_id)
+    except NotFoundException as exc:
+        raise to_http_exception(exc)
+    frete = Frete(id_pedido=pedido_id, entregador=data.entregador, valor=data.valor, data_frete=data.data_frete)
+    db.add(frete)
+    db.commit()
+    db.refresh(frete)
+    return FreteOut.model_validate(frete)
+
+
+@router.put("/{pedido_id}/fretes/{frete_id}", response_model=FreteOut)
+def update_frete(
+    pedido_id: UUID,
+    frete_id: UUID,
+    data: FreteCreate,
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_user_dep),
+):
+    frete = db.query(Frete).filter(Frete.id == frete_id, Frete.id_pedido == pedido_id).first()
+    if not frete:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Frete não encontrado")
+    frete.entregador = data.entregador
+    frete.valor = data.valor
+    frete.data_frete = data.data_frete
+    db.commit()
+    db.refresh(frete)
+    return FreteOut.model_validate(frete)
+
+
+@router.delete("/{pedido_id}/fretes/{frete_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_frete(
+    pedido_id: UUID,
+    frete_id: UUID,
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_user_dep),
+):
+    frete = db.query(Frete).filter(Frete.id == frete_id, Frete.id_pedido == pedido_id).first()
+    if not frete:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Frete não encontrado")
+    db.delete(frete)
+    db.commit()

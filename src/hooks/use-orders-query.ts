@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { apiFetch } from '@/lib/api'
+import type { ProdutoApiItem } from '@/types/api'
 
 export interface OrderFilters {
   page: number
@@ -13,6 +14,13 @@ export interface OrderFilters {
   sort_dir: 'asc' | 'desc'
 }
 
+export interface FreteApiItem {
+  id: string
+  entregador: string | null
+  valor: string | number
+  data_frete: string
+}
+
 export interface PedidoListItem {
   id: string
   numero_os: string
@@ -21,10 +29,21 @@ export interface PedidoListItem {
   status: string
   is_rma: boolean | null
   is_cancelled: boolean | null
+  is_direct_billing: boolean | null
   valor_venda: number | null
+  parcelas: number | null
   nome_cliente: string | null
+  cnpj_cliente: string | null
   nome_loja: string | null
   nome_vendedor: string | null
+  numero_oc: string | null
+  numero_nf: string | null
+  nota_fiscal_fornecedor: string | null
+  observacao: string | null
+  fornecedor_principal: string | null
+  formas_pagamento: { id: string; forma: string }[]
+  fretes: FreteApiItem[]
+  produtos: ProdutoApiItem[]
 }
 
 export interface PedidoListResponse {
@@ -35,9 +54,9 @@ export interface PedidoListResponse {
   pages: number
 }
 
-export function useOrdersQuery(filters: OrderFilters) {
+export function useOrdersQuery(filters: OrderFilters, options?: { enabled?: boolean }) {
   const { data, isLoading, isError, refetch } = useQuery<PedidoListResponse>({
-    queryKey: ['pedidos', filters],
+    queryKey: ['orders', 'list', filters],
     queryFn: () =>
       apiFetch<PedidoListResponse>('/pedidos', {
         params: {
@@ -53,6 +72,7 @@ export function useOrdersQuery(filters: OrderFilters) {
         },
       }),
     staleTime: 30_000,
+    enabled: options?.enabled ?? true,
   })
 
   return { data, isLoading, isError, refetch }

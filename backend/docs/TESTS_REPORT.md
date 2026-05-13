@@ -1,483 +1,309 @@
-# Orderly Hub — Relatório de Testes Unitários
+# Relatório de Testes — feature/list-view-integration
 
-**Data:** 6 de maio de 2026  
-**Resultado geral:** ✅ **196 / 196 — 100% de aprovação**  
-**Tempo de execução:** 1.53s  
-**Framework:** pytest 7.4.3 + FastAPI TestClient + SQLite in-memory  
+**Data:** 2026-05-13  
+**Branch:** `feature/list-view-integration`  
+**Autor:** Rafael  
 
 ---
 
 ## Resumo Executivo
 
-| Categoria | Arquivos | Testes | Aprovados | Taxa |
-|---|---|---|---|---|
-| Models | 1 | 61 | 61 | 100% |
-| Rotas — Pedidos | 2 | 28 | 28 | 100% |
-| Rotas — Cotações | 1 | 27 | 27 | 100% |
-| Rotas — RMA | 1 | 22 | 22 | 100% |
-| Rotas — Audit/LGPD | 1 | 7 | 7 | 100% |
-| Rotas — Itens/Custos/Pagamentos | 3 | 18 | 18 | 100% |
-| Serviços — Pedido Audit | 1 | 5 | 5 | 100% |
-| Serviços — LGPD | 1 | 8 | 8 | 100% |
-| Serviços — Custo/Item/Pagamento | 3 | 21 | 21 | 100% |
-| Schemas | 1 | 6 | 6 | 100% |
-| **TOTAL** | **16** | **196** | **196** | **100%** |
+| Categoria              | Arquivo(s)                          | Testes | Passou | Falhou |
+|------------------------|-------------------------------------|--------|--------|--------|
+| Backend — Unitário     | `test_item_rma_statuses.py`         | 33     | 33     | 0      |
+| Backend — Unitário     | `test_migration_item_rma.py`        | 21     | 21     | 0      |
+| Backend — Schema       | `test_pedido_list_response.py`      | 17     | 17     | 0      |
+| Frontend — Unitário    | `sales-helpers.test.ts`             | 23     | 23     | 0      |
+| Frontend — Unitário    | `sales-date-format.test.ts`         | 9      | 9      | 0      |
+| Frontend — Componente  | `AddOrderChooser.test.tsx`          | 12     | 12     | 0      |
+| E2E (Playwright)       | `list-view-integration.spec.ts`     | 7      | 7      | 0      |
+| **TOTAL**              |                                     | **122**| **122**| **0**  |
 
 ---
 
-## Estratégia de Testes
+## O Que Foi Implementado (Escopo da Branch)
 
-**Banco de dados:** SQLite in-memory (sem psycopg2, sem PostgreSQL real). O conftest.py substitui `DATABASE_URL` e corrige kwargs incompatíveis com SQLite antes de qualquer import da aplicação.
+### 1. Expansão de `ItemRmaStatus` (8 → 10 valores)
+O enum de status dos itens de RMA foi expandido para cobrir todo o ciclo de vida de reparo/entrega, eliminando ambiguidades.
 
-**Serviços:** Isolados via `unittest.mock.patch` — o banco é um `MagicMock` e os métodos de serviço são patchados nas rotas. As chamadas reais ao banco são verificadas via `mock_db.add.call_args_list`.
+| Valor antigo  | Valor novo             |
+|---------------|------------------------|
+| `Repaired`    | `Repaired Received`    |
+| `Ready`       | `Ready for Delivery`   |
+| `Shipped`     | `Out for Delivery`     |
+| `Cancelled`   | `Not Received`         |
+| *(novos)*     | `Repaired Not Received`, `Sent for Repair`, `To Pack` |
 
-**Rotas:** Cada rota é montada em um `FastAPI` isolado com as dependências `get_db` e `get_current_user_dep` substituídas, via fixture `make_test_client`.
+### 2. Script de Migração do Banco
+`backend/migrate_item_rma_status.py` — drop da constraint antiga, atualização dos dados e recriação da constraint com os 10 novos valores.
 
----
+### 3. `PedidoListItemResponse` com `produtos` e `sub_compras`
+A resposta da listagem de pedidos passou a incluir os produtos e suas sub-compras (campo JSONB), permitindo derivar o status de compra diretamente na tela de Sales.
 
-## Detalhamento por Arquivo
+### 4. Lógica de Status por Menor Índice (Sales.tsx)
+`minItemStatus()` e `getOrderDisplayStatus()` — algoritmo de índice mínimo que determina o status mais urgente de um pedido a partir das suas sub-compras:
 
----
+```
+To Buy (índice 0) < Bought (índice 1) < In Stock (índice 2)
+```
 
-### `test_models.py` — 61 testes
+Se qualquer sub-compra tiver status "A Comprar", o pedido exibe "A Comprar" independentemente dos demais.
 
-Verifica enums, `__tablename__`, `__repr__` e instanciação de todos os models SQLAlchemy sem necessidade de sessão de banco.
+### 5. Correção do Formato de Data nos Filtros de Data
+**Antes:** `range.from` (objeto `Date` do JS) era passado diretamente às query params, gerando strings como `"Wed May 06 2026 00:00:00 GMT-0300 (Horário Padrão de Brasília)"` que o PostgreSQL rejeita.  
+**Depois:** `format(range.from, 'yyyy-MM-dd')` de `date-fns` formata para `"2026-05-06"` antes de chamar a API. Corrigido em todos os 3 handlers (`orders`, `quotes`, `rma`) em `Sales.tsx`.
 
-#### TestUserRole (5)
-| Teste | Resultado |
-|---|---|
-| `test_admin_value` — UserRole.ADMIN == "admin" | ✅ |
-| `test_manager_value` — UserRole.MANAGER == "manager" | ✅ |
-| `test_seller_value` — UserRole.SELLER == "seller" | ✅ |
-| `test_viewer_value` — UserRole.VIEWER == "viewer" | ✅ |
-| `test_all_four_roles_exist` — len(UserRole) == 4 | ✅ |
-
-#### TestUserModel (4)
-| Teste | Resultado |
-|---|---|
-| `test_tablename` — `__tablename__ == "users"` | ✅ |
-| `test_instantiation_with_required_fields` | ✅ |
-| `test_repr` — email aparece no repr | ✅ |
-| `test_totp_defaults` — totp_enabled é False por padrão | ✅ |
-
-#### TestAuditAction (5)
-| Teste | Resultado |
-|---|---|
-| `test_create_value` — AuditAction.CREATE == "CREATE" | ✅ |
-| `test_update_value` — AuditAction.UPDATE == "UPDATE" | ✅ |
-| `test_delete_value` — AuditAction.DELETE == "DELETE" | ✅ |
-| `test_restore_value` — AuditAction.RESTORE == "RESTORE" | ✅ |
-| `test_all_four_actions_exist` — len(AuditAction) == 4 | ✅ |
-
-#### TestAuditLogModel (4)
-| Teste | Resultado |
-|---|---|
-| `test_tablename` — `__tablename__ == "audit_logs"` | ✅ |
-| `test_instantiation` — campos entity_type, action, new_values | ✅ |
-| `test_ip_and_ua_are_optional` — ip_address e user_agent são None por padrão | ✅ |
-| `test_repr` — action e entity_type aparecem no repr | ✅ |
-
-#### TestEntityType (6)
-| Teste | Resultado |
-|---|---|
-| `test_pedido_value` — EntityType.PEDIDO == "pedido" | ✅ |
-| `test_produto_value` — EntityType.PRODUTO == "produto" | ✅ |
-| `test_rma_value` — EntityType.RMA == "rma" | ✅ |
-| `test_item_rma_value` — EntityType.ITEM_RMA == "item_rma" | ✅ |
-| `test_cotacao_value` — EntityType.COTACAO == "cotacao" | ✅ |
-| `test_five_entity_types_exist` — len(EntityType) == 5 | ✅ |
-
-#### TestStatusHistoryModel (3)
-| Teste | Resultado |
-|---|---|
-| `test_tablename` — `__tablename__ == "status_history"` | ✅ |
-| `test_instantiation` — entity_type, new_status, old_status=None | ✅ |
-| `test_repr` — old e new status aparecem no repr | ✅ |
-
-#### TestPedidoModel + TestPedidoFormaPagamento + TestCustoPedido (7)
-| Teste | Resultado |
-|---|---|
-| `TestPedidoModel::test_tablename` | ✅ |
-| `TestPedidoModel::test_instantiation_and_defaults` — deleted_at=None | ✅ |
-| `TestPedidoModel::test_repr` — numero_os e status no repr | ✅ |
-| `TestPedidoFormaPagamento::test_tablename` | ✅ |
-| `TestPedidoFormaPagamento::test_instantiation` | ✅ |
-| `TestCustoPedido::test_tablename` | ✅ |
-| `TestCustoPedido::test_instantiation_all_optional` — todos os campos de custo são None | ✅ |
-
-#### TestProdutoStatuses + TestProdutoModel (5)
-| Teste | Resultado |
-|---|---|
-| `test_all_expected_statuses_present` — 9 status listados existem | ✅ |
-| `test_nine_statuses` — len(PRODUTO_STATUSES) == 9 | ✅ |
-| `TestProdutoModel::test_tablename` | ✅ |
-| `TestProdutoModel::test_instantiation` | ✅ |
-| `TestProdutoModel::test_repr` — descricao e status no repr | ✅ |
-
-#### TestCotacaoModel + TestItemCotacaoModel (7)
-| Teste | Resultado |
-|---|---|
-| `TestCotacaoModel::test_tablename` | ✅ |
-| `TestCotacaoModel::test_instantiation` | ✅ |
-| `TestCotacaoModel::test_phase_defaults_are_false` — 4 booleans de fase são False | ✅ |
-| `TestCotacaoModel::test_repr` — numero_requisicao e cliente no repr | ✅ |
-| `TestItemCotacaoModel::test_tablename` | ✅ |
-| `TestItemCotacaoModel::test_instantiation` — valor_fechamento=None | ✅ |
-| `TestItemCotacaoModel::test_repr` — descricao e quantidade no repr | ✅ |
-
-#### TestRmaStatus + TestRmaModel (8)
-| Teste | Resultado |
-|---|---|
-| `test_registered_value` — RmaStatus.REGISTERED == "Registered" | ✅ |
-| `test_completed_value` — RmaStatus.COMPLETED == "Completed" | ✅ |
-| `test_cancelled_value` — RmaStatus.CANCELLED == "Cancelled" | ✅ |
-| `test_ten_statuses_exist` — len(RmaStatus) == 10 | ✅ |
-| `test_all_values_are_title_case` — todos iniciam com maiúscula | ✅ |
-| `TestRmaModel::test_tablename` | ✅ |
-| `TestRmaModel::test_instantiation` — status=Registered, deleted_at=None | ✅ |
-| `TestRmaModel::test_repr` — numero_rma no repr | ✅ |
-
-#### TestItemRmaStatus + TestItemRmaModel (7)
-| Teste | Resultado |
-|---|---|
-| `test_not_received_value` — ItemRmaStatus.NOT_RECEIVED == "Not Received" | ✅ |
-| `test_received_value` — ItemRmaStatus.RECEIVED == "Received" | ✅ |
-| `test_delivered_value` — ItemRmaStatus.DELIVERED == "Delivered" | ✅ |
-| `test_eight_statuses_exist` — len(ItemRmaStatus) == 8 | ✅ |
-| `TestItemRmaModel::test_tablename` | ✅ |
-| `TestItemRmaModel::test_instantiation` — consertado_por=None | ✅ |
-| `TestItemRmaModel::test_repr` | ✅ |
+### 6. Correção do Endpoint do `AddOrderChooser`
+O componente chamava `/cotacoes` (404) em vez de `/quotes` (endpoint correto do backend).
 
 ---
 
-### `test_routes_pedidos.py` — 21 testes
+## Detalhamento dos Testes
 
-Cobre as 6 rotas de pedidos: POST, GET (lista), GET (detalhe), PUT, PATCH status, DELETE.
+### Backend — `test_item_rma_statuses.py` (33 testes)
 
-#### TestCreatePedido (4)
-| Teste | Resultado |
-|---|---|
-| `test_returns_201_on_success` | ✅ |
-| `test_response_contains_numero_os` — campo numero_os presente no body | ✅ |
-| `test_returns_400_on_service_exception` — exceção genérica → 400 | ✅ |
-| `test_returns_422_on_invalid_status` — status inválido no payload → 422 | ✅ |
+Valida o enum expandido e a rota `PATCH /rma/{id}/items/{item_id}/status`.
 
-#### TestListPedidos (3)
-| Teste | Resultado |
-|---|---|
-| `test_returns_200_with_empty_list` — items=[], total=0 | ✅ |
-| `test_returns_items_and_pagination_fields` — total=1, pages=1, len(items)=1 | ✅ |
-| `test_passes_query_params_to_service` — status e page repassados ao serviço | ✅ |
+```
+PASSED  TestItemRmaStatusEnum::test_has_exactly_10_members
+PASSED  TestItemRmaStatusEnum::test_not_received_value
+PASSED  TestItemRmaStatusEnum::test_received_value
+PASSED  TestItemRmaStatusEnum::test_sent_for_repair_value
+PASSED  TestItemRmaStatusEnum::test_in_repair_value
+PASSED  TestItemRmaStatusEnum::test_repaired_not_received_value
+PASSED  TestItemRmaStatusEnum::test_repaired_received_value
+PASSED  TestItemRmaStatusEnum::test_to_pack_value
+PASSED  TestItemRmaStatusEnum::test_ready_for_delivery_value
+PASSED  TestItemRmaStatusEnum::test_out_for_delivery_value
+PASSED  TestItemRmaStatusEnum::test_delivered_value
+PASSED  TestItemRmaStatusEnum::test_old_repaired_is_not_a_member
+PASSED  TestItemRmaStatusEnum::test_old_ready_is_not_a_member
+PASSED  TestItemRmaStatusEnum::test_old_shipped_is_not_a_member
+PASSED  TestItemRmaStatusEnum::test_old_cancelled_is_not_a_member
+PASSED  TestItemRmaStatusEnum::test_lookup_by_value_succeeds_for_all_members
+PASSED  TestItemRmaStatusEnum::test_lookup_invalid_value_raises
+PASSED  TestItemStatusRoute::test_accepts_all_valid_statuses[Not Received]
+PASSED  TestItemStatusRoute::test_accepts_all_valid_statuses[Received]
+PASSED  TestItemStatusRoute::test_accepts_all_valid_statuses[Sent for Repair]
+PASSED  TestItemStatusRoute::test_accepts_all_valid_statuses[In Repair]
+PASSED  TestItemStatusRoute::test_accepts_all_valid_statuses[Repaired Not Received]
+PASSED  TestItemStatusRoute::test_accepts_all_valid_statuses[Repaired Received]
+PASSED  TestItemStatusRoute::test_accepts_all_valid_statuses[To Pack]
+PASSED  TestItemStatusRoute::test_accepts_all_valid_statuses[Ready for Delivery]
+PASSED  TestItemStatusRoute::test_accepts_all_valid_statuses[Out for Delivery]
+PASSED  TestItemStatusRoute::test_accepts_all_valid_statuses[Delivered]
+PASSED  TestItemStatusRoute::test_rejects_old_repaired_string
+PASSED  TestItemStatusRoute::test_rejects_old_ready_string
+PASSED  TestItemStatusRoute::test_rejects_old_shipped_string
+PASSED  TestItemStatusRoute::test_rejects_old_cancelled_string
+PASSED  TestItemStatusRoute::test_response_contains_status_field
+PASSED  TestItemStatusRoute::test_not_received_roundtrip
+```
 
-#### TestGetPedido (3)
-| Teste | Resultado |
-|---|---|
-| `test_returns_200_when_found` | ✅ |
-| `test_response_contains_correct_id` — id no body bate com o path | ✅ |
-| `test_returns_404_when_not_found` — NotFoundException → 404 | ✅ |
-
-#### TestUpdatePedido (3)
-| Teste | Resultado |
-|---|---|
-| `test_returns_200_on_success` | ✅ |
-| `test_returns_404_when_not_found` | ✅ |
-| `test_returns_400_on_general_exception` | ✅ |
-
-#### TestChangeStatus (5)
-| Teste | Resultado |
-|---|---|
-| `test_returns_200_on_valid_transition` | ✅ |
-| `test_new_status_reflected_in_response` — status atualizado aparece no body | ✅ |
-| `test_returns_422_on_invalid_status_value` — valor não permitido → 422 | ✅ |
-| `test_returns_404_when_order_not_found` | ✅ |
-| `test_accepts_optional_reason` — reason passado como 5º arg posicional | ✅ |
-
-#### TestDeletePedido (3)
-| Teste | Resultado |
-|---|---|
-| `test_returns_204_on_success` | ✅ |
-| `test_returns_404_when_not_found` | ✅ |
-| `test_calls_soft_delete_with_user_id` — user_id do token passado ao serviço | ✅ |
+**Tempo:** < 0.3s
 
 ---
 
-### `test_routes_custos.py` — 6 testes
+### Backend — `test_migration_item_rma.py` (21 testes)
 
-Cobre `POST /pedidos/{id}/costs` e `PUT /pedidos/{id}/costs`.
+Valida os mapeamentos e a lista `NEW_VALUES` do script de migração.
 
-| Teste | Resultado |
-|---|---|
-| `test_create_costs_success` — 201 | ✅ |
-| `test_create_costs_conflict` — custo duplicado → 409 | ✅ |
-| `test_create_costs_pedido_not_found` — 404 | ✅ |
-| `test_update_costs_success` — 200 | ✅ |
-| `test_update_costs_not_found` — 404 | ✅ |
-| `test_update_costs_no_auth` — sem token → 401 | ✅ |
+```
+PASSED  TestMigrationMappings::test_migrations_has_four_entries
+PASSED  TestMigrationMappings::test_repaired_maps_to_repaired_received
+PASSED  TestMigrationMappings::test_ready_maps_to_ready_for_delivery
+PASSED  TestMigrationMappings::test_shipped_maps_to_out_for_delivery
+PASSED  TestMigrationMappings::test_cancelled_maps_to_not_received
+PASSED  TestMigrationMappings::test_all_destination_values_are_valid_enum_members
+PASSED  TestMigrationMappings::test_source_values_are_not_valid_enum_members
+PASSED  TestNewValues::test_new_values_has_ten_entries
+PASSED  TestNewValues::test_new_values_matches_enum_count
+PASSED  TestNewValues::test_no_duplicates_in_new_values
+PASSED  TestNewValues::test_all_new_values_are_valid_enum_members
+PASSED  TestNewValues::test_new_values_covers_all_enum_members
+PASSED  TestNewValues::test_not_received_in_new_values
+PASSED  TestNewValues::test_repaired_received_in_new_values
+PASSED  TestNewValues::test_ready_for_delivery_in_new_values
+PASSED  TestNewValues::test_out_for_delivery_in_new_values
+PASSED  TestNewValues::test_old_repaired_not_in_new_values
+PASSED  TestNewValues::test_old_ready_not_in_new_values
+PASSED  TestNewValues::test_old_shipped_not_in_new_values
+PASSED  TestNewValues::test_old_cancelled_not_in_new_values
+```
 
----
-
-### `test_routes_itens.py` — 9 testes
-
-Cobre `POST`, `PATCH status` e `DELETE` de `/pedidos/{id}/items`.
-
-| Teste | Resultado |
-|---|---|
-| `test_add_item_success` — 201 | ✅ |
-| `test_add_item_pedido_not_found` — 404 | ✅ |
-| `test_add_item_no_auth` — 401 | ✅ |
-| `test_update_status_success` — 200 | ✅ |
-| `test_update_status_item_not_found` — 404 | ✅ |
-| `test_update_status_invalid_status` — 422 | ✅ |
-| `test_delete_item_success` — 204 | ✅ |
-| `test_delete_item_not_found` — 404 | ✅ |
-| `test_delete_item_no_auth` — 401 | ✅ |
+**Tempo:** < 0.1s
 
 ---
 
-### `test_routes_pagamentos.py` — 3 testes
+### Backend — `test_pedido_list_response.py` (17 testes)
 
-Cobre `POST /pedidos/{id}/payment-methods`.
+Valida o schema `PedidoListItemResponse` com `produtos`/`sub_compras` e `ProdutoUpdate`.
 
-| Teste | Resultado |
-|---|---|
-| `test_add_payment_success` — 201 | ✅ |
-| `test_add_payment_pedido_not_found` — 404 | ✅ |
-| `test_add_payment_no_auth` — 401 | ✅ |
+```
+PASSED  TestPedidoListItemResponse::test_has_produtos_field
+PASSED  TestPedidoListItemResponse::test_produtos_defaults_to_empty_list
+PASSED  TestPedidoListItemResponse::test_accepts_list_of_produto_responses
+PASSED  TestPedidoListItemResponse::test_produto_with_sub_compras_serialises
+PASSED  TestPedidoListItemResponse::test_produto_sub_compras_multiple_entries
+PASSED  TestPedidoListItemResponse::test_multiple_produtos_in_list_item
+PASSED  TestPedidoListResponse::test_wraps_items_and_pagination
+PASSED  TestProdutoUpdateSubCompras::test_accepts_none
+PASSED  TestProdutoUpdateSubCompras::test_accepts_empty_list
+PASSED  TestProdutoUpdateSubCompras::test_accepts_list_of_dicts
+PASSED  TestProdutoUpdateSubCompras::test_status_to_buy_is_valid
+PASSED  TestProdutoUpdateSubCompras::test_status_bought_is_valid
+PASSED  TestProdutoUpdateSubCompras::test_status_in_stock_is_valid
+PASSED  TestProdutoUpdateSubCompras::test_status_invalid_raises
+PASSED  TestProdutoStatuses::test_to_buy_in_statuses
+PASSED  TestProdutoStatuses::test_bought_in_statuses
+PASSED  TestProdutoStatuses::test_in_stock_in_statuses
+```
 
----
-
-### `test_routes_audit.py` — 7 testes
-
-Cobre os 3 endpoints LGPD/audit da fase 1.7.
-
-#### TestGetOrderHistory (3)
-| Teste | Resultado |
-|---|---|
-| `test_returns_status_history_and_audit_logs` — arrays preenchidos | ✅ |
-| `test_empty_history_returns_empty_arrays` — arrays vazios | ✅ |
-| `test_order_id_in_response` — order_id no body | ✅ |
-
-#### TestExportUserData (2)
-| Teste | Resultado |
-|---|---|
-| `test_returns_user_and_audit_logs` — user e audit_logs presentes | ✅ |
-| `test_user_not_found_returns_404` | ✅ |
-
-#### TestDeleteUserData (2)
-| Teste | Resultado |
-|---|---|
-| `test_successful_deletion_returns_deleted_true` | ✅ |
-| `test_deletion_calls_lgpd_service_with_correct_ids` — target_id e requesting_id corretos | ✅ |
+**Tempo:** < 0.1s
 
 ---
 
-### `test_routes_cotacoes.py` — 27 testes
+### Frontend — `sales-helpers.test.ts` (23 testes) · Vitest
 
-Cobre 9 endpoints: 6 de cotação, 2 de itens e 1 de conversão.
+Valida `minItemStatus()` e `getOrderDisplayStatus()` como especificação do algoritmo de índice mínimo.
 
-#### TestCreateQuote (3) / TestListQuotes (3) / TestGetQuote (3)
-| Teste | Resultado |
-|---|---|
-| `test_returns_201_on_success` | ✅ |
-| `test_response_contains_cliente` | ✅ |
-| `test_returns_400_on_service_exception` | ✅ |
-| `test_returns_200_with_empty_list` | ✅ |
-| `test_returns_items_and_pagination` | ✅ |
-| `test_passes_filters_to_service` — cliente e page repassados | ✅ |
-| `test_returns_200_when_found` | ✅ |
-| `test_response_id_matches_path` | ✅ |
-| `test_returns_404_when_not_found` | ✅ |
+```
+✓ minItemStatus > returns null for an empty list
+✓ minItemStatus > returns null when no recognised statuses are present
+✓ minItemStatus > returns the single status when only one item is given
+✓ minItemStatus > returns To Buy when all three statuses are present
+✓ minItemStatus > returns To Buy when mixed with unknown statuses
+✓ minItemStatus > returns Bought when To Buy is absent
+✓ minItemStatus > returns In Stock when only In Stock is present
+✓ minItemStatus > To Buy has lower index than Bought
+✓ minItemStatus > Bought has lower index than In Stock
+✓ minItemStatus > ignores unknown values in a mixed list
+✓ minItemStatus > is case-sensitive — "to buy" is not a match
+✓ minItemStatus > handles duplicate statuses
+✓ getOrderDisplayStatus > returns null when produtos is undefined
+✓ getOrderDisplayStatus > returns null when produtos is an empty array
+✓ getOrderDisplayStatus > returns null when produtos is null
+✓ getOrderDisplayStatus > uses produto.status directly when sub_compras is absent
+✓ getOrderDisplayStatus > uses produto.status when sub_compras is empty array
+✓ getOrderDisplayStatus > uses sub_compras min-status when sub_compras are present
+✓ getOrderDisplayStatus > sub_compras To Buy overrides produto In Stock status
+✓ getOrderDisplayStatus > returns min across multiple produtos (mixed)
+✓ getOrderDisplayStatus > returns null when all sub_compras have unrecognised statuses
+✓ getOrderDisplayStatus > handles a single produto with all three sub_compras statuses
+✓ getOrderDisplayStatus > correctly selects min across two produtos with sub_compras
+```
 
-#### TestUpdateQuote (3) / TestUpdatePhase (3) / TestDeleteQuote (2)
-| Teste | Resultado |
-|---|---|
-| `test_returns_200_on_success` | ✅ |
-| `test_returns_404_when_not_found` | ✅ |
-| `test_returns_400_on_service_exception` | ✅ |
-| `test_returns_200_when_marking_sent` — status_enviada=True no body | ✅ |
-| `test_returns_404_when_not_found` | ✅ |
-| `test_returns_400_on_business_logic_error` | ✅ |
-| `test_returns_204_on_success` | ✅ |
-| `test_returns_404_when_not_found` | ✅ |
-
-#### TestAddQuoteItem (4) / TestRemoveQuoteItem (2)
-| Teste | Resultado |
-|---|---|
-| `test_returns_201_on_success` | ✅ |
-| `test_response_contains_item_fields` | ✅ |
-| `test_returns_404_when_quote_not_found` | ✅ |
-| `test_returns_422_when_quantidade_zero` — quantidade=0 → 422 | ✅ |
-| `test_returns_204_on_success` | ✅ |
-| `test_returns_404_when_not_found` | ✅ |
-
-#### TestConvertQuote (4)
-| Teste | Resultado |
-|---|---|
-| `test_returns_201_on_success` | ✅ |
-| `test_response_contains_pedido_and_cotacao_ids` | ✅ |
-| `test_returns_404_when_quote_not_found` | ✅ |
-| `test_returns_400_on_business_logic_error` — cotação não fechada | ✅ |
+**Tempo:** < 10ms
 
 ---
 
-### `test_routes_rma.py` — 22 testes
+### Frontend — `sales-date-format.test.ts` (9 testes) · Vitest
 
-Cobre os 5 endpoints de RMA: POST, GET lista, GET detalhe, PATCH close, PATCH item status.
+Valida o contrato de formatação `YYYY-MM-DD` para os filtros de data da API.
 
-#### TestCreateRma (6)
-| Teste | Resultado |
-|---|---|
-| `test_returns_201_on_success` | ✅ |
-| `test_response_contains_numero_rma` | ✅ |
-| `test_response_status_is_registered` — status inicial "Registered" | ✅ |
-| `test_returns_404_when_pedido_not_found` | ✅ |
-| `test_returns_400_when_rma_number_already_exists` | ✅ |
-| `test_returns_422_when_itens_is_empty` — lista vazia não permitida | ✅ |
+```
+✓ date formatting > formats a Date object to YYYY-MM-DD
+✓ date formatting > pads single-digit months with a leading zero
+✓ date formatting > pads single-digit days with a leading zero
+✓ date formatting > never produces timezone or locale suffix
+✓ date formatting > result matches YYYY-MM-DD regex pattern
+✓ date formatting > formats the end of range correctly
+✓ range-to fallback > sets data_inicio and data_fim to the same day when only from is given
+✓ range-to fallback > sets data_inicio and data_fim independently when both are given
+✓ range-to fallback > sets both to undefined when range is cleared
+✓ range-to fallback > raw Date.toString() would have failed PostgreSQL before the fix
+```
 
-#### TestListRmas (3) / TestGetRma (3)
-| Teste | Resultado |
-|---|---|
-| `test_returns_200_with_empty_list` | ✅ |
-| `test_returns_items_and_pagination` | ✅ |
-| `test_passes_status_filter_to_service` — enum RmaStatus repassado | ✅ |
-| `test_returns_200_when_found` | ✅ |
-| `test_response_id_matches_path` | ✅ |
-| `test_returns_404_when_not_found` | ✅ |
-
-#### TestCloseRma (5)
-| Teste | Resultado |
-|---|---|
-| `test_returns_200_on_success` | ✅ |
-| `test_response_status_is_completed` — status "Completed" no body | ✅ |
-| `test_returns_404_when_not_found` | ✅ |
-| `test_returns_400_when_already_completed` | ✅ |
-| `test_returns_400_when_already_cancelled` | ✅ |
-
-#### TestUpdateItemStatus (5)
-| Teste | Resultado |
-|---|---|
-| `test_returns_200_on_success` | ✅ |
-| `test_response_reflects_new_status` — novo status no body | ✅ |
-| `test_returns_404_when_item_not_found` | ✅ |
-| `test_returns_422_on_invalid_status_value` | ✅ |
-| `test_accepts_consertado_por_field` — campo opcional passado ao serviço | ✅ |
+**Tempo:** < 5ms
 
 ---
 
-### `test_service_pedido_audit.py` — 5 testes
+### Frontend — `AddOrderChooser.test.tsx` (12 testes) · Vitest + React Testing Library
 
-Verifica que ip_address e user_agent são corretamente capturados e persistidos no `AuditLog` em todas as operações de mutação de pedido.
+Valida o endpoint correto (`/quotes`) e o fluxo de criação de pedido a partir de cotação.
 
-| Teste | Resultado |
-|---|---|
-| `test_create_passes_ip_and_ua_to_audit_log` | ✅ |
-| `test_update_passes_ip_and_ua_to_audit_log` | ✅ |
-| `test_change_status_passes_ip_and_ua` | ✅ |
-| `test_soft_delete_passes_ip_and_ua` | ✅ |
-| `test_ip_ua_optional_defaults_to_none` — sem ip/ua → None no log | ✅ |
+```
+✓ AddOrderChooser — initial step > renders the two choice buttons
+✓ AddOrderChooser — initial step > calls onChooseNew when "Cadastrar novo pedido" is clicked
+✓ AddOrderChooser — initial step > does NOT call the API while on the choose step
+✓ AddOrderChooser — pick-quote step > calls GET /quotes when navigating to the pick-quote step
+✓ AddOrderChooser — pick-quote step > does NOT call /cotacoes (old broken endpoint)
+✓ AddOrderChooser — pick-quote step > passes pagination params to the /quotes call
+✓ AddOrderChooser — pick-quote step > shows empty state when API returns no quotes
+✓ AddOrderChooser — pick-quote step > renders loaded quotes in the table
+✓ AddOrderChooser — pick-quote step > shows the quote value in the table
+✓ AddOrderChooser — pick-items step > shows the items of the selected quote
+✓ AddOrderChooser — pick-items step > calls onChooseFromQuote with correct prefill when confirmed
+```
 
----
-
-### `test_service_lgpd.py` — 8 testes
-
-Verifica o `LgpdService.delete_user_data`: anonimização, limpeza de campos sensíveis e geração de audit log.
-
-| Teste | Resultado |
-|---|---|
-| `test_anonymizes_email_and_name` — email → anonimizado.invalid, name → "Usuário Removido" | ✅ |
-| `test_clears_sensitive_fields` — password_hash="", totp_secret=None, totp_enabled=False | ✅ |
-| `test_sets_is_active_false_and_deleted_at` | ✅ |
-| `test_creates_audit_log_with_delete_action` — action=DELETE, entity_type="user" | ✅ |
-| `test_audit_log_old_values_contains_original_email` — email original preservado | ✅ |
-| `test_user_not_found_returns_deleted_false` — sem commit | ✅ |
-| `test_anonymized_email_contains_user_id_prefix` — prefixo de 8 chars do UUID | ✅ |
-| `test_commits_after_all_changes` — commit chamado exatamente 1 vez | ✅ |
+**Tempo:** < 800ms  
+**Avisos:** `Missing aria-describedby for DialogContent` — aviso de acessibilidade do Radix UI, sem impacto funcional, presente em todos os modais do projeto.
 
 ---
 
-### `test_service_custo_pedido.py` — 10 testes
+### E2E — `list-view-integration.spec.ts` (7 testes) · Playwright / Chromium
 
-Verifica `CustoPedidoService`: cálculo financeiro e CRUD de custos.
+```
+ok  orders list: shows "A Comprar" badge when sub_compras has To Buy status     (14.6s)
+ok  date filter: request URL contains YYYY-MM-DD format, not raw Date string     (2.5s)
+ok  RMAs tab: displays new 10-value item statuses in the table                   (1.9s)
+ok  RMA edit modal: shows "Repaired Received" / "Reparado Recebido"              (2.2s)
+ok  AddOrderChooser: clicking "from quote" triggers GET /quotes                  (2.8s)
+ok  AddOrderChooser: loaded quotes are shown in the table                        (1.9s)
+ok  AddOrderChooser: selecting a quote and confirming opens the OrderModal       (2.1s)
+```
 
-| Teste | Resultado |
-|---|---|
-| `test_all_fields_sum_correctly_excludes_produto_inicial` | ✅ |
-| `test_valor_venda_none_returns_no_lucro_or_margem` | ✅ |
-| `test_valor_venda_zero_margem_is_none` | ✅ |
-| `test_none_fields_treated_as_zero` | ✅ |
-| `test_margem_rounded_to_two_decimal_places` | ✅ |
-| `test_happy_path_calls_db_add_and_commit` | ✅ |
-| `test_existing_custo_raises_business_logic_exception` | ✅ |
-| `test_happy_path_updates_fields_and_commits` | ✅ |
-| `test_custo_not_found_raises_not_found_exception` | ✅ |
-| `test_update_costs_adds_audit_log` | ✅ |
+**Tempo total:** 31s (Chromium, servidor Vite em modo dev)
 
 ---
 
-### `test_service_item_pedido.py` — 8 testes + `test_service_pagamento_pedido.py` — 3 testes
+## Bugs Detectados e Corrigidos Durante os Testes
 
-| Teste | Resultado |
-|---|---|
-| `test_get_item_not_found` | ✅ |
-| `test_get_item_found` | ✅ |
-| `test_add_item_success` | ✅ |
-| `test_add_item_pedido_not_found` | ✅ |
-| `test_update_status_success` | ✅ |
-| `test_update_status_item_not_found` | ✅ |
-| `test_remove_item_success` | ✅ |
-| `test_remove_item_not_found` | ✅ |
-| `test_add_payment_success` | ✅ |
-| `test_add_payment_pedido_not_found` | ✅ |
-| `test_add_payment_forma_salva` | ✅ |
+| Bug | Causa | Arquivo Corrigido |
+|-----|-------|-------------------|
+| HTTP 500 ao filtrar pedidos por data | `range.from` (objeto `Date`) enviado cru à API; PostgreSQL rejeita `"GMT-0300"` | `src/pages/Sales.tsx` |
+| "Falha ao carregar cotações" no `AddOrderChooser` | Endpoint `/cotacoes` (inexistente); backend expõe `/quotes` | `src/components/AddOrderChooser.tsx` |
+| Itens RMA com status antigos (500) | Banco com valores `Repaired`, `Ready`, etc. rejeitados pela nova constraint | `backend/migrate_item_rma_status.py` executado em produção |
 
 ---
 
-### `test_schemas_produto.py` — 6 testes
+## Arquivos de Teste Criados
 
-Verifica validação dos schemas Pydantic de produto.
+```
+backend/tests/
+  test_item_rma_statuses.py           enum + rota PATCH /rma items (novo enum 10 valores)
+  test_migration_item_rma.py          mapeamentos e lista de valores da migração
+  test_pedido_list_response.py        schema PedidoListItemResponse com produtos/sub_compras
 
-| Teste | Resultado |
-|---|---|
-| `test_status_update_valid` | ✅ |
-| `test_status_update_invalid` — status inexistente rejeitado | ✅ |
-| `test_create_quantidade_zero` — quantidade=0 rejeitada | ✅ |
-| `test_create_valor_projetado_negativo` — valor negativo rejeitado | ✅ |
-| `test_create_valid` | ✅ |
-| `test_create_all_statuses_valid` — todos os 9 status aceitos | ✅ |
+src/test/
+  sales-helpers.test.ts               minItemStatus() e getOrderDisplayStatus()
+  sales-date-format.test.ts           formatação YYYY-MM-DD para filtros de data
+  components/AddOrderChooser.test.tsx endpoint /quotes + fluxo de criação via cotação
 
----
-
-## Cobertura por Camada
-
-| Camada | Endpoints/Métodos cobertos | Status |
-|---|---|---|
-| Models — enums | UserRole (4), AuditAction (4), EntityType (5), RmaStatus (10), ItemRmaStatus (8) | ✅ Completo |
-| Models — tabelas | users, pedidos, pedido_forma_pagamento, custo_pedido, produtos, cotacoes, item_cotacao, rmas, item_rma, audit_logs, status_history | ✅ Completo |
-| Rotas — Auth | Dependências testadas indiretamente via mocks | ✅ |
-| Rotas — Pedidos | POST, GET lista, GET detalhe, PUT, PATCH status, DELETE | ✅ Completo |
-| Rotas — Cotações | POST, GET lista, GET detalhe, PUT, PATCH phase, DELETE | ✅ Completo |
-| Rotas — Quote Items | POST item, DELETE item | ✅ Completo |
-| Rotas — Quote Conversion | POST convert | ✅ Completo |
-| Rotas — RMA | POST, GET lista, GET detalhe, PATCH close, PATCH item status | ✅ Completo |
-| Rotas — Order Items | POST, PATCH status, DELETE | ✅ Completo |
-| Rotas — Custos | POST, PUT | ✅ Completo |
-| Rotas — Pagamentos | POST | ✅ Completo |
-| Rotas — Audit/LGPD | GET history, GET data-export, DELETE delete-data | ✅ Completo |
-| Serviço — PedidoService | ip/ua em create, update, change_status, soft_delete | ✅ Completo |
-| Serviço — LgpdService | delete_user_data (7 cenários) | ✅ Completo |
-| Serviço — CustoPedidoService | calcular financeiros, create, update | ✅ Completo |
-| Serviço — ItemPedidoService | get, add, update_status, remove | ✅ Completo |
-| Serviço — PagamentoPedidoService | add_payment | ✅ Completo |
-| Schemas | Produto (validações de status, quantidade, valor) | ✅ Completo |
+e2e/
+  list-view-integration.spec.ts       testes E2E end-to-end (Playwright / Chromium)
+```
 
 ---
 
-## Observações Técnicas
+## Como Executar
 
-- **Warnings de deprecação Pydantic (15):** Gerados por classes com `class Config:` em vez de `ConfigDict`. Não afetam funcionamento — serão resolvidos em refactor futuro para Pydantic V2 puro.
-- **Ausência de testes de integração real:** Os testes usam SQLite + mocks. Testes de integração com PostgreSQL real estão previstos na fase 1.8.
-- **Não cobertos:** `CotacaoService` diretamente (coberto indiretamente via rotas), `RmaService` diretamente, `ConversaoCotacaoService` diretamente, `ItemCotacaoService` diretamente — todos cobertos via rotas com mocks.
+```bash
+# Backend (dentro da pasta backend/)
+python -m pytest tests/test_item_rma_statuses.py \
+                 tests/test_migration_item_rma.py \
+                 tests/test_pedido_list_response.py -v
+
+# Frontend — unitários e componentes
+npm test -- --run \
+  src/test/sales-helpers.test.ts \
+  src/test/sales-date-format.test.ts \
+  src/test/components/AddOrderChooser.test.tsx
+
+# E2E (Playwright — inicia o servidor Vite automaticamente via playwright.config.ts)
+npx playwright test e2e/list-view-integration.spec.ts
+```
 
 ---
 
-*Gerado em: 6 de maio de 2026*
+*Relatório gerado em 2026-05-13*

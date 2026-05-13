@@ -3,6 +3,7 @@ from datetime import date, datetime
 from decimal import Decimal
 from uuid import UUID
 from typing import Optional, List
+from app.schemas.produto import ProdutoResponse
 
 
 VALID_STATUSES = [
@@ -35,6 +36,24 @@ class FormaPagamentoIn(BaseModel):
 class FormaPagamentoOut(BaseModel):
     id: UUID
     forma: str
+
+    class Config:
+        from_attributes = True
+
+
+# ── Frete ─────────────────────────────────────────────────────────────────────
+
+class FreteCreate(BaseModel):
+    entregador: Optional[str] = None
+    valor: Decimal
+    data_frete: date
+
+
+class FreteOut(BaseModel):
+    id: UUID
+    entregador: Optional[str]
+    valor: Decimal
+    data_frete: date
 
     class Config:
         from_attributes = True
@@ -181,10 +200,21 @@ class PedidoListItemResponse(BaseModel):
     status: str
     is_rma: Optional[bool] = None
     is_cancelled: Optional[bool] = None
+    is_direct_billing: Optional[bool] = None
     valor_venda: Optional[Decimal] = None
+    parcelas: Optional[int] = None
     nome_cliente: Optional[str] = None
+    cnpj_cliente: Optional[str] = None
     nome_loja: Optional[str] = None
     nome_vendedor: Optional[str] = None
+    numero_oc: Optional[str] = None
+    numero_nf: Optional[str] = None
+    nota_fiscal_fornecedor: Optional[str] = None
+    observacao: Optional[str] = None
+    fornecedor_principal: Optional[str] = None
+    formas_pagamento: List[FormaPagamentoOut] = []
+    fretes: List[FreteOut] = []
+    produtos: List[ProdutoResponse] = []
 
     class Config:
         from_attributes = True

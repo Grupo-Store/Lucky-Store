@@ -39,6 +39,11 @@ class ItemRmaResponse(BaseModel):
         from_attributes = True
 
 
+class RmaUpdate(BaseModel):
+    prazo_entrega: Optional[date] = None
+    status: Optional[RmaStatus] = None
+
+
 class RmaCreate(BaseModel):
     id_pedido_origem: UUID
     numero_rma: Optional[str] = None
@@ -59,6 +64,7 @@ class RmaResponse(BaseModel):
     id_vendedor: UUID
     id_loja: UUID
     numero_rma: str
+    numero_os_origem: Optional[str] = None
     data_registro: date
     prazo_entrega: Optional[date]
     status: RmaStatus

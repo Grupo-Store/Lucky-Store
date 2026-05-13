@@ -10,12 +10,14 @@ from app.database import Base
 class ItemRmaStatus(str, enum.Enum):
     NOT_RECEIVED = "Not Received"
     RECEIVED = "Received"
+    SENT_FOR_REPAIR = "Sent for Repair"
     IN_REPAIR = "In Repair"
-    REPAIRED = "Repaired"
-    READY = "Ready"
-    SHIPPED = "Shipped"
+    REPAIRED_NOT_RECEIVED = "Repaired Not Received"
+    REPAIRED_RECEIVED = "Repaired Received"
+    TO_PACK = "To Pack"
+    READY_FOR_DELIVERY = "Ready for Delivery"
+    OUT_FOR_DELIVERY = "Out for Delivery"
     DELIVERED = "Delivered"
-    CANCELLED = "Cancelled"
 
 
 class ItemRma(Base):

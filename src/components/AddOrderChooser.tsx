@@ -1,15 +1,26 @@
 import { useState, useMemo } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Skeleton } from '@/components/ui/skeleton';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { ArrowLeft, Search, ChevronRight, FilePlus, FileText } from 'lucide-react';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
-import {
-  Quote, QuoteItem, getHighestPhase, getDisplayValue, QUOTE_PHASE_LABELS, QUOTE_PHASE_COLORS,
-} from '@/store/QuoteStore';
+import { Quote, QUOTE_PHASE_LABELS, QUOTE_PHASE_COLORS } from '@/store/QuoteStore';
+import { apiClient } from '@/api/client';
+import { LOJA_IDS, VENDEDOR_IDS } from '@/api/storeConfig';
+import type { CotacaoResponse, PaginatedResponse } from '@/types/api';
+
+const LOJA_BY_ID: Record<string, string> = Object.fromEntries(
+  Object.entries(LOJA_IDS).map(([name, id]) => [id, name])
+);
+const VENDEDOR_BY_ID: Record<string, string> = Object.fromEntries(
+  Object.entries(VENDEDOR_IDS).map(([name, id]) => [id, name])
+);
 
 function fmtDate(iso?: string) {
   if (!iso) return '—';
@@ -18,8 +29,14 @@ function fmtDate(iso?: string) {
 function toBRL(v: number) {
   return v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 }
+function getCotacaoPhase(c: CotacaoResponse) {
+  if (c.status_caida) return 'dropped';
+  if (c.status_fechada) return 'closed';
+  if (c.status_em_fechamento) return 'forClosing';
+  if (c.status_enviada) return 'sent';
+  return null;
+}
 
-/** Pre-fill data passed to the Order modal when creating from a quote. */
 export interface OrderPrefill {
   customer: string;
   cnpj: string;
@@ -32,52 +49,62 @@ export interface OrderPrefill {
 interface Props {
   open: boolean;
   onClose: () => void;
-  quotes: Quote[];
-  /** Choice 1 — start an empty order */
+  quotes?: Quote[];
   onChooseNew: () => void;
-  /** Choice 2 — order built from a quote */
   onChooseFromQuote: (prefill: OrderPrefill) => void;
 }
 
 type Step = 'choose' | 'pick-quote' | 'pick-items';
 
-export function AddOrderChooser({ open, onClose, quotes, onChooseNew, onChooseFromQuote }: Props) {
+export function AddOrderChooser({ open, onClose, onChooseNew, onChooseFromQuote }: Props) {
   const [step, setStep] = useState<Step>('choose');
   const [search, setSearch] = useState('');
-  const [picked, setPicked] = useState<Quote | null>(null);
+  const [picked, setPicked] = useState<CotacaoResponse | null>(null);
   const [selectedItemIds, setSelectedItemIds] = useState<Set<string>>(new Set());
+  const [quotePage, setQuotePage] = useState(1);
 
-  // Reset on open
+  const {
+    data: quotesData,
+    isLoading: quotesLoading,
+    isError: quotesError,
+    refetch: quotesRefetch,
+  } = useQuery<PaginatedResponse<CotacaoResponse>>({
+    queryKey: ['cotacoes-chooser', quotePage],
+    queryFn: () =>
+      apiClient.get('/quotes', {
+        params: { page: quotePage, limit: 20, sort_by: 'data_cotacao', sort_dir: 'desc' },
+      }).then(r => r.data),
+    enabled: open && step === 'pick-quote',
+    staleTime: 60_000,
+  });
+
   const handleOpenChange = (o: boolean) => {
     if (!o) {
       onClose();
-      setTimeout(() => { setStep('choose'); setPicked(null); setSelectedItemIds(new Set()); setSearch(''); }, 200);
+      setTimeout(() => {
+        setStep('choose');
+        setPicked(null);
+        setSelectedItemIds(new Set());
+        setSearch('');
+        setQuotePage(1);
+      }, 200);
     }
   };
 
-  /** Quotes whose highest active phase is "closed" or "dropped" */
   const eligibleQuotes = useMemo(() => {
+    const items = quotesData?.items ?? [];
     const q = search.toLowerCase().trim();
-    return quotes
-      .filter(qt => {
-        const h = getHighestPhase(qt);
-        return h === 'closed' || h === 'dropped';
-      })
-      .filter(qt => !q || (
-        qt.index.toLowerCase().includes(q) ||
-        qt.customer.toLowerCase().includes(q) ||
-        (qt.cnpj || '').toLowerCase().includes(q) ||
-        (qt.company || '').toLowerCase().includes(q)
-      ))
-      .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
-  }, [quotes, search]);
+    if (!q) return items;
+    return items.filter(qt =>
+      qt.cliente.toLowerCase().includes(q) ||
+      (qt.cnpj_cliente ?? '').toLowerCase().includes(q) ||
+      (LOJA_BY_ID[qt.id_loja] ?? '').toLowerCase().includes(q)
+    );
+  }, [quotesData, search]);
 
-  const startFromQuote = () => { setStep('pick-quote'); };
-
-  const pickQuote = (qt: Quote) => {
+  const pickQuote = (qt: CotacaoResponse) => {
     setPicked(qt);
-    // Default: all items selected
-    setSelectedItemIds(new Set((qt.items || []).map(i => i.id)));
+    setSelectedItemIds(new Set((qt.itens ?? []).map(i => i.id)));
     setStep('pick-items');
   };
 
@@ -91,18 +118,20 @@ export function AddOrderChooser({ open, onClose, quotes, onChooseNew, onChooseFr
 
   const confirmFromQuote = () => {
     if (!picked) return;
-    const chosen = (picked.items || []).filter(i => selectedItemIds.has(i.id));
+    const chosen = (picked.itens ?? []).filter(i => selectedItemIds.has(i.id));
     const prefill: OrderPrefill = {
-      customer: (picked.b2bCompany && picked.b2bCompany.trim()) ? picked.b2bCompany : picked.customer,
-      cnpj: picked.cnpj,
-      company: picked.company,
-      seller: picked.seller,
-      salesValue: getDisplayValue(picked),
+      customer: (picked.b2b_company?.trim()) ? picked.b2b_company : picked.cliente,
+      cnpj: picked.cnpj_cliente ?? '',
+      company: (LOJA_BY_ID[picked.id_loja] ?? '') as Quote['company'],
+      seller: (VENDEDOR_BY_ID[picked.id_vendedor] ?? '') as Quote['seller'],
+      salesValue: parseFloat(picked.valor_total ?? '0') || 0,
       items: chosen.map(i => ({
         id: crypto.randomUUID(),
-        name: i.name,
-        quantity: i.quantity,
-        projectedValue: i.closingValue || i.quoteValue || 0,
+        name: i.descricao,
+        quantity: i.quantidade,
+        projectedValue: i.valor_fechamento
+          ? parseFloat(i.valor_fechamento)
+          : parseFloat(i.valor_unitario) || 0,
       })),
     };
     onChooseFromQuote(prefill);
@@ -122,20 +151,24 @@ export function AddOrderChooser({ open, onClose, quotes, onChooseNew, onChooseFr
             )}
             {step === 'choose' && 'Adicionar Pedido'}
             {step === 'pick-quote' && 'Selecionar Cotação'}
-            {step === 'pick-items' && `Selecionar Itens — ${picked?.index}`}
+            {step === 'pick-items' && `Selecionar Itens — ${picked?.cliente}`}
           </DialogTitle>
         </DialogHeader>
 
         {step === 'choose' && (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3 py-4">
-            <button onClick={startFromQuote}
-              className="border-2 border-secondary/30 hover:border-secondary hover:bg-secondary/5 rounded-xl p-6 text-left transition-all group">
+            <button
+              onClick={() => setStep('pick-quote')}
+              className="border-2 border-secondary/30 hover:border-secondary hover:bg-secondary/5 rounded-xl p-6 text-left transition-all group"
+            >
               <FileText className="h-8 w-8 text-secondary mb-3 group-hover:scale-110 transition-transform" />
               <h3 className="font-bold text-secondary uppercase text-sm tracking-wide">Cadastrar a partir de cotação</h3>
               <p className="text-sm text-muted-foreground mt-2">Pré-preencha o pedido com dados de uma cotação fechada ou caída.</p>
             </button>
-            <button onClick={() => { onChooseNew(); handleOpenChange(false); }}
-              className="border-2 border-secondary/30 hover:border-secondary hover:bg-secondary/5 rounded-xl p-6 text-left transition-all group">
+            <button
+              onClick={() => { onChooseNew(); handleOpenChange(false); }}
+              className="border-2 border-secondary/30 hover:border-secondary hover:bg-secondary/5 rounded-xl p-6 text-left transition-all group"
+            >
               <FilePlus className="h-8 w-8 text-secondary mb-3 group-hover:scale-110 transition-transform" />
               <h3 className="font-bold text-secondary uppercase text-sm tracking-wide">Cadastrar novo pedido</h3>
               <p className="text-sm text-muted-foreground mt-2">Abrir um pedido em branco e preencher manualmente.</p>
@@ -147,60 +180,97 @@ export function AddOrderChooser({ open, onClose, quotes, onChooseNew, onChooseFr
           <>
             <div className="relative">
               <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input placeholder="Buscar índice, cliente, CPF/CNPJ, empresa..."
-                value={search} onChange={e => setSearch(e.target.value)}
+              <Input
+                placeholder="Buscar cliente, CPF/CNPJ, empresa..."
+                value={search}
+                onChange={e => setSearch(e.target.value)}
                 onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
-                className="pl-9 bg-white" autoFocus />
+                className="pl-9 bg-white"
+                autoFocus
+              />
             </div>
+            {quotesError && (
+              <Alert variant="destructive">
+                <AlertDescription className="flex items-center justify-between">
+                  <span>Falha ao carregar cotações.</span>
+                  <Button variant="outline" size="sm" onClick={() => quotesRefetch()}>Tentar novamente</Button>
+                </AlertDescription>
+              </Alert>
+            )}
             <div className="overflow-x-auto rounded-lg border">
               <Table>
                 <TableHeader>
                   <TableRow className="bg-secondary/10">
-                    <TableHead>Índice</TableHead>
                     <TableHead>Cliente</TableHead>
                     <TableHead>Empresa</TableHead>
+                    <TableHead>Data</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead className="text-right">Valor</TableHead>
                     <TableHead className="w-10"></TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {eligibleQuotes.map(qt => {
-                    const h = getHighestPhase(qt);
+                  {quotesLoading ? (
+                    Array.from({ length: 5 }).map((_, i) => (
+                      <TableRow key={i}>
+                        {Array.from({ length: 6 }).map((_, j) => (
+                          <TableCell key={j}><Skeleton className="h-4 w-full" /></TableCell>
+                        ))}
+                      </TableRow>
+                    ))
+                  ) : eligibleQuotes.map(qt => {
+                    const phase = getCotacaoPhase(qt);
                     return (
                       <TableRow key={qt.id} className="cursor-pointer hover:bg-muted/50" onClick={() => pickQuote(qt)}>
-                        <TableCell className="font-medium">{qt.index}</TableCell>
-                        <TableCell>{qt.customer}</TableCell>
-                        <TableCell>{qt.company || '—'}</TableCell>
+                        <TableCell className="font-medium">{qt.cliente}</TableCell>
+                        <TableCell>{LOJA_BY_ID[qt.id_loja] || '—'}</TableCell>
+                        <TableCell>{fmtDate(qt.data_cotacao)}</TableCell>
                         <TableCell>
-                          {h && (
-                            <span className={cn('px-2 py-0.5 rounded text-xs font-semibold border', QUOTE_PHASE_COLORS[h])}>
-                              {QUOTE_PHASE_LABELS[h]}
+                          {phase && (
+                            <span className={cn('px-2 py-0.5 rounded text-xs font-semibold border',
+                              QUOTE_PHASE_COLORS[phase as keyof typeof QUOTE_PHASE_COLORS])}>
+                              {QUOTE_PHASE_LABELS[phase as keyof typeof QUOTE_PHASE_LABELS]}
                             </span>
                           )}
                         </TableCell>
-                        <TableCell className="text-right font-semibold">{toBRL(getDisplayValue(qt))}</TableCell>
+                        <TableCell className="text-right font-semibold">
+                          {qt.valor_total ? toBRL(parseFloat(qt.valor_total)) : '—'}
+                        </TableCell>
                         <TableCell><ChevronRight className="h-4 w-4 text-muted-foreground" /></TableCell>
                       </TableRow>
                     );
                   })}
-                  {eligibleQuotes.length === 0 && (
-                    <TableRow><TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
-                      Nenhuma cotação fechada ou caída disponível.
-                    </TableCell></TableRow>
+                  {!quotesLoading && eligibleQuotes.length === 0 && (
+                    <TableRow>
+                      <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
+                        Nenhuma cotação encontrada nesta página.
+                      </TableCell>
+                    </TableRow>
                   )}
                 </TableBody>
               </Table>
             </div>
+            {(quotesData?.pages ?? 1) > 1 && (
+              <div className="flex items-center justify-between text-sm text-muted-foreground pt-1">
+                <span>{quotesData?.total ?? 0} cotações</span>
+                <div className="flex items-center gap-2">
+                  <Button variant="outline" size="sm" disabled={quotePage <= 1}
+                    onClick={() => setQuotePage(p => p - 1)}>Anterior</Button>
+                  <span>Página {quotePage} de {quotesData?.pages ?? 1}</span>
+                  <Button variant="outline" size="sm" disabled={quotePage >= (quotesData?.pages ?? 1)}
+                    onClick={() => setQuotePage(p => p + 1)}>Próxima</Button>
+                </div>
+              </div>
+            )}
           </>
         )}
 
         {step === 'pick-items' && picked && (
           <>
             <p className="text-sm text-muted-foreground">
-              Cliente: <span className="font-medium text-foreground">{picked.customer}</span>
-              {' · '}CPF/CNPJ: <span className="font-medium text-foreground">{picked.cnpj || '—'}</span>
-              {' · '}Empresa: <span className="font-medium text-foreground">{picked.company || '—'}</span>
+              Cliente: <span className="font-medium text-foreground">{picked.cliente}</span>
+              {' · '}CPF/CNPJ: <span className="font-medium text-foreground">{picked.cnpj_cliente || '—'}</span>
+              {' · '}Empresa: <span className="font-medium text-foreground">{LOJA_BY_ID[picked.id_loja] || '—'}</span>
             </p>
             <div className="overflow-x-auto rounded-lg border">
               <Table>
@@ -214,19 +284,23 @@ export function AddOrderChooser({ open, onClose, quotes, onChooseNew, onChooseFr
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {(picked.items || []).map((it: QuoteItem) => (
+                  {(picked.itens ?? []).map(it => (
                     <TableRow key={it.id} className="cursor-pointer hover:bg-muted/50" onClick={() => toggleItem(it.id)}>
                       <TableCell><Checkbox checked={selectedItemIds.has(it.id)} onCheckedChange={() => toggleItem(it.id)} /></TableCell>
-                      <TableCell>{it.name}</TableCell>
-                      <TableCell>{it.quantity}</TableCell>
-                      <TableCell className="text-right">{toBRL(it.quoteValue || 0)}</TableCell>
-                      <TableCell className="text-right">{toBRL(it.closingValue || 0)}</TableCell>
+                      <TableCell>{it.descricao}</TableCell>
+                      <TableCell>{it.quantidade}</TableCell>
+                      <TableCell className="text-right">{toBRL(parseFloat(it.valor_unitario) || 0)}</TableCell>
+                      <TableCell className="text-right">
+                        {it.valor_fechamento ? toBRL(parseFloat(it.valor_fechamento)) : '—'}
+                      </TableCell>
                     </TableRow>
                   ))}
-                  {(picked.items || []).length === 0 && (
-                    <TableRow><TableCell colSpan={5} className="text-center py-6 text-muted-foreground">
-                      Esta cotação não possui itens. Você pode prosseguir mesmo assim.
-                    </TableCell></TableRow>
+                  {(picked.itens ?? []).length === 0 && (
+                    <TableRow>
+                      <TableCell colSpan={5} className="text-center py-6 text-muted-foreground">
+                        Esta cotação não possui itens. Você pode prosseguir mesmo assim.
+                      </TableCell>
+                    </TableRow>
                   )}
                 </TableBody>
               </Table>

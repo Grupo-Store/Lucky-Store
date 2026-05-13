@@ -113,11 +113,12 @@ export interface CreatePedidoPayload {
   nota_fiscal_fornecedor?: string;
   numero_oc?: string;
   is_direct_billing?: boolean;
+  fornecedor_principal?: string;
   formas_pagamento?: { forma: string }[];
   custo?: Partial<Omit<CustoPedido, 'id' | 'id_pedido'>>;
 }
 
-export type UpdatePedidoPayload = Partial<Omit<CreatePedidoPayload, 'id_loja' | 'id_vendedor' | 'nome_cliente'>>;
+export type UpdatePedidoPayload = Partial<Omit<CreatePedidoPayload, 'id_loja' | 'id_vendedor' | 'nome_cliente' | 'status' | 'formas_pagamento'>>;
 
 export interface PedidoFilters {
   page?: number;
@@ -129,6 +130,38 @@ export interface PedidoFilters {
   data_fim?: string;
   sort_by?: string;
   sort_dir?: 'asc' | 'desc';
+}
+
+// ─── Produtos ─────────────────────────────────────────────────────────────────
+
+export interface SubCompraApiItem {
+  id: string;
+  selectedQuantity: number;
+  supplier: string;
+  buyer: string;
+  purchaseDate?: string;
+  productDeliveryDate?: string;
+  receiptDate?: string;
+  purchaseValue: number;
+  paymentMethod: string;
+  installments?: number;
+  status: string;
+}
+
+export interface ProdutoApiItem {
+  id: string;
+  id_pedido: string;
+  id_vendedor: string;
+  descricao: string;
+  quantidade: number;
+  valor_projetado: string;
+  valor_compra: string | null;
+  status: string;
+  prazo_entrega: string | null;
+  data_compra: string | null;
+  data_recebimento: string | null;
+  fornecedor: string | null;
+  sub_compras: SubCompraApiItem[] | null;
 }
 
 // ─── Cotações ─────────────────────────────────────────────────────────────────
@@ -239,12 +272,14 @@ export type RmaStatus =
 export type ItemRmaStatus =
   | 'Not Received'
   | 'Received'
+  | 'Sent for Repair'
   | 'In Repair'
-  | 'Repaired'
-  | 'Ready'
-  | 'Shipped'
-  | 'Delivered'
-  | 'Cancelled';
+  | 'Repaired Not Received'
+  | 'Repaired Received'
+  | 'To Pack'
+  | 'Ready for Delivery'
+  | 'Out for Delivery'
+  | 'Delivered';
 
 export interface ItemRma {
   id: string;
@@ -262,6 +297,7 @@ export interface RmaResponse {
   id_vendedor: string;
   id_loja: string;
   numero_rma: string;
+  numero_os_origem: string | null;
   data_registro: string;
   prazo_entrega: string | null;
   status: RmaStatus;
@@ -269,6 +305,11 @@ export interface RmaResponse {
   created_by: string;
   created_at: string;
   updated_at: string;
+}
+
+export interface UpdateRmaPayload {
+  prazo_entrega?: string;
+  status?: RmaStatus;
 }
 
 export interface CreateRmaPayload {
@@ -288,6 +329,8 @@ export interface RmaFilters {
   id_loja?: string;
   id_vendedor?: string;
   id_pedido_origem?: string;
+  data_inicio?: string;
+  data_fim?: string;
   sort_by?: string;
   sort_dir?: 'asc' | 'desc';
 }

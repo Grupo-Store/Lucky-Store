@@ -2,11 +2,12 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 from typing import Optional
 from uuid import UUID
+from datetime import date
 from app.database import get_db
 from app.models.user import User
 from app.models.rma import RmaStatus
 from app.schemas.rma import (
-    RmaCreate, RmaResponse, RmaListResponse,
+    RmaCreate, RmaUpdate, RmaResponse, RmaListResponse,
     ItemRmaStatusUpdate, ItemRmaResponse,
 )
 from app.services.rma import RmaService
@@ -33,11 +34,13 @@ def create_rma(
 @router.get("", response_model=RmaListResponse)
 def list_rmas(
     page: int = Query(default=1, ge=1),
-    limit: int = Query(default=20, ge=1, le=100),
+    limit: int = Query(default=20, ge=1, le=500),
     status_filter: Optional[RmaStatus] = Query(default=None, alias="status"),
     id_loja: Optional[UUID] = Query(default=None),
     id_vendedor: Optional[UUID] = Query(default=None),
     id_pedido_origem: Optional[UUID] = Query(default=None),
+    data_inicio: Optional[date] = Query(default=None),
+    data_fim: Optional[date] = Query(default=None),
     sort_by: str = Query(default="data_registro"),
     sort_dir: str = Query(default="desc", pattern="^(asc|desc)$"),
     db: Session = Depends(get_db),
@@ -47,9 +50,23 @@ def list_rmas(
         db, page=page, limit=limit,
         status=status_filter,
         id_loja=id_loja, id_vendedor=id_vendedor, id_pedido_origem=id_pedido_origem,
+        data_inicio=data_inicio, data_fim=data_fim,
         sort_by=sort_by, sort_dir=sort_dir,
     )
     return RmaListResponse(items=items, total=total, page=page, limit=limit, pages=pages)
+
+
+@router.patch("/{rma_id}", response_model=RmaResponse)
+def update_rma(
+    rma_id: UUID,
+    data: RmaUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user_dep),
+):
+    try:
+        return RmaService.update(db, rma_id, data, current_user.id)
+    except (NotFoundException, BusinessLogicException) as exc:
+        raise to_http_exception(exc)
 
 
 @router.get("/{rma_id}", response_model=RmaResponse)

@@ -1,5 +1,4 @@
 const BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000/api'
-const DEV_TOKEN = import.meta.env.VITE_DEV_API_TOKEN ?? ''
 
 export class ApiError extends Error {
   constructor(public readonly status: number, message: string) {
@@ -25,11 +24,13 @@ export async function apiFetch<T>(
     if (qs) url += `?${qs}`
   }
 
+  const token = localStorage.getItem('access_token')
+
   const response = await fetch(url, {
     ...options?.init,
     headers: {
       'Content-Type': 'application/json',
-      Authorization: `Bearer ${DEV_TOKEN}`,
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...options?.init?.headers,
     },
   })
