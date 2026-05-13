@@ -87,6 +87,36 @@ export function useUpdateOrderStatus(id: string) {
   });
 }
 
+/** Muda o status de um pedido com ID dinâmico (para uso em listas). */
+export function useUpdateOrderStatusInline() {
+  const qc = useQueryClient();
+  return useMutation<
+    PedidoResponse,
+    Error,
+    { id: string; new_status: PedidoStatus; reason?: string }
+  >({
+    mutationFn: ({ id, new_status, reason }) =>
+      apiClient
+        .patch(`/pedidos/${id}/status`, { new_status, reason })
+        .then((r) => r.data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: orderKeys.lists() });
+    },
+  });
+}
+
+/** Atualiza o status de um item de pedido. */
+export function useUpdateItemStatus() {
+  const qc = useQueryClient();
+  return useMutation<unknown, Error, { pedidoId: string; itemId: string; newStatus: string }>({
+    mutationFn: ({ pedidoId, itemId, newStatus }) =>
+      apiClient.patch(`/pedidos/${pedidoId}/items/${itemId}/status`, { new_status: newStatus }).then((r) => r.data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: orderKeys.lists() });
+    },
+  });
+}
+
 /** Soft-delete de um pedido. */
 export function useDeleteOrder() {
   const qc = useQueryClient();

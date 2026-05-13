@@ -3,7 +3,7 @@ from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Optional
 from uuid import UUID
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import asc, desc, text
 from app.models.pedido import Pedido, PedidoFormaPagamento, CustoPedido
 from app.models.cliente import Cliente
@@ -121,24 +121,37 @@ class PedidoService:
         sort_by: str = "data_pedido",
         sort_dir: str = "desc",
     ):
-        q = db.query(Pedido).filter(Pedido.deleted_at.is_(None))
-
+        base_filters = [Pedido.deleted_at.is_(None)]
         if status:
-            q = q.filter(Pedido.status == status)
+            base_filters.append(Pedido.status == status)
         if id_loja:
-            q = q.filter(Pedido.id_loja == id_loja)
+            base_filters.append(Pedido.id_loja == id_loja)
         if id_vendedor:
-            q = q.filter(Pedido.id_vendedor == id_vendedor)
+            base_filters.append(Pedido.id_vendedor == id_vendedor)
         if data_inicio:
-            q = q.filter(Pedido.data_pedido >= data_inicio)
+            base_filters.append(Pedido.data_pedido >= data_inicio)
         if data_fim:
-            q = q.filter(Pedido.data_pedido <= data_fim)
+            base_filters.append(Pedido.data_pedido <= data_fim)
+
+        total = db.query(Pedido).filter(*base_filters).count()
 
         sort_col = getattr(Pedido, sort_by, Pedido.data_pedido)
-        q = q.order_by(desc(sort_col) if sort_dir == "desc" else asc(sort_col))
-
-        total = q.count()
-        items = q.offset((page - 1) * limit).limit(limit).all()
+        items = (
+            db.query(Pedido)
+            .options(
+                joinedload(Pedido.loja),
+                joinedload(Pedido.vendedor),
+                joinedload(Pedido.cliente),
+                joinedload(Pedido.produtos),
+                joinedload(Pedido.formas_pagamento),
+                joinedload(Pedido.fretes),
+            )
+            .filter(*base_filters)
+            .order_by(desc(sort_col) if sort_dir == "desc" else asc(sort_col))
+            .offset((page - 1) * limit)
+            .limit(limit)
+            .all()
+        )
 
         for p in items:
             p.economia = _economia(p)

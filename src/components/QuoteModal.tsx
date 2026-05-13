@@ -62,7 +62,7 @@ function CurrencyInput({ value, onChange, className }: {
   return (
     <Input
       className={cn('bg-white border-border', className)}
-      value={editing ? draft : toBRL(value || 0)}
+      value={editing ? draft : toBRL(typeof value === 'number' ? value : 0)}
       onFocus={() => { setEditing(true); setDraft(value ? String(value) : ''); }}
       onBlur={() => { onChange(parseBRL(draft) || parseFloat(draft) || 0); setEditing(false); }}
       onChange={e => setDraft(e.target.value)}
@@ -249,17 +249,17 @@ export function QuoteModal({ open, onClose, quote, onSave, onDelete, nextIndex }
             </div>
             <div>
               <Label>Cliente</Label>
-              <Input className="bg-white border-border" value={form.customer}
+              <Input className="bg-white border-border" value={form.customer || ''}
                 onChange={e => set('customer', e.target.value)} onKeyDown={handleEnterBlur} />
             </div>
             <div>
               <Label>CPF/CNPJ</Label>
-              <Input className="bg-white border-border" value={form.cnpj}
+              <Input className="bg-white border-border" value={form.cnpj || ''}
                 onChange={e => set('cnpj', e.target.value)} onKeyDown={handleEnterBlur} />
             </div>
             <div>
               <Label>Nº da Requisição</Label>
-              <Input className="bg-white border-border" value={form.requestNumber}
+              <Input className="bg-white border-border" value={form.requestNumber || ''}
                 onChange={e => set('requestNumber', e.target.value)} onKeyDown={handleEnterBlur} />
             </div>
             <div>
@@ -299,7 +299,7 @@ export function QuoteModal({ open, onClose, quote, onSave, onDelete, nextIndex }
             {form.directBilling && (
               <div className="md:col-span-2">
                 <Label>Fornecedor</Label>
-                <Input className="bg-white border-border" value={form.supplier}
+                <Input className="bg-white border-border" value={form.supplier || ''}
                   onChange={e => set('supplier', e.target.value)} onKeyDown={handleEnterBlur} />
               </div>
             )}
@@ -321,7 +321,7 @@ export function QuoteModal({ open, onClose, quote, onSave, onDelete, nextIndex }
               return (
                 <div key={item.id} className="grid grid-cols-16 gap-2 items-center border rounded-md p-2 bg-muted/20" style={{ gridTemplateColumns: 'repeat(16, minmax(0, 1fr))' }}>
                   <Input placeholder="Nome do Item" className="bg-white border-border" style={{ gridColumn: 'span 3' }}
-                    value={item.name} onChange={e => updateItem(item.id, 'name', e.target.value)} onKeyDown={handleEnterBlur} />
+                    value={item.name || ''} onChange={e => updateItem(item.id, 'name', e.target.value)} onKeyDown={handleEnterBlur} />
                   <Input type="number" min={1} placeholder="Qtd" className="bg-white border-border" style={{ gridColumn: 'span 1' }}
                     value={item.quantity} onChange={e => updateItem(item.id, 'quantity', parseInt(e.target.value) || 1)} onKeyDown={handleEnterBlur} />
                   <div style={{ gridColumn: 'span 2' }}>
@@ -337,7 +337,7 @@ export function QuoteModal({ open, onClose, quote, onSave, onDelete, nextIndex }
                     <Input readOnly className="bg-muted border-border font-semibold" value={toBRL(lineFinal)} />
                   </div>
                   <Input placeholder="Fornecedor" className="bg-white border-border" style={{ gridColumn: 'span 3' }}
-                    value={item.supplier} onChange={e => updateItem(item.id, 'supplier', e.target.value)} onKeyDown={handleEnterBlur} />
+                    value={item.supplier || ''} onChange={e => updateItem(item.id, 'supplier', e.target.value)} onKeyDown={handleEnterBlur} />
                   <Button variant="ghost" size="icon" style={{ gridColumn: 'span 1' }} onClick={() => removeItem(item.id)}>
                     <Trash2 className="h-4 w-4 text-destructive" />
                   </Button>

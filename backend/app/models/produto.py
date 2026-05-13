@@ -2,12 +2,13 @@ import uuid
 from datetime import datetime, timezone
 from decimal import Decimal
 from sqlalchemy import Column, String, Integer, Date, DateTime, Text, Numeric, ForeignKey, CheckConstraint  # type: ignore[import]
-from sqlalchemy.dialects.postgresql import UUID  # type: ignore[import]
+from sqlalchemy.dialects.postgresql import UUID, JSONB  # type: ignore[import]
 from sqlalchemy.orm import relationship
 from app.database import Base
 
 PRODUTO_STATUSES = [
-    "Pending", "To Purchase", "In Stock", "Received",
+    "To Buy", "Bought", "In Stock",
+    "Pending", "To Purchase", "Received",
     "Ready", "Shipped", "Delivered", "Delayed", "Cancelled",
 ]
 
@@ -26,6 +27,8 @@ class Produto(Base):
     valor_projetado = Column(Numeric(12, 2), nullable=False)
     valor_compra = Column(Numeric(12, 2), nullable=True)
     economia = Column(Numeric(12, 2), nullable=True)
+
+    sub_compras = Column(JSONB, nullable=True)
 
     fornecedor = Column(Text, nullable=True)
     data_compra = Column(Date, nullable=True)

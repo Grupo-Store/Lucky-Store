@@ -622,7 +622,7 @@
 
 ## Phase 2.5: Audit & Compliance (Weeks 5-6)
 
-### 2.5.1 Status History UI (Days 1-3)
+### 2.5.1 Status History UI (Days 1-3) - Gustavo
 **Priority:** P1 - MVP Feature
 
 **Frontend Tasks:** → **Duda**
@@ -644,7 +644,7 @@
 
 ---
 
-### 2.5.2 Audit Log Viewer (Days 3-5)
+### 2.5.2 Audit Log Viewer (Days 3-5) - Duda
 **Priority:** P1 - MVP Feature
 
 **Frontend Tasks:** → **Gustavo**
@@ -666,7 +666,7 @@
 
 ---
 
-### 2.5.3 LGPD Data Export (Days 5-7)
+### 2.5.3 LGPD Data Export (Days 5-7) - Peu
 **Priority:** P1 - LGPD Requirement
 
 **Backend Tasks:** → **Rafael** ✅ COMPLETO
@@ -688,7 +688,7 @@
 
 ---
 
-### 2.5.4 Data Deletion (Days 7-10)
+### 2.5.4 Data Deletion (Days 7-10) - Duda
 **Priority:** P1 - LGPD Requirement
 
 **Backend Tasks:** → **Rafael** ✅ COMPLETO

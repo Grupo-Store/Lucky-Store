@@ -42,6 +42,11 @@ class Rma(Base):
     loja = relationship("Loja", back_populates="rmas")
     vendedor = relationship("Vendedor", back_populates="rmas", foreign_keys=[id_vendedor])
     itens = relationship("ItemRma", back_populates="rma", cascade="all, delete-orphan")
+    pedido = relationship("Pedido", foreign_keys=[id_pedido_origem])
+
+    @property
+    def numero_os_origem(self) -> str | None:
+        return self.pedido.numero_os if self.pedido else None
 
     def __repr__(self):
         return f"<Rma {self.numero_rma}>"

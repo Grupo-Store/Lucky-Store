@@ -4,6 +4,7 @@ import type {
   RmaResponse,
   PaginatedResponse,
   CreateRmaPayload,
+  UpdateRmaPayload,
   RmaFilters,
   ItemRmaStatus,
 } from '../../types/api';
@@ -49,6 +50,19 @@ export function useCreateRma() {
     mutationFn: (payload) =>
       apiClient.post('/rma', payload).then((r) => r.data),
     onSuccess: () => {
+      qc.invalidateQueries({ queryKey: rmaKeys.lists() });
+    },
+  });
+}
+
+/** Atualiza prazo_entrega e/ou status de um RMA. */
+export function useUpdateRma() {
+  const qc = useQueryClient();
+  return useMutation<RmaResponse, Error, { id: string } & UpdateRmaPayload>({
+    mutationFn: ({ id, ...payload }) =>
+      apiClient.patch(`/rma/${id}`, payload).then((r) => r.data),
+    onSuccess: (data) => {
+      qc.setQueryData(rmaKeys.detail(String(data.id)), data);
       qc.invalidateQueries({ queryKey: rmaKeys.lists() });
     },
   });

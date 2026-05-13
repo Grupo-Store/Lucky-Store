@@ -1,13 +1,27 @@
+import json
+from datetime import date
 from decimal import Decimal
 from typing import Optional
 from uuid import UUID
 from sqlalchemy.orm import Session
 
 from app.models.produto import Produto
-from app.schemas.produto import ProdutoCreate
+from app.schemas.produto import ProdutoCreate, ProdutoUpdate
 from app.services.pedido import PedidoService
 from app.models.audit_log import AuditLog, AuditAction
 from app.utils.errors import NotFoundException
+
+
+def _to_jsonable(v):
+    if v is None:
+        return None
+    if isinstance(v, Decimal):
+        return float(v)
+    if isinstance(v, date):
+        return v.isoformat()
+    if isinstance(v, UUID):
+        return str(v)
+    return v
 
 
 class ItemPedidoService:
@@ -39,6 +53,7 @@ class ItemPedidoService:
             data_compra=data.data_compra,
             prazo_entrega=data.prazo_entrega,
             data_recebimento=data.data_recebimento,
+            status=data.status,
         )
         db.add(produto)
         db.flush()
@@ -49,6 +64,32 @@ class ItemPedidoService:
             action=AuditAction.CREATE,
             changed_by=current_user_id,
             new_values={"descricao": data.descricao, "quantidade": data.quantidade},
+        ))
+
+        db.commit()
+        db.refresh(produto)
+        return produto
+
+    @staticmethod
+    def update_item(db: Session, pedido_id: UUID, item_id: UUID,
+                    data: ProdutoUpdate, current_user_id: UUID) -> Produto:
+        produto = ItemPedidoService._get_item(db, pedido_id, item_id)
+        changes = data.model_dump(exclude_none=True)
+        if not changes:
+            return produto
+
+        old_values = {k: _to_jsonable(getattr(produto, k)) for k in changes}
+        new_values = {k: _to_jsonable(v) for k, v in changes.items()}
+        for field, value in changes.items():
+            setattr(produto, field, value)
+
+        db.add(AuditLog(
+            entity_type="produto",
+            entity_id=item_id,
+            action=AuditAction.UPDATE,
+            changed_by=current_user_id,
+            old_values=old_values,
+            new_values=new_values,
         ))
 
         db.commit()

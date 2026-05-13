@@ -1,4 +1,6 @@
 import { useState, useEffect, useMemo, KeyboardEvent } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
+import { toast } from 'sonner';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -10,6 +12,8 @@ import { CalendarIcon, Plus, Trash2, AlertTriangle, Printer } from 'lucide-react
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
+import { apiClient, getApiError } from '@/api/client';
+import { orderKeys } from '@/api/hooks/useOrders';
 import {
   Order, OrderItem, SubPurchase, ItemStatus, PaymentMethod,
   ITEM_STATUS_COLORS, PAYMENT_METHODS, PAYMENT_METHOD_LABELS,
@@ -53,7 +57,9 @@ interface Props {
 }
 
 export function ProductModal({ open, onClose, order, item, onSave }: Props) {
+  const qc = useQueryClient();
   const [subs, setSubs] = useState<SubPurchase[]>([]);
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     if (item) {
@@ -75,12 +81,11 @@ export function ProductModal({ open, onClose, order, item, onSave }: Props) {
   const addSub = () => setSubs(prev => [...prev, emptySub()]);
   const removeSub = (id: string) => setSubs(prev => prev.filter(s => s.id !== id));
 
-  const handleSave = () => {
+  const handleSave = async () => {
     const updatedItem: OrderItem = {
       ...item,
       subPurchases: subs,
     };
-    // recompute aggregated fields
     updatedItem.purchaseValue = calcItemFinalValue(updatedItem);
     updatedItem.productDeliveryDate = calcItemLatestDelivery(updatedItem);
 
@@ -88,10 +93,37 @@ export function ProductModal({ open, onClose, order, item, onSave }: Props) {
       ...order,
       items: order.items.map(i => i.id === item.id ? updatedItem : i),
     };
-    // Recompute order's finalProductCost as the sum of all items' purchase values
     updatedOrder.finalProductCost = updatedOrder.items.reduce((s, i) => s + (i.purchaseValue || 0), 0);
+
+    const firstSub = subs[0];
+    const dominantStatus: ItemStatus = subs.some(s => s.status === 'To Buy')
+      ? 'To Buy'
+      : subs.some(s => s.status === 'Bought')
+      ? 'Bought'
+      : 'In Stock';
+
+    const payload: Record<string, unknown> = {};
+    payload.sub_compras = subs;
+    if (subs.length > 0) payload.valor_compra = updatedItem.purchaseValue;
+    payload.status = dominantStatus;
+    if (firstSub?.supplier) payload.fornecedor = firstSub.supplier;
+    if (firstSub?.purchaseDate) payload.data_compra = firstSub.purchaseDate;
+    if (updatedItem.productDeliveryDate) payload.prazo_entrega = updatedItem.productDeliveryDate;
+    if (firstSub?.receiptDate) payload.data_recebimento = firstSub.receiptDate;
+
+    setSaving(true);
+    try {
+      await apiClient.put(`/pedidos/${order.id}/items/${item.id}`, payload);
+    } catch (err) {
+      toast.error(getApiError(err));
+      setSaving(false);
+      return;
+    }
+    setSaving(false);
+    toast.success('Produto atualizado com sucesso!');
     onSave(updatedOrder);
     onClose();
+    qc.invalidateQueries({ queryKey: orderKeys.lists() });
   };
 
   return (
@@ -256,8 +288,8 @@ export function ProductModal({ open, onClose, order, item, onSave }: Props) {
             <Printer className="h-4 w-4 mr-1" /> Imprimir
           </Button>
           <Button variant="outline" onClick={onClose}>Cancelar</Button>
-          <Button onClick={handleSave} disabled={overQuantity} className="bg-secondary hover:bg-secondary/90">
-            Salvar Alterações
+          <Button onClick={handleSave} disabled={saving || overQuantity} className="bg-secondary hover:bg-secondary/90">
+            {saving ? 'Salvando...' : 'Salvar Alterações'}
           </Button>
         </div>
       </DialogContent>

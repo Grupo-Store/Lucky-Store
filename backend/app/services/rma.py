@@ -2,14 +2,14 @@ import math
 from datetime import datetime, timezone, date
 from typing import Optional
 from uuid import UUID
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import asc, desc
 from app.models.rma import Rma, RmaStatus
 from app.models.item_rma import ItemRma, ItemRmaStatus
 from app.models.pedido import Pedido
 from app.models.status_history import StatusHistory, EntityType
 from app.models.audit_log import AuditLog, AuditAction
-from app.schemas.rma import RmaCreate, ItemRmaStatusUpdate
+from app.schemas.rma import RmaCreate, RmaUpdate, ItemRmaStatusUpdate
 from app.utils.errors import NotFoundException, BusinessLogicException
 
 
@@ -25,11 +25,11 @@ def _audit(db: Session, action: AuditAction, entity_id, changed_by: UUID,
     ))
 
 
-def _generate_numero_rma(db: Session) -> str:
-    year = datetime.now().year
-    prefix = f"RMA-{year}-"
-    count = db.query(Rma).filter(Rma.numero_rma.like(f"{prefix}%")).count()
-    return f"{prefix}{str(count + 1).zfill(6)}"
+def _generate_numero_rma(db: Session, numero_os: str, id_pedido: UUID) -> str:
+    import re
+    os_num = re.sub(r'^OS[-\s]?', '', numero_os, flags=re.IGNORECASE).strip('-').strip()
+    count = db.query(Rma).filter(Rma.id_pedido_origem == id_pedido).count()
+    return f"RMA-{os_num}-{count + 1}"
 
 
 class RmaService:
@@ -43,7 +43,7 @@ class RmaService:
         if not pedido:
             raise NotFoundException(f"Pedido {data.id_pedido_origem} não encontrado")
 
-        numero_rma = data.numero_rma or _generate_numero_rma(db)
+        numero_rma = data.numero_rma or _generate_numero_rma(db, pedido.numero_os, pedido.id)
         if db.query(Rma).filter(Rma.numero_rma == numero_rma).first():
             raise BusinessLogicException(f"Número RMA '{numero_rma}' já existe")
 
@@ -87,7 +87,7 @@ class RmaService:
 
     @staticmethod
     def get_by_id(db: Session, rma_id: UUID) -> Rma:
-        rma = db.query(Rma).filter(
+        rma = db.query(Rma).options(joinedload(Rma.pedido)).filter(
             Rma.id == rma_id,
             Rma.deleted_at.is_(None),
         ).first()
@@ -104,10 +104,12 @@ class RmaService:
         id_loja: Optional[UUID] = None,
         id_vendedor: Optional[UUID] = None,
         id_pedido_origem: Optional[UUID] = None,
+        data_inicio: Optional[date] = None,
+        data_fim: Optional[date] = None,
         sort_by: str = "data_registro",
         sort_dir: str = "desc",
     ):
-        q = db.query(Rma).filter(Rma.deleted_at.is_(None))
+        q = db.query(Rma).options(joinedload(Rma.pedido)).filter(Rma.deleted_at.is_(None))
 
         if status:
             q = q.filter(Rma.status == status)
@@ -117,6 +119,10 @@ class RmaService:
             q = q.filter(Rma.id_vendedor == id_vendedor)
         if id_pedido_origem:
             q = q.filter(Rma.id_pedido_origem == id_pedido_origem)
+        if data_inicio:
+            q = q.filter(Rma.data_registro >= data_inicio)
+        if data_fim:
+            q = q.filter(Rma.data_registro <= data_fim)
 
         sort_col = getattr(Rma, sort_by, Rma.data_registro)
         q = q.order_by(desc(sort_col) if sort_dir == "desc" else asc(sort_col))
@@ -124,6 +130,30 @@ class RmaService:
         total = q.count()
         items = q.offset((page - 1) * limit).limit(limit).all()
         return items, total, math.ceil(total / limit) if total else 0
+
+    @staticmethod
+    def update(db: Session, rma_id: UUID, data: RmaUpdate, current_user_id: UUID) -> Rma:
+        rma = RmaService.get_by_id(db, rma_id)
+
+        old_status = rma.status
+        if data.prazo_entrega is not None:
+            rma.prazo_entrega = data.prazo_entrega
+        if data.status is not None and data.status != rma.status:
+            rma.status = data.status
+            db.add(StatusHistory(
+                entity_type=EntityType.RMA,
+                entity_id=rma.id,
+                old_status=old_status,
+                new_status=data.status,
+                changed_by=current_user_id,
+                reason=None,
+            ))
+            _audit(db, AuditAction.UPDATE, rma.id, current_user_id,
+                   old_values={"status": str(old_status)}, new_values={"status": str(data.status)})
+
+        db.commit()
+        db.refresh(rma)
+        return rma
 
     @staticmethod
     def close(db: Session, rma_id: UUID, current_user_id: UUID) -> Rma:
