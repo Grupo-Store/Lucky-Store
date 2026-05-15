@@ -44,5 +44,6 @@ export const API = {
     detail: (id: string) => `/users/${id}`,
     deactivate: (id: string) => `/users/${id}/deactivate`,
     export: (id: string) => `/users/${id}/data-export`,
+    deleteData: (id: string) => `/users/${id}/delete-data`,
   },
 } as const
