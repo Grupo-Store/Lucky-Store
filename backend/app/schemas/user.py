@@ -57,6 +57,10 @@ class EmailCodeVerifyRequest(BaseModel):
     code: str
 
 
+class ResendCodeRequest(BaseModel):
+    email: EmailStr
+
+
 # ── TOTP (legado) ─────────────────────────────────────────────────────────────
 
 class TOTPSetupResponse(BaseModel):

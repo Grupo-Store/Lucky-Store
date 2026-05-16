@@ -44,6 +44,9 @@ class ItemCotacaoService:
             valor_unitario=data.valor_unitario,
             valor_fechamento=data.valor_fechamento,
             fornecedor=data.fornecedor,
+            is_direct_supply=data.is_direct_supply,
+            porcentagem_fornecedor=data.porcentagem_fornecedor,
+            frete_fornecedor=data.frete_fornecedor,
         )
         db.add(item)
         db.flush()

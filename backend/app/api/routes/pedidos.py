@@ -10,7 +10,7 @@ from app.schemas.pedido import (
     PedidoCreate, PedidoUpdate, PedidoResponse,
     PedidoDetailResponse, PedidoListResponse, PedidoListItemResponse,
     StatusChangeRequest, StatusHistoryOut,
-    FormaPagamentoOut, FreteCreate, FreteOut,
+    FormaPagamentoOut, FreteCreate, FreteOut, CustoPedidoOut,
 )
 from app.schemas.produto import ProdutoResponse
 from app.models.pedido import Frete
@@ -90,6 +90,13 @@ def list_pedidos(
             formas_pagamento=[FormaPagamentoOut.model_validate(fp) for fp in (p.formas_pagamento or [])],
             fretes=[FreteOut.model_validate(f) for f in (p.fretes or [])],
             produtos=[ProdutoResponse.model_validate(prod) for prod in (p.produtos or [])],
+            custo=CustoPedidoOut.model_validate(p.custo) if p.custo else None,
+            data_pagamento=p.data_pagamento,
+            multa=p.multa,
+            juros=p.juros,
+            forma_pagamento_efetiva=p.forma_pagamento_efetiva,
+            num_parcelas_efetivas=p.num_parcelas_efetivas,
+            plano_parcelas=p.plano_parcelas,
         )
         for p in items
     ]

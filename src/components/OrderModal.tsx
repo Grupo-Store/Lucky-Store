@@ -15,11 +15,11 @@ import { ptBR } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import {
-  Order, OrderItem, ItemStatus, PaymentMethod, Company, Seller, OrderStatus, FreightCard,
+  Order, OrderItem, DirectSupplyOrderItem, ItemStatus, PaymentMethod, Company, Seller, OrderStatus, FreightCard,
   PaymentInstallment,
   ITEM_STATUS_COLORS, ORDER_STATUS_COLORS, ORDER_STATUS_LABELS,
   PAYMENT_METHODS, PAYMENT_METHOD_LABELS, SELLERS,
-  calcFinalCost, calcProfit, calcFreightTotal,
+  calcFinalCost, calcPartialCost, calcDirectSupplyCost, calcProfit, calcFreightTotal,
 } from '@/store/OrderStore';
 import type { OrderPrefill } from '@/components/AddOrderChooser';
 import { useCreateOrder, useUpdateOrder, useUpdateOrderStatus, orderKeys } from '@/api/hooks/useOrders';
@@ -38,7 +38,7 @@ const emptyOrder = (os: string): Partial<Order> => ({
   initialProductCost: 0, finalProductCost: 0, boletoCost: 0, giftCost: 0,
   creditCostPercent: 0, creditCostValue: 0, debitCostPercent: 0, debitCostValue: 0,
   purchaseTaxPercent: 0, purchaseTaxValue: 0, salesTaxPercent: 0, salesTaxValue: 0,
-  salesValue: 0, items: [], freight: [],
+  salesValue: 0, items: [], directSupplyItems: [], freight: [],
   paymentDate: '', penaltyValue: 0, interestValue: 0, paymentMethod: '',
   paymentInstallments: 1, paymentInstallmentPlan: [],
 });
@@ -82,7 +82,7 @@ export function OrderModal({ open, onClose, order, onSave, nextOS, prefill }: Pr
 
   useEffect(() => {
     if (order) {
-      setForm({ ...order, freight: order.freight || [] });
+      setForm({ ...order, freight: order.freight || [], directSupplyItems: order.directSupplyItems || [] });
     } else if (prefill) {
       setForm({
         ...emptyOrder(nextOS?.() || ''),
@@ -91,10 +91,12 @@ export function OrderModal({ open, onClose, order, onSave, nextOS, prefill }: Pr
         company: prefill.company,
         seller: prefill.seller,
         salesValue: prefill.salesValue,
+        directBilling: prefill.directBilling ?? false,
         items: prefill.items.map(i => ({
           id: i.id, name: i.name, quantity: i.quantity, status: 'To Buy' as ItemStatus,
           projectedValue: i.projectedValue, purchaseValue: 0,
         })),
+        directSupplyItems: (prefill.directSupplyItems || []).map(i => ({ ...i })),
       });
     } else {
       setForm(emptyOrder(nextOS?.() || ''));
@@ -105,8 +107,12 @@ export function OrderModal({ open, onClose, order, onSave, nextOS, prefill }: Pr
   const set = (k: keyof Order, v: any) => setForm(prev => ({ ...prev, [k]: v }));
 
   /* ---------------- Derived calculations ---------------- */
+  const derivedInitialProductCost = useMemo(
+    () => (form.items || []).reduce((s, i) => s + (i.projectedValue || 0) * (i.quantity || 0), 0),
+    [form.items]
+  );
   const derivedFinalProductCost = useMemo(
-    () => (form.items || []).reduce((s, i) => s + (i.purchaseValue || 0), 0),
+    () => (form.items || []).reduce((s, i) => s + (i.purchaseValue || 0) * (i.quantity || 0), 0),
     [form.items]
   );
   const derivedFreightTotal = useMemo(() => calcFreightTotal(form.freight), [form.freight]);
@@ -122,11 +128,20 @@ export function OrderModal({ open, onClose, order, onSave, nextOS, prefill }: Pr
     };
   }, [form.salesValue, derivedFinalProductCost, form.creditCostPercent, form.debitCostPercent, form.purchaseTaxPercent, form.salesTaxPercent]);
 
+  const dsItems = form.directSupplyItems || [];
+  const directSupplyCost = calcDirectSupplyCost(dsItems);
   const finalCost = calcFinalCost({
     ...form, finalProductCost: derivedFinalProductCost, freight: form.freight, ...computed,
+    directSupplyItems: dsItems,
+  });
+  const partialCost = calcPartialCost({
+    ...form, initialProductCost: derivedInitialProductCost,
+    purchaseTaxPercent: form.purchaseTaxPercent || 0,
+    freight: form.freight, ...computed, directSupplyItems: dsItems,
   });
   const profit = calcProfit({
     ...form, finalProductCost: derivedFinalProductCost, freight: form.freight, ...computed,
+    directSupplyItems: dsItems,
   });
 
   /* ---------------- Items ---------------- */
@@ -154,6 +169,16 @@ export function OrderModal({ open, onClose, order, onSave, nextOS, prefill }: Pr
     set('freight', (form.freight || []).map(f => f.id === id ? { ...f, [field]: value } : f));
   };
   const removeFreight = (id: string) => set('freight', (form.freight || []).filter(f => f.id !== id));
+
+  /* ---------------- Direct supply items ---------------- */
+  const addDsItem = () => set('directSupplyItems', [...(form.directSupplyItems || []), {
+    id: crypto.randomUUID(), name: '', quantity: 1, projectedValue: 0, closingValue: 0,
+    supplier: '', supplierPct: 0, supplierFreight: 0, supplierInvoice: '',
+  } as DirectSupplyOrderItem]);
+  const updateDsItem = (id: string, field: keyof DirectSupplyOrderItem, value: any) => {
+    set('directSupplyItems', (form.directSupplyItems || []).map(i => i.id === id ? { ...i, [field]: value } : i));
+  };
+  const removeDsItem = (id: string) => set('directSupplyItems', (form.directSupplyItems || []).filter(i => i.id !== id));
 
   /* ---------------- Payment methods ---------------- */
   const togglePayment = (m: PaymentMethod) => {
@@ -205,7 +230,7 @@ export function OrderModal({ open, onClose, order, onSave, nextOS, prefill }: Pr
       isRMA: !!form.isRMA,
       cancelled: !!form.cancelled,
       observations: form.observations || '',
-      initialProductCost: form.initialProductCost || 0,
+      initialProductCost: derivedInitialProductCost,
       finalProductCost: derivedFinalProductCost,
       boletoCost: form.boletoCost || 0,
       giftCost: form.giftCost || 0,
@@ -219,6 +244,7 @@ export function OrderModal({ open, onClose, order, onSave, nextOS, prefill }: Pr
       salesTaxValue: computed.salesTaxValue,
       salesValue: form.salesValue || 0,
       items: form.items || [],
+      directSupplyItems: form.directSupplyItems || [],
       freight: form.freight || [],
       paymentDate: form.paymentDate || '',
       penaltyValue: form.penaltyValue || 0,
@@ -230,17 +256,46 @@ export function OrderModal({ open, onClose, order, onSave, nextOS, prefill }: Pr
 
     const onApiError = (err: unknown) => toast.error(getApiError(err));
 
+    const pagamentoPayload = {
+      data_pagamento: o.paymentDate || undefined,
+      multa: o.penaltyValue ? String(o.penaltyValue) : undefined,
+      juros: o.interestValue ? String(o.interestValue) : undefined,
+      forma_pagamento_efetiva: o.paymentMethod
+        ? (FORMA_PAGAMENTO_MAP[o.paymentMethod as string] ?? o.paymentMethod)
+        : undefined,
+      num_parcelas_efetivas: o.paymentInstallments > 1 ? o.paymentInstallments : undefined,
+      plano_parcelas: o.paymentInstallmentPlan?.length ? o.paymentInstallmentPlan : undefined,
+    };
+
+    const custoPayload = {
+      custo_produto_inicial: String(derivedInitialProductCost),
+      custo_produto_final: String(derivedFinalProductCost),
+      custo_boleto: String(o.boletoCost || 0),
+      brinde: String(o.giftCost || 0),
+      pct_custo_credito: String(o.creditCostPercent || 0),
+      custo_credito: String(computed.creditCostValue),
+      pct_custo_debito: String(o.debitCostPercent || 0),
+      custo_debito: String(computed.debitCostValue),
+      pct_imposto_compra: String(o.purchaseTaxPercent || 0),
+      imposto_compra: String(computed.purchaseTaxValue),
+      pct_imposto_venda: String(o.salesTaxPercent || 0),
+      imposto_venda: String(computed.salesTaxValue),
+    };
+
     if (isEdit) {
       const payload: UpdatePedidoPayload = {
         data_pedido: o.orderDate,
         data_entrega: o.deliveryDate,
         valor_venda: String(o.salesValue),
+        parcelas: o.installments || undefined,
         observacao: o.observations || undefined,
         numero_nf: o.invoice || undefined,
         nota_fiscal_fornecedor: o.invoiceSupplier || undefined,
         numero_oc: o.ocAfPed || undefined,
         is_direct_billing: o.directBilling,
         fornecedor_principal: o.supplier || undefined,
+        custo: custoPayload,
+        ...pagamentoPayload,
       };
       const statusChanged = order && o.status !== order.status;
       const sellerId = VENDEDOR_IDS[(o.seller as string) ?? ''] ?? '';
@@ -253,6 +308,17 @@ export function OrderModal({ open, onClose, order, onSave, nextOS, prefill }: Pr
         const orig = origItems.find(orig => orig.id === i.id);
         return orig && orig.status !== i.status;
       });
+
+      // ── DS item diff ────────────────────────────────────────────────────────
+      const origDsItems = order?.directSupplyItems ?? [];
+      const dsChanged = origDsItems.length !== o.directSupplyItems.length
+        || o.directSupplyItems.some(curr => {
+          const orig = origDsItems.find(x => x.id === curr.id);
+          return !orig || orig.name !== curr.name || orig.quantity !== curr.quantity
+            || orig.projectedValue !== curr.projectedValue || orig.closingValue !== curr.closingValue
+            || orig.supplier !== curr.supplier || orig.supplierPct !== curr.supplierPct
+            || orig.supplierFreight !== curr.supplierFreight || orig.supplierInvoice !== curr.supplierInvoice;
+        });
 
       // ── Frete diff ──────────────────────────────────────────────────────────
       const origFretes = order?.freight ?? [];
@@ -283,6 +349,20 @@ export function OrderModal({ open, onClose, order, onSave, nextOS, prefill }: Pr
           ...toUpdateStatus.map(item =>
             apiClient.patch(`/pedidos/${pedidoId}/items/${item.id}/status`, { new_status: item.status })
           ),
+          ...(dsChanged ? origDsItems.map(item => apiClient.delete(`/pedidos/${pedidoId}/items/${item.id}`)) : []),
+          ...(dsChanged ? o.directSupplyItems.map(item => apiClient.post(`/pedidos/${pedidoId}/items`, {
+            id_vendedor: sellerId,
+            descricao: item.name || 'Item',
+            quantidade: item.quantity || 1,
+            valor_projetado: Math.max(0.01, item.projectedValue),
+            valor_compra: item.closingValue > 0 ? item.closingValue : undefined,
+            status: 'To Buy',
+            is_direct_supply: true,
+            porcentagem_fornecedor: item.supplierPct != null ? String(item.supplierPct) : undefined,
+            frete_fornecedor: item.supplierFreight != null ? String(item.supplierFreight) : undefined,
+            nota_fiscal_item: item.supplierInvoice || undefined,
+            fornecedor: item.supplier || undefined,
+          })) : []),
           ...fretesToAdd.map(f => apiClient.post(`/pedidos/${pedidoId}/fretes`, freteBody(f))),
           ...fretesToDelete.map(f => apiClient.delete(`/pedidos/${pedidoId}/fretes/${f.id}`)),
           ...fretesToUpdate.map(f => apiClient.put(`/pedidos/${pedidoId}/fretes/${f.id}`, freteBody(f))),
@@ -290,6 +370,7 @@ export function OrderModal({ open, onClose, order, onSave, nextOS, prefill }: Pr
       };
       const finish = async () => {
         const hasChanges = toAdd.length || toDelete.length || toUpdateStatus.length
+          || dsChanged
           || fretesToAdd.length || fretesToDelete.length || fretesToUpdate.length;
         if (hasChanges) {
           try { await syncItems(o.id); } catch (err) { toast.error(getApiError(err)); }
@@ -319,6 +400,7 @@ export function OrderModal({ open, onClose, order, onSave, nextOS, prefill }: Pr
         data_entrega: o.deliveryDate,
         status: o.status as PedidoStatus,
         valor_venda: String(o.salesValue),
+        parcelas: o.installments || undefined,
         observacao: o.observations || undefined,
         numero_nf: o.invoice || undefined,
         nota_fiscal_fornecedor: o.invoiceSupplier || undefined,
@@ -326,6 +408,8 @@ export function OrderModal({ open, onClose, order, onSave, nextOS, prefill }: Pr
         is_direct_billing: o.directBilling,
         fornecedor_principal: o.supplier || undefined,
         formas_pagamento: o.paymentMethods.map(m => ({ forma: FORMA_PAGAMENTO_MAP[m] ?? m })),
+        custo: custoPayload,
+        ...pagamentoPayload,
       };
       createOrder(payload, {
         onSuccess: async (data) => {
@@ -351,6 +435,31 @@ export function OrderModal({ open, onClose, order, onSave, nextOS, prefill }: Pr
               toast.error(getApiError(err));
             }
           }
+          let savedDsItems = o.directSupplyItems;
+          if (o.directSupplyItems.length > 0) {
+            try {
+              const results = await Promise.all(
+                o.directSupplyItems.map(item =>
+                  apiClient.post(`/pedidos/${newId}/items`, {
+                    id_vendedor: vendedorId,
+                    descricao: item.name || 'Item',
+                    quantidade: item.quantity || 1,
+                    valor_projetado: Math.max(0.01, item.projectedValue),
+                    valor_compra: item.closingValue > 0 ? item.closingValue : undefined,
+                    status: 'To Buy',
+                    is_direct_supply: true,
+                    porcentagem_fornecedor: item.supplierPct != null ? String(item.supplierPct) : undefined,
+                    frete_fornecedor: item.supplierFreight != null ? String(item.supplierFreight) : undefined,
+                    nota_fiscal_item: item.supplierInvoice || undefined,
+                    fornecedor: item.supplier || undefined,
+                  }).then(r => r.data)
+                )
+              );
+              savedDsItems = results.map((r, i) => ({ ...o.directSupplyItems[i], id: r.id }));
+            } catch (err) {
+              toast.error(getApiError(err));
+            }
+          }
           if (o.freight.length > 0) {
             try {
               await Promise.all(
@@ -366,7 +475,7 @@ export function OrderModal({ open, onClose, order, onSave, nextOS, prefill }: Pr
           }
           qc.invalidateQueries({ queryKey: orderKeys.lists() });
           toast.success('Pedido criado com sucesso');
-          onSave({ ...o, id: newId, items: savedItems });
+          onSave({ ...o, id: newId, items: savedItems, directSupplyItems: savedDsItems });
           onClose();
         },
         onError: onApiError,
@@ -510,18 +619,6 @@ export function OrderModal({ open, onClose, order, onSave, nextOS, prefill }: Pr
                 <span className="text-sm font-medium">Faturamento Direto?</span>
               </label>
             </div>
-            {form.directBilling && (
-              <>
-                <div>
-                  <Label>Fornecedor</Label>
-                  <Input className="bg-white border-border" value={form.supplier || ''} onChange={e => set('supplier', e.target.value)} onKeyDown={handleEnterBlur} />
-                </div>
-                <div>
-                  <Label>NF Fornecedor</Label>
-                  <Input className="bg-white border-border" value={form.invoiceSupplier || ''} onChange={e => set('invoiceSupplier', e.target.value)} onKeyDown={handleEnterBlur} placeholder="Número da NF do fornecedor" />
-                </div>
-              </>
-            )}
           </div>
 
           {/* Payment methods */}
@@ -557,9 +654,12 @@ export function OrderModal({ open, onClose, order, onSave, nextOS, prefill }: Pr
         <section className="border rounded-lg p-4">
           <h3 className="text-sm font-bold text-secondary uppercase tracking-wide mb-3">Financeiro</h3>
           <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-            {renderCurrencyInput('initialProductCost', 'Custo Inicial Produto')}
             <div>
-              <Label>Custo Final Produto <span className="text-xs text-muted-foreground">(soma das compras)</span></Label>
+              <Label>Custo Inicial Produto <span className="text-xs text-muted-foreground">(Σ projetado × qtd)</span></Label>
+              <Input readOnly value={toBRL(derivedInitialProductCost)} className="bg-muted border-border font-semibold" />
+            </div>
+            <div>
+              <Label>Custo Final Produto <span className="text-xs text-muted-foreground">(Σ compra × qtd)</span></Label>
               <Input readOnly value={toBRL(derivedFinalProductCost)} className="bg-muted border-border font-semibold" />
             </div>
             {renderCurrencyInput('boletoCost', 'Custo Boleto')}
@@ -568,6 +668,12 @@ export function OrderModal({ open, onClose, order, onSave, nextOS, prefill }: Pr
               <Input readOnly value={toBRL(derivedFreightTotal)} className="bg-muted border-border font-semibold" />
             </div>
             {renderCurrencyInput('giftCost', 'Brinde')}
+            {form.directBilling && (
+              <div>
+                <Label>Custo Fornecimento Direto <span className="text-xs text-muted-foreground">(auto)</span></Label>
+                <Input readOnly value={toBRL(directSupplyCost)} className="bg-muted border-border font-semibold" />
+              </div>
+            )}
           </div>
 
           {/* Bidirectional %↔R$ rows */}
@@ -618,6 +724,91 @@ export function OrderModal({ open, onClose, order, onSave, nextOS, prefill }: Pr
             />
           </div>
         </section>
+
+        {/* ============== 2b. ITENS DE FORNECIMENTO DIRETO ============== */}
+        {form.directBilling && (
+          <section className="border border-amber-300 rounded-lg p-4 bg-amber-50/30">
+            <div className="flex justify-between items-center mb-3">
+              <h3 className="text-sm font-bold text-secondary uppercase tracking-wide">Itens de Fornecimento Direto</h3>
+              <Button size="sm" onClick={addDsItem} className="bg-secondary hover:bg-secondary/90">
+                <Plus className="h-4 w-4 mr-1" /> Adicionar Item
+              </Button>
+            </div>
+            <div className="space-y-2">
+              {dsItems.map(item => {
+                const lineProj = (item.projectedValue || 0) * (item.quantity || 0);
+                const lineFinal = (item.closingValue || 0) * (item.quantity || 0);
+                const lineDiff = lineFinal - lineProj;
+                const supplierProfit = lineDiff * (item.supplierPct || 0) / 100;
+                const internalProfit = lineDiff - supplierProfit;
+                return (
+                  <div key={item.id} className="border rounded-md p-2 bg-white space-y-2">
+                    <div className="grid gap-2 items-start grid-cols-12">
+                      <div className="col-span-4">
+                        <Input placeholder="Nome" className="bg-white border-border"
+                          value={item.name || ''} onChange={e => updateDsItem(item.id, 'name', e.target.value)} onKeyDown={handleEnterBlur} />
+                        <span className="text-[10px] text-muted-foreground">Nome</span>
+                      </div>
+                      <div className="col-span-1">
+                        <Input type="number" min={1} className="bg-white border-border"
+                          value={item.quantity} onChange={e => updateDsItem(item.id, 'quantity', parseInt(e.target.value) || 1)} onKeyDown={handleEnterBlur} />
+                        <span className="text-[10px] text-muted-foreground">Qtd</span>
+                      </div>
+                      <div className="col-span-2">
+                        <Input type="number" step="0.01" className="bg-white border-border"
+                          value={item.projectedValue || ''} onChange={e => updateDsItem(item.id, 'projectedValue', parseFloat(e.target.value) || 0)} onKeyDown={handleEnterBlur} />
+                        <span className="text-[10px] text-muted-foreground">Val. Projetado</span>
+                      </div>
+                      <div className="col-span-2">
+                        <Input type="number" step="0.01" className="bg-white border-border"
+                          value={item.closingValue || ''} onChange={e => updateDsItem(item.id, 'closingValue', parseFloat(e.target.value) || 0)} onKeyDown={handleEnterBlur} />
+                        <span className="text-[10px] text-muted-foreground">Val. Venda</span>
+                      </div>
+                      <div className="col-span-2">
+                        <Input className="bg-white border-border"
+                          value={item.supplier || ''} onChange={e => updateDsItem(item.id, 'supplier', e.target.value)} onKeyDown={handleEnterBlur} />
+                        <span className="text-[10px] text-muted-foreground">Fornecedor</span>
+                      </div>
+                      <div className="col-span-1 flex items-start justify-center pt-1">
+                        <Button variant="ghost" size="icon" onClick={() => removeDsItem(item.id)}>
+                          <Trash2 className="h-4 w-4 text-destructive" />
+                        </Button>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-5 gap-2">
+                      <div>
+                        <Input type="number" step="0.01" min={0} max={100} className="bg-white border-border"
+                          value={item.supplierPct || ''} onChange={e => updateDsItem(item.id, 'supplierPct', parseFloat(e.target.value) || 0)} onKeyDown={handleEnterBlur} />
+                        <span className="text-[10px] text-muted-foreground">% Fornecedor</span>
+                      </div>
+                      <div>
+                        <Input readOnly className="bg-muted border-border font-semibold" value={toBRL(supplierProfit)} />
+                        <span className="text-[10px] text-muted-foreground">Lucro Fornecedor</span>
+                      </div>
+                      <div>
+                        <Input type="number" step="0.01" className="bg-white border-border"
+                          value={item.supplierFreight || ''} onChange={e => updateDsItem(item.id, 'supplierFreight', parseFloat(e.target.value) || 0)} onKeyDown={handleEnterBlur} />
+                        <span className="text-[10px] text-muted-foreground">Frete Fornecedor</span>
+                      </div>
+                      <div>
+                        <Input readOnly className="bg-muted border-border font-semibold" value={toBRL(internalProfit)} />
+                        <span className="text-[10px] text-muted-foreground">Lucro Interno</span>
+                      </div>
+                      <div>
+                        <Input className="bg-white border-border"
+                          value={item.supplierInvoice || ''} onChange={e => updateDsItem(item.id, 'supplierInvoice', e.target.value)} onKeyDown={handleEnterBlur} />
+                        <span className="text-[10px] text-muted-foreground">NF Fornecedor</span>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+              {dsItems.length === 0 && (
+                <p className="text-sm text-muted-foreground text-center py-4">Nenhum item de fornecimento direto adicionado</p>
+              )}
+            </div>
+          </section>
+        )}
 
         {/* ============== 3. ITENS ============== */}
         <section className="border rounded-lg p-4">
@@ -727,6 +918,10 @@ export function OrderModal({ open, onClose, order, onSave, nextOS, prefill }: Pr
             <div>
               <Label>Valor de Venda</Label>
               <Input readOnly value={toBRL(form.salesValue || 0)} className="bg-muted border-border font-semibold" />
+            </div>
+            <div>
+              <Label>Custo Parcial <span className="text-xs text-muted-foreground">(custo inicial)</span></Label>
+              <Input readOnly value={toBRL(partialCost)} className="bg-muted border-border font-semibold" />
             </div>
             <div>
               <Label>Custo Final</Label>

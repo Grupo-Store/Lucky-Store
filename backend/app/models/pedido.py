@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime, timezone
 from sqlalchemy import Column, String, Boolean, Integer, Date, DateTime, Text, Numeric, ForeignKey  # type: ignore[import]
-from sqlalchemy.dialects.postgresql import UUID  # type: ignore[import]
+from sqlalchemy.dialects.postgresql import UUID, JSONB  # type: ignore[import]
 from sqlalchemy.orm import relationship
 from app.database import Base
 
@@ -31,6 +31,13 @@ class Pedido(Base):
     observacao = Column(Text, nullable=True)
     fornecedor_principal = Column(Text, nullable=True)
     nota_fiscal_fornecedor = Column(String(50), nullable=True)
+
+    data_pagamento = Column(Date, nullable=True)
+    multa = Column(Numeric(12, 2), nullable=True)
+    juros = Column(Numeric(12, 2), nullable=True)
+    forma_pagamento_efetiva = Column(String(50), nullable=True)
+    num_parcelas_efetivas = Column(Integer, nullable=True)
+    plano_parcelas = Column(JSONB, nullable=True)
 
     created_by = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)

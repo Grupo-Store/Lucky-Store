@@ -6,14 +6,16 @@ import { emptyPhases } from '@/store/QuoteStore';
 
 // ─── Mocks ───────────────────────────────────────────────────────────────────
 
-const { mockCreateQuote, mockUpdateQuote } = vi.hoisted(() => ({
+const { mockCreateQuote, mockUpdateQuote, mockUpdateQuotePhase } = vi.hoisted(() => ({
   mockCreateQuote: vi.fn(),
   mockUpdateQuote: vi.fn(),
+  mockUpdateQuotePhase: vi.fn(),
 }));
 
 vi.mock('@/api/hooks/useQuotes', () => ({
   useCreateQuote: () => ({ mutate: mockCreateQuote, isPending: false }),
   useUpdateQuote: () => ({ mutate: mockUpdateQuote, isPending: false }),
+  useUpdateQuotePhase: () => ({ mutate: mockUpdateQuotePhase, isPending: false }),
 }));
 
 vi.mock('sonner', () => ({
@@ -21,7 +23,10 @@ vi.mock('sonner', () => ({
 }));
 
 vi.mock('@/api/client', () => ({
-  apiClient: {},
+  apiClient: {
+    delete: vi.fn().mockResolvedValue({}),
+    post: vi.fn().mockResolvedValue({ data: {} }),
+  },
   getApiError: (e: unknown) => String(e),
 }));
 
@@ -35,12 +40,14 @@ const existingQuote: Quote = {
   cnpj: '12.345.678/0001-99',
   requestNumber: 'REQ-001',
   requestDate: '2026-05-01',
+  b2bCompany: '',
   company: 'Lucky Store',
   directBilling: false,
   supplier: '',
   seller: 'Alcides',
   value: 5000,
   items: [],
+  directSupplyItems: [],
   observations: '',
   phases: emptyPhases(),
   taxLucky: 5,

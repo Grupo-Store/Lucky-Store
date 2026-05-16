@@ -11,6 +11,7 @@ import { ArrowLeft, Search, ChevronRight, FilePlus, FileText } from 'lucide-reac
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { Quote, QUOTE_PHASE_LABELS, QUOTE_PHASE_COLORS } from '@/store/QuoteStore';
+import type { DirectSupplyOrderItem } from '@/store/OrderStore';
 import { apiClient } from '@/api/client';
 import { LOJA_IDS, VENDEDOR_IDS } from '@/api/storeConfig';
 import type { CotacaoResponse, PaginatedResponse } from '@/types/api';
@@ -43,7 +44,9 @@ export interface OrderPrefill {
   company: Quote['company'];
   seller: Quote['seller'];
   salesValue: number;
+  directBilling: boolean;
   items: { id: string; name: string; quantity: number; projectedValue: number }[];
+  directSupplyItems: DirectSupplyOrderItem[];
 }
 
 interface Props {
@@ -69,10 +72,10 @@ export function AddOrderChooser({ open, onClose, onChooseNew, onChooseFromQuote 
     isError: quotesError,
     refetch: quotesRefetch,
   } = useQuery<PaginatedResponse<CotacaoResponse>>({
-    queryKey: ['cotacoes-chooser', quotePage],
+    queryKey: ['quotes', 'list', 'chooser', quotePage],
     queryFn: () =>
       apiClient.get('/quotes', {
-        params: { page: quotePage, limit: 20, sort_by: 'data_cotacao', sort_dir: 'desc' },
+        params: { page: quotePage, limit: 20, sort_by: 'data_cotacao', sort_dir: 'desc', eligible_for_order: true },
       }).then(r => r.data),
     enabled: open && step === 'pick-quote',
     staleTime: 60_000,
@@ -119,19 +122,32 @@ export function AddOrderChooser({ open, onClose, onChooseNew, onChooseFromQuote 
   const confirmFromQuote = () => {
     if (!picked) return;
     const chosen = (picked.itens ?? []).filter(i => selectedItemIds.has(i.id));
+    const regularItems = chosen.filter(i => !i.is_direct_supply);
+    const dsItems = chosen.filter(i => i.is_direct_supply);
+    const hasDirect = picked.itens?.some(i => i.is_direct_supply) ?? false;
     const prefill: OrderPrefill = {
       customer: (picked.b2b_company?.trim()) ? picked.b2b_company : picked.cliente,
       cnpj: picked.cnpj_cliente ?? '',
       company: (LOJA_BY_ID[picked.id_loja] ?? '') as Quote['company'],
       seller: (VENDEDOR_BY_ID[picked.id_vendedor] ?? '') as Quote['seller'],
       salesValue: parseFloat(picked.valor_total ?? '0') || 0,
-      items: chosen.map(i => ({
+      directBilling: hasDirect,
+      items: regularItems.map(i => ({
         id: crypto.randomUUID(),
         name: i.descricao,
         quantity: i.quantidade,
-        projectedValue: i.valor_fechamento
-          ? parseFloat(i.valor_fechamento)
-          : parseFloat(i.valor_unitario) || 0,
+        projectedValue: parseFloat(i.valor_unitario) || 0,
+      })),
+      directSupplyItems: dsItems.map(i => ({
+        id: crypto.randomUUID(),
+        name: i.descricao,
+        quantity: i.quantidade,
+        projectedValue: parseFloat(i.valor_unitario) || 0,
+        closingValue: i.valor_fechamento ? parseFloat(i.valor_fechamento) : parseFloat(i.valor_unitario) || 0,
+        supplier: i.fornecedor || '',
+        supplierPct: parseFloat(i.porcentagem_fornecedor ?? '0') || 0,
+        supplierFreight: parseFloat(i.frete_fornecedor ?? '0') || 0,
+        supplierInvoice: '',
       })),
     };
     onChooseFromQuote(prefill);
@@ -151,7 +167,7 @@ export function AddOrderChooser({ open, onClose, onChooseNew, onChooseFromQuote 
             )}
             {step === 'choose' && 'Adicionar Pedido'}
             {step === 'pick-quote' && 'Selecionar Cotação'}
-            {step === 'pick-items' && `Selecionar Itens — ${picked?.cliente}`}
+            {step === 'pick-items' && `Selecionar Itens — ${picked?.b2b_company?.trim() || picked?.cliente}`}
           </DialogTitle>
         </DialogHeader>
 
@@ -222,7 +238,7 @@ export function AddOrderChooser({ open, onClose, onChooseNew, onChooseFromQuote 
                     const phase = getCotacaoPhase(qt);
                     return (
                       <TableRow key={qt.id} className="cursor-pointer hover:bg-muted/50" onClick={() => pickQuote(qt)}>
-                        <TableCell className="font-medium">{qt.cliente}</TableCell>
+                        <TableCell className="font-medium">{qt.b2b_company?.trim() || qt.cliente}</TableCell>
                         <TableCell>{LOJA_BY_ID[qt.id_loja] || '—'}</TableCell>
                         <TableCell>{fmtDate(qt.data_cotacao)}</TableCell>
                         <TableCell>
@@ -243,7 +259,7 @@ export function AddOrderChooser({ open, onClose, onChooseNew, onChooseFromQuote 
                   {!quotesLoading && eligibleQuotes.length === 0 && (
                     <TableRow>
                       <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
-                        Nenhuma cotação encontrada nesta página.
+                        Nenhuma cotação fechada ou caída encontrada.
                       </TableCell>
                     </TableRow>
                   )}
@@ -268,7 +284,7 @@ export function AddOrderChooser({ open, onClose, onChooseNew, onChooseFromQuote 
         {step === 'pick-items' && picked && (
           <>
             <p className="text-sm text-muted-foreground">
-              Cliente: <span className="font-medium text-foreground">{picked.cliente}</span>
+              Cliente: <span className="font-medium text-foreground">{picked.b2b_company?.trim() || picked.cliente}</span>
               {' · '}CPF/CNPJ: <span className="font-medium text-foreground">{picked.cnpj_cliente || '—'}</span>
               {' · '}Empresa: <span className="font-medium text-foreground">{LOJA_BY_ID[picked.id_loja] || '—'}</span>
             </p>
@@ -279,8 +295,9 @@ export function AddOrderChooser({ open, onClose, onChooseNew, onChooseFromQuote 
                     <TableHead className="w-10"></TableHead>
                     <TableHead>Item</TableHead>
                     <TableHead>Qtd</TableHead>
-                    <TableHead className="text-right">Valor Cotação</TableHead>
-                    <TableHead className="text-right">Valor Fechamento</TableHead>
+                    <TableHead className="text-right">Val. Cotação</TableHead>
+                    <TableHead className="text-right">Val. Fechamento</TableHead>
+                    <TableHead>Tipo</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -293,11 +310,18 @@ export function AddOrderChooser({ open, onClose, onChooseNew, onChooseFromQuote 
                       <TableCell className="text-right">
                         {it.valor_fechamento ? toBRL(parseFloat(it.valor_fechamento)) : '—'}
                       </TableCell>
+                      <TableCell>
+                        {it.is_direct_supply && (
+                          <span className="px-2 py-0.5 rounded text-xs font-medium border border-amber-400 bg-amber-50 text-amber-700">
+                            Forn. Direto
+                          </span>
+                        )}
+                      </TableCell>
                     </TableRow>
                   ))}
                   {(picked.itens ?? []).length === 0 && (
                     <TableRow>
-                      <TableCell colSpan={5} className="text-center py-6 text-muted-foreground">
+                      <TableCell colSpan={6} className="text-center py-6 text-muted-foreground">
                         Esta cotação não possui itens. Você pode prosseguir mesmo assim.
                       </TableCell>
                     </TableRow>

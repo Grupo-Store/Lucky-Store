@@ -14,20 +14,7 @@ import { ptBR } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
 import { apiClient, getApiError } from '@/api/client';
 import { rmaKeys } from '@/api/hooks/useRma';
-import type { RmaResponse, RmaStatus, ItemRmaStatus } from '@/types/api';
-
-const RMA_STATUS_OPTIONS: { value: RmaStatus; label: string; color: string }[] = [
-  { value: 'Registered',  label: 'Registrado',   color: 'bg-blue-50 text-blue-700 border-blue-300' },
-  { value: 'In Analysis', label: 'Em Análise',    color: 'bg-yellow-50 text-yellow-700 border-yellow-300' },
-  { value: 'Approved',    label: 'Aprovado',      color: 'bg-green-50 text-green-700 border-green-300' },
-  { value: 'In Repair',   label: 'Em Reparo',     color: 'bg-orange-50 text-orange-700 border-orange-300' },
-  { value: 'Repaired',    label: 'Reparado',      color: 'bg-teal-50 text-teal-700 border-teal-300' },
-  { value: 'Ready',       label: 'Pronto',        color: 'bg-cyan-50 text-cyan-700 border-cyan-300' },
-  { value: 'Shipped',     label: 'Enviado',       color: 'bg-indigo-50 text-indigo-700 border-indigo-300' },
-  { value: 'Delivered',   label: 'Entregue',      color: 'bg-green-100 text-green-800 border-green-400' },
-  { value: 'Cancelled',   label: 'Cancelado',     color: 'bg-red-50 text-red-700 border-red-300' },
-  { value: 'Completed',   label: 'Concluído',     color: 'bg-purple-50 text-purple-700 border-purple-300' },
-];
+import type { RmaResponse, ItemRmaStatus } from '@/types/api';
 
 const ITEM_STATUS_OPTIONS: { value: ItemRmaStatus; label: string; color: string }[] = [
   { value: 'Not Received',          label: 'Não Recebido',          color: 'bg-slate-50 text-slate-600 border-slate-300' },
@@ -41,9 +28,6 @@ const ITEM_STATUS_OPTIONS: { value: ItemRmaStatus; label: string; color: string 
   { value: 'Out for Delivery',      label: 'Em Entrega',            color: 'bg-amber-50 text-amber-700 border-amber-300' },
   { value: 'Delivered',             label: 'Entregue',              color: 'bg-green-100 text-green-800 border-green-400' },
 ];
-
-const rmaStatusColor = (s: string) =>
-  RMA_STATUS_OPTIONS.find(o => o.value === s)?.color ?? 'bg-muted text-muted-foreground border-border';
 
 const itemStatusColor = (s: string) =>
   ITEM_STATUS_OPTIONS.find(o => o.value === s)?.color ?? 'bg-muted text-muted-foreground border-border';
@@ -72,7 +56,6 @@ interface Props {
 
 export function RmaEditModal({ open, onClose, rma }: Props) {
   const qc = useQueryClient();
-  const [localStatus, setLocalStatus] = useState<RmaStatus>('Registered');
   const [localPrazo, setLocalPrazo] = useState<string>('');
   const [prazoOpen, setPrazoOpen] = useState(false);
   const [localItems, setLocalItems] = useState<LocalItem[]>([]);
@@ -80,7 +63,6 @@ export function RmaEditModal({ open, onClose, rma }: Props) {
 
   useEffect(() => {
     if (rma && open) {
-      setLocalStatus(rma.status);
       setLocalPrazo(rma.prazo_entrega ?? '');
       setLocalItems(rma.itens.map(i => ({
         id: i.id,
@@ -100,12 +82,8 @@ export function RmaEditModal({ open, onClose, rma }: Props) {
   const handleSave = async () => {
     setSaving(true);
     try {
-      const rmaChanged = localStatus !== rma.status || localPrazo !== (rma.prazo_entrega ?? '');
-      if (rmaChanged) {
-        await apiClient.patch(`/rma/${rma.id}`, {
-          ...(localStatus !== rma.status && { status: localStatus }),
-          ...(localPrazo !== (rma.prazo_entrega ?? '') && { prazo_entrega: localPrazo || undefined }),
-        });
+      if (localPrazo !== (rma.prazo_entrega ?? '')) {
+        await apiClient.patch(`/rma/${rma.id}`, { prazo_entrega: localPrazo || undefined });
       }
 
       for (const item of localItems) {
@@ -128,8 +106,6 @@ export function RmaEditModal({ open, onClose, rma }: Props) {
     }
   };
 
-  const currentStatusColor = rmaStatusColor(localStatus);
-
   return (
     <Dialog open={open} onOpenChange={v => !v && onClose()}>
       <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto bg-card">
@@ -142,7 +118,7 @@ export function RmaEditModal({ open, onClose, rma }: Props) {
         {/* ===== Informações Gerais ===== */}
         <section className="border rounded-lg p-4">
           <h3 className="text-sm font-bold text-secondary uppercase tracking-wide mb-3">Informações Gerais</h3>
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <div>
               <Label>Nº RMA</Label>
               <Input readOnly value={rma.numero_rma} className="bg-muted border-border font-semibold" />
@@ -154,21 +130,6 @@ export function RmaEditModal({ open, onClose, rma }: Props) {
             <div>
               <Label>Data de Registro</Label>
               <Input readOnly value={fmtDate(rma.data_registro)} className="bg-muted border-border" />
-            </div>
-            <div>
-              <Label>Status</Label>
-              <Select value={localStatus} onValueChange={v => setLocalStatus(v as RmaStatus)}>
-                <SelectTrigger className={cn('border', currentStatusColor)}>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {RMA_STATUS_OPTIONS.map(opt => (
-                    <SelectItem key={opt.value} value={opt.value}>
-                      <span className={cn('px-2 py-0.5 rounded text-xs font-medium', opt.color)}>{opt.label}</span>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
             </div>
             <div>
               <Label>Prazo de Entrega</Label>

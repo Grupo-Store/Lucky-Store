@@ -14,6 +14,10 @@ class ProdutoCreate(BaseModel):
     valor_projetado: Decimal = Field(gt=0)
     valor_compra: Optional[Decimal] = None
     fornecedor: Optional[str] = None
+    is_direct_supply: bool = False
+    porcentagem_fornecedor: Optional[Decimal] = None
+    frete_fornecedor: Optional[Decimal] = None
+    nota_fiscal_item: Optional[str] = None
     data_compra: Optional[date] = None
     prazo_entrega: Optional[date] = None
     data_recebimento: Optional[date] = None
@@ -62,6 +66,10 @@ class ProdutoResponse(BaseModel):
     economia: Optional[Decimal]
     sub_compras: Optional[List[Any]] = None
     fornecedor: Optional[str]
+    is_direct_supply: bool
+    porcentagem_fornecedor: Optional[Decimal]
+    frete_fornecedor: Optional[Decimal]
+    nota_fiscal_item: Optional[str]
     data_compra: Optional[date]
     prazo_entrega: Optional[date]
     data_recebimento: Optional[date]

@@ -145,6 +145,7 @@ class PedidoService:
                 joinedload(Pedido.produtos),
                 joinedload(Pedido.formas_pagamento),
                 joinedload(Pedido.fretes),
+                joinedload(Pedido.custo),
             )
             .filter(*base_filters)
             .order_by(desc(sort_col) if sort_dir == "desc" else asc(sort_col))
@@ -189,8 +190,18 @@ class PedidoService:
             "valor_venda": str(pedido.valor_venda) if pedido.valor_venda else None,
         }
 
-        for field, value in data.model_dump(exclude_none=True).items():
+        dump = data.model_dump(exclude_none=True)
+        custo_data = dump.pop('custo', None)
+
+        for field, value in dump.items():
             setattr(pedido, field, value)
+
+        if custo_data:
+            if pedido.custo:
+                for k, v in custo_data.items():
+                    setattr(pedido.custo, k, v)
+            else:
+                db.add(CustoPedido(id_pedido=pedido.id, **custo_data))
 
         new_values = {
             "numero_os": pedido.numero_os,

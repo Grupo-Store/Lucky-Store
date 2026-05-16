@@ -7,6 +7,7 @@ from app.schemas.user import (
     ChangePasswordRequest,
     EmailCodeVerifyRequest,
     LoginResponse,
+    ResendCodeRequest,
     TOTPSetupResponse,
     TOTPVerifyRequest,
     TokenRefreshRequest,
@@ -69,6 +70,19 @@ async def login(
         status_code=status.HTTP_202_ACCEPTED,
         detail={"requires_2fa": True, "user_id": str(user.id)},
     )
+
+
+@router.post("/resend-2fa", status_code=status.HTTP_200_OK)
+async def resend_2fa(
+    payload: ResendCodeRequest,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+):
+    user = db.query(User).filter(User.email == payload.email).first()
+    if user and user.is_active:
+        code = AuthService.create_email_verification_code(db, str(user.id))
+        background_tasks.add_task(send_verification_email, user.email, user.name, code)
+    return {"detail": "Se o e-mail estiver cadastrado, um novo código foi enviado."}
 
 
 @router.post("/verify-2fa", response_model=LoginResponse)

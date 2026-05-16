@@ -16,12 +16,12 @@ import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { Company, Seller, SELLERS } from '@/store/OrderStore';
 import {
-  Quote, QuoteItem, QuotePhases, QuotePhaseKey,
+  Quote, QuoteItem, DirectSupplyQuoteItem, QuotePhases, QuotePhaseKey,
   QUOTE_PHASE_COLORS, QUOTE_PHASE_LABELS, emptyPhases,
 } from '@/store/QuoteStore';
-import { useCreateQuote, useUpdateQuote } from '@/api/hooks/useQuotes';
-import { getApiError } from '@/api/client';
-import type { CreateCotacaoPayload, UpdateCotacaoPayload } from '@/types/api';
+import { useCreateQuote, useUpdateQuote, useUpdateQuotePhase } from '@/api/hooks/useQuotes';
+import { apiClient, getApiError } from '@/api/client';
+import type { CreateCotacaoPayload, UpdateCotacaoPayload, UpdateCotacaoFasePayload } from '@/types/api';
 import { LOJA_IDS, VENDEDOR_IDS } from '@/api/storeConfig';
 
 function toBRL(v: number) { return v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }); }
@@ -40,7 +40,7 @@ const emptyQuote = (index: string): Quote => ({
   id: '', index, createdAt: Date.now(), b2bCompany: '', customer: '', cnpj: '',
   requestNumber: '', requestDate: format(new Date(), 'yyyy-MM-dd'),
   company: '', directBilling: false, supplier: '', seller: '',
-  value: 0, items: [], observations: '', phases: emptyPhases(),
+  value: 0, items: [], directSupplyItems: [], observations: '', phases: emptyPhases(),
   taxLucky: 0, taxBTech: 0,
 });
 
@@ -78,13 +78,15 @@ export function QuoteModal({ open, onClose, quote, onSave, onDelete, nextIndex }
 
   const { mutate: createQuote, isPending: isCreating } = useCreateQuote();
   const { mutate: updateQuote, isPending: isUpdating } = useUpdateQuote(quote?.id ?? '');
-  const isPending = isCreating || isUpdating;
+  const { mutate: updateQuotePhase, isPending: isUpdatingPhase } = useUpdateQuotePhase(quote?.id ?? '');
+  const isPending = isCreating || isUpdating || isUpdatingPhase;
 
   useEffect(() => {
     if (quote) {
       setForm({
         ...quote,
         items: quote.items ? quote.items.map(i => ({ ...i })) : [],
+        directSupplyItems: quote.directSupplyItems ? quote.directSupplyItems.map(i => ({ ...i })) : [],
         observations: quote.observations || '',
         phases: { ...quote.phases },
       });
@@ -100,7 +102,7 @@ export function QuoteModal({ open, onClose, quote, onSave, onDelete, nextIndex }
     setForm(prev => ({ ...prev, phases: { ...prev.phases, [key]: { ...prev.phases[key], ...patch } as QuotePhases[K] } }));
   };
 
-  /* ---------- Items ---------- */
+  /* ---------- Regular items ---------- */
   const addItem = () => set('items', [...(form.items || []), {
     id: crypto.randomUUID(), name: '', quantity: 1, quoteValue: 0, closingValue: 0, supplier: '',
   } as QuoteItem]);
@@ -109,16 +111,38 @@ export function QuoteModal({ open, onClose, quote, onSave, onDelete, nextIndex }
   };
   const removeItem = (id: string) => set('items', (form.items || []).filter(i => i.id !== id));
 
+  /* ---------- Direct supply items ---------- */
+  const addDsItem = () => set('directSupplyItems', [...(form.directSupplyItems || []), {
+    id: crypto.randomUUID(), name: '', quantity: 1, quoteValue: 0, closingValue: 0,
+    supplier: '', supplierPct: 0, supplierFreight: 0,
+  } as DirectSupplyQuoteItem]);
+  const updateDsItem = (id: string, field: keyof DirectSupplyQuoteItem, value: any) => {
+    set('directSupplyItems', (form.directSupplyItems || []).map(i => i.id === id ? { ...i, [field]: value } : i));
+  };
+  const removeDsItem = (id: string) => set('directSupplyItems', (form.directSupplyItems || []).filter(i => i.id !== id));
+
   /* ---------- Derived totals (auto-calculated) ---------- */
   const items = form.items || [];
+  const dsItems = form.directSupplyItems || [];
   const totalCost = items.reduce((s, i) => s + (i.quoteValue || 0) * (i.quantity || 0), 0);
   const totalRevenue = items.reduce((s, i) => s + (i.closingValue || 0) * (i.quantity || 0), 0);
+  const dsTotalCost = dsItems.reduce((s, i) => s + (i.quoteValue || 0) * (i.quantity || 0), 0);
+  const dsTotalRevenue = dsItems.reduce((s, i) => s + (i.closingValue || 0) * (i.quantity || 0), 0);
   const taxLucky = form.taxLucky || 0;
   const taxBTech = form.taxBTech || 0;
-  const margin = totalCost > 0 ? ((totalRevenue / totalCost) - 1) * 100 : 0;
-  const grossProfit = totalRevenue - totalCost;
-  const profitBTech = (totalRevenue * ((100 - taxBTech) / 100)) - totalCost;
-  const profitLucky = (totalRevenue * ((100 - taxLucky) / 100)) - totalCost;
+  const allCost = totalCost + dsTotalCost;
+  const allRevenue = totalRevenue + dsTotalRevenue;
+  const margin = allCost > 0 ? ((allRevenue / allCost) - 1) * 100 : 0;
+  // grossProfit = lucro interno de itens diretos + margem bruta de itens normais
+  const regularGrossProfit = totalRevenue - totalCost;
+  const dsInternalProfit = dsItems.reduce((s, i) => {
+    const lineDiff = ((i.closingValue || 0) - (i.quoteValue || 0)) * (i.quantity || 0);
+    const supplierProfit = lineDiff * (i.supplierPct || 0) / 100;
+    return s + (lineDiff - supplierProfit);
+  }, 0);
+  const grossProfit = regularGrossProfit + dsInternalProfit;
+  const profitBTech = (allRevenue * ((100 - taxBTech) / 100)) - allCost;
+  const profitLucky = (allRevenue * ((100 - taxLucky) / 100)) - allCost;
 
   // Auto-sync closed phase value to sum of all Valor Final
   useEffect(() => {
@@ -130,6 +154,18 @@ export function QuoteModal({ open, onClose, quote, onSave, onDelete, nextIndex }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [totalRevenue]);
+
+  const buildPhasePayload = (q: Quote): UpdateCotacaoFasePayload => ({
+    status_enviada: q.phases.sent.active,
+    data_envio: q.phases.sent.date || undefined,
+    status_em_fechamento: q.phases.forClosing.active,
+    data_prevista_fechamento: q.phases.forClosing.expectedDate || undefined,
+    status_fechada: q.phases.closed.active,
+    data_fechamento: q.phases.closed.date || undefined,
+    valor_fechamento: q.phases.closed.value != null ? String(q.phases.closed.value) : undefined,
+    status_caida: q.phases.dropped.active,
+    data_queda: q.phases.dropped.date || undefined,
+  });
 
   const handleSave = () => {
     const q: Quote = { ...form, id: form.id || crypto.randomUUID(), createdAt: form.createdAt || Date.now() };
@@ -143,6 +179,7 @@ export function QuoteModal({ open, onClose, quote, onSave, onDelete, nextIndex }
         cnpj_cliente: q.cnpj || undefined,
         numero_requisicao: q.requestNumber || undefined,
         b2b_company: q.b2bCompany || undefined,
+        is_direct_billing: q.directBilling,
         fornecedor: q.directBilling ? (q.supplier || undefined) : undefined,
         valor_total: String(q.value),
         pct_imposto_lucky: q.taxLucky != null ? String(q.taxLucky) : undefined,
@@ -150,10 +187,38 @@ export function QuoteModal({ open, onClose, quote, onSave, onDelete, nextIndex }
         observacao: q.observations || undefined,
       };
       updateQuote(payload, {
-        onSuccess: () => {
-          toast.success('Cotação atualizada com sucesso');
-          onSave(q);
-          onClose();
+        onSuccess: async () => {
+          try {
+            const quoteId = quote!.id;
+            const originalItems = [...(quote!.items || []), ...(quote!.directSupplyItems || [])];
+            await Promise.all(originalItems.map(i => apiClient.delete(`/quotes/${quoteId}/items/${i.id}`)));
+            const allNewItems = [
+              ...(q.items || []).map(i => ({
+                descricao: i.name,
+                quantidade: i.quantity,
+                valor_unitario: String(i.quoteValue ?? 0),
+                valor_fechamento: i.closingValue != null ? String(i.closingValue) : undefined,
+                fornecedor: i.supplier || undefined,
+              })),
+              ...(q.directSupplyItems || []).map(i => ({
+                descricao: i.name,
+                quantidade: i.quantity,
+                valor_unitario: String(i.quoteValue ?? 0),
+                valor_fechamento: i.closingValue != null ? String(i.closingValue) : undefined,
+                fornecedor: i.supplier || undefined,
+                is_direct_supply: true,
+                porcentagem_fornecedor: i.supplierPct != null ? String(i.supplierPct) : undefined,
+                frete_fornecedor: i.supplierFreight != null ? String(i.supplierFreight) : undefined,
+              })),
+            ];
+            await Promise.all(allNewItems.map(item => apiClient.post(`/quotes/${quoteId}/items`, item)));
+            updateQuotePhase(buildPhasePayload(q), {
+              onSuccess: () => { toast.success('Cotação atualizada com sucesso'); onSave(q); onClose(); },
+              onError: onApiError,
+            });
+          } catch (err) {
+            onApiError(err);
+          }
         },
         onError: onApiError,
       });
@@ -166,24 +231,45 @@ export function QuoteModal({ open, onClose, quote, onSave, onDelete, nextIndex }
         cnpj_cliente: q.cnpj || undefined,
         numero_requisicao: q.requestNumber || undefined,
         b2b_company: q.b2bCompany || undefined,
+        is_direct_billing: q.directBilling,
         fornecedor: q.directBilling ? (q.supplier || undefined) : undefined,
         valor_total: String(q.value),
         pct_imposto_lucky: q.taxLucky != null ? String(q.taxLucky) : undefined,
         pct_imposto_btech: q.taxBTech != null ? String(q.taxBTech) : undefined,
         observacao: q.observations || undefined,
-        itens: (q.items || []).map(i => ({
-          descricao: i.name,
-          quantidade: i.quantity,
-          valor_unitario: String(i.quoteValue ?? 0),
-          valor_fechamento: i.closingValue != null ? String(i.closingValue) : undefined,
-          fornecedor: i.supplier || undefined,
-        })),
+        itens: [
+          ...(q.items || []).map(i => ({
+            descricao: i.name,
+            quantidade: i.quantity,
+            valor_unitario: String(i.quoteValue ?? 0),
+            valor_fechamento: i.closingValue != null ? String(i.closingValue) : undefined,
+            fornecedor: i.supplier || undefined,
+          })),
+          ...(q.directSupplyItems || []).map(i => ({
+            descricao: i.name,
+            quantidade: i.quantity,
+            valor_unitario: String(i.quoteValue ?? 0),
+            valor_fechamento: i.closingValue != null ? String(i.closingValue) : undefined,
+            fornecedor: i.supplier || undefined,
+            is_direct_supply: true,
+            porcentagem_fornecedor: i.supplierPct != null ? String(i.supplierPct) : undefined,
+            frete_fornecedor: i.supplierFreight != null ? String(i.supplierFreight) : undefined,
+          })),
+        ],
       };
       createQuote(payload, {
         onSuccess: (data) => {
-          toast.success('Cotação criada com sucesso');
-          onSave({ ...q, id: data.id });
-          onClose();
+          const phasePayload = buildPhasePayload(q);
+          const hasPhase = q.phases.sent.active || q.phases.forClosing.active ||
+            q.phases.closed.active || q.phases.dropped.active;
+          const finish = () => { toast.success('Cotação criada com sucesso'); onSave({ ...q, id: data.id }); onClose(); };
+          if (hasPhase) {
+            apiClient.patch(`/quotes/${data.id}/phase`, phasePayload)
+              .then(finish)
+              .catch(onApiError);
+          } else {
+            finish();
+          }
         },
         onError: onApiError,
       });
@@ -296,17 +382,93 @@ export function QuoteModal({ open, onClose, quote, onSave, onDelete, nextIndex }
                 <span className="text-sm font-medium">Faturamento Direto?</span>
               </label>
             </div>
-            {form.directBilling && (
-              <div className="md:col-span-2">
-                <Label>Fornecedor</Label>
-                <Input className="bg-white border-border" value={form.supplier || ''}
-                  onChange={e => set('supplier', e.target.value)} onKeyDown={handleEnterBlur} />
-              </div>
-            )}
           </div>
         </section>
 
-        {/* ============== 2. ITENS DA COTAÇÃO ============== */}
+        {/* ============== 2. ITENS DE FORNECIMENTO DIRETO ============== */}
+        {form.directBilling && (
+          <section className="border border-amber-300 rounded-lg p-4 bg-amber-50/30">
+            <div className="flex justify-between items-center mb-3">
+              <h3 className="text-sm font-bold text-secondary uppercase tracking-wide">Itens de Fornecimento Direto</h3>
+              <Button size="sm" onClick={addDsItem} className="bg-secondary hover:bg-secondary/90">
+                <Plus className="h-4 w-4 mr-1" /> Adicionar Item
+              </Button>
+            </div>
+            <div className="space-y-2 overflow-x-auto">
+              {(form.directSupplyItems || []).map(item => {
+                const lineCost = (item.quoteValue || 0) * (item.quantity || 0);
+                const lineFinal = (item.closingValue || 0) * (item.quantity || 0);
+                const lineDiff = lineFinal - lineCost;
+                const supplierProfit = lineDiff * (item.supplierPct || 0) / 100;
+                const internalProfit = lineDiff - supplierProfit;
+                return (
+                  <div key={item.id} className="border rounded-md p-2 bg-white space-y-2">
+                    <div className="grid gap-2 items-start" style={{ gridTemplateColumns: 'repeat(16, minmax(0, 1fr))' }}>
+                      <div style={{ gridColumn: 'span 4' }}>
+                        <Input placeholder="Nome do Item" className="bg-white border-border"
+                          value={item.name || ''} onChange={e => updateDsItem(item.id, 'name', e.target.value)} onKeyDown={handleEnterBlur} />
+                        <span className="text-[10px] text-muted-foreground">Nome</span>
+                      </div>
+                      <div style={{ gridColumn: 'span 1' }}>
+                        <Input type="number" min={1} placeholder="Qtd" className="bg-white border-border"
+                          value={item.quantity} onChange={e => updateDsItem(item.id, 'quantity', parseInt(e.target.value) || 1)} onKeyDown={handleEnterBlur} />
+                        <span className="text-[10px] text-muted-foreground">Qtd</span>
+                      </div>
+                      <div style={{ gridColumn: 'span 2' }}>
+                        <CurrencyInput value={item.quoteValue || 0} onChange={n => updateDsItem(item.id, 'quoteValue', n)} />
+                        <span className="text-[10px] text-muted-foreground">Val. Cotação</span>
+                      </div>
+                      <div style={{ gridColumn: 'span 2' }}>
+                        <Input readOnly className="bg-muted border-border font-semibold" value={toBRL(lineCost)} />
+                        <span className="text-[10px] text-muted-foreground">Valor</span>
+                      </div>
+                      <div style={{ gridColumn: 'span 2' }}>
+                        <CurrencyInput value={item.closingValue || 0} onChange={n => updateDsItem(item.id, 'closingValue', n)} />
+                        <span className="text-[10px] text-muted-foreground">Val. Fechamento</span>
+                      </div>
+                      <div style={{ gridColumn: 'span 2' }}>
+                        <Input readOnly className="bg-muted border-border font-semibold" value={toBRL(lineFinal)} />
+                        <span className="text-[10px] text-muted-foreground">Valor Final</span>
+                      </div>
+                      <div style={{ gridColumn: 'span 2' }}>
+                        <Input placeholder="Fornecedor" className="bg-white border-border"
+                          value={item.supplier || ''} onChange={e => updateDsItem(item.id, 'supplier', e.target.value)} onKeyDown={handleEnterBlur} />
+                        <span className="text-[10px] text-muted-foreground">Fornecedor</span>
+                      </div>
+                      <Button variant="ghost" size="icon" style={{ gridColumn: 'span 1' }} onClick={() => removeDsItem(item.id)}>
+                        <Trash2 className="h-4 w-4 text-destructive" />
+                      </Button>
+                    </div>
+                    <div className="grid grid-cols-4 gap-2">
+                      <div>
+                        <Input type="number" step="0.01" min={0} max={100} className="bg-white border-border"
+                          value={item.supplierPct || ''} onChange={e => updateDsItem(item.id, 'supplierPct', parseFloat(e.target.value) || 0)} onKeyDown={handleEnterBlur} />
+                        <span className="text-[10px] text-muted-foreground">% Fornecedor</span>
+                      </div>
+                      <div>
+                        <Input readOnly className="bg-muted border-border font-semibold" value={toBRL(supplierProfit)} />
+                        <span className="text-[10px] text-muted-foreground">Lucro Fornecedor</span>
+                      </div>
+                      <div>
+                        <CurrencyInput value={item.supplierFreight || 0} onChange={n => updateDsItem(item.id, 'supplierFreight', n)} />
+                        <span className="text-[10px] text-muted-foreground">Frete Fornecedor</span>
+                      </div>
+                      <div>
+                        <Input readOnly className="bg-muted border-border font-semibold" value={toBRL(internalProfit)} />
+                        <span className="text-[10px] text-muted-foreground">Lucro Interno</span>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+              {(form.directSupplyItems || []).length === 0 && (
+                <p className="text-sm text-muted-foreground text-center py-4">Nenhum item de fornecimento direto adicionado</p>
+              )}
+            </div>
+          </section>
+        )}
+
+        {/* ============== 3. ITENS DA COTAÇÃO ============== */}
         <section className="border rounded-lg p-4">
           <div className="flex justify-between items-center mb-3">
             <h3 className="text-sm font-bold text-secondary uppercase tracking-wide">Itens da Cotação</h3>

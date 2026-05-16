@@ -13,6 +13,9 @@ class ItemCotacaoCreate(BaseModel):
     valor_unitario: Decimal
     valor_fechamento: Optional[Decimal] = None
     fornecedor: Optional[str] = None
+    is_direct_supply: bool = False
+    porcentagem_fornecedor: Optional[Decimal] = None
+    frete_fornecedor: Optional[Decimal] = None
 
     @field_validator("quantidade")
     @classmethod
@@ -45,6 +48,9 @@ class ItemCotacaoResponse(BaseModel):
     valor_unitario: Decimal
     valor_fechamento: Optional[Decimal]
     fornecedor: Optional[str]
+    is_direct_supply: bool
+    porcentagem_fornecedor: Optional[Decimal]
+    frete_fornecedor: Optional[Decimal]
     valor_total: Optional[Decimal] = None
     valor_total_fechamento: Optional[Decimal] = None
     created_at: datetime

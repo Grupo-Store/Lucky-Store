@@ -122,6 +122,20 @@ export interface OrderItem {
   subPurchases?: SubPurchase[];
 }
 
+export interface DirectSupplyOrderItem {
+  id: string;
+  name: string;
+  quantity: number;
+  /** Unit quote value (stored as valor_projetado in DB) */
+  projectedValue: number;
+  /** Unit closing/sale value (stored as valor_compra in DB for direct supply items) */
+  closingValue: number;
+  supplier: string;
+  supplierPct: number;
+  supplierFreight: number;
+  supplierInvoice: string;
+}
+
 /** Sum of all purchase values from sub-purchases (falls back to item.purchaseValue if none). */
 export function calcItemFinalValue(item: OrderItem): number {
   if (item.subPurchases && item.subPurchases.length > 0) {
@@ -200,6 +214,7 @@ export interface Order {
   /** Final sales value entered by user */
   salesValue: number;
   items: OrderItem[];
+  directSupplyItems: DirectSupplyOrderItem[];
   /** Freight cards for non-RMA orders */
   freight: FreightCard[];
 }
@@ -273,6 +288,15 @@ export function isOpenOrder(status: OrderStatus) {
   return OPEN_STATUSES.includes(status);
 }
 
+/** Direct supply cost = Σ(supplier profit per item) + Σ(supplier freight per item) */
+export function calcDirectSupplyCost(items?: DirectSupplyOrderItem[]): number {
+  return (items || []).reduce((s, i) => {
+    const lineDiff = (i.closingValue - i.projectedValue) * i.quantity;
+    const supplierProfit = lineDiff * (i.supplierPct || 0) / 100;
+    return s + supplierProfit + (i.supplierFreight || 0);
+  }, 0);
+}
+
 /** Final cost = sum of all monetary R$ values from the Financial Section */
 export function calcFinalCost(o: Partial<Order>): number {
   return (o.finalProductCost || 0)
@@ -282,7 +306,22 @@ export function calcFinalCost(o: Partial<Order>): number {
     + (o.creditCostValue || 0)
     + (o.debitCostValue || 0)
     + (o.purchaseTaxValue || 0)
-    + (o.salesTaxValue || 0);
+    + (o.salesTaxValue || 0)
+    + calcDirectSupplyCost(o.directSupplyItems);
+}
+
+/** Partial cost = same as Final but uses initialProductCost with purchase tax applied to it */
+export function calcPartialCost(o: Partial<Order> & { initialProductCost: number; purchaseTaxPercent: number }): number {
+  const purchaseTaxOnInitial = (o.purchaseTaxPercent || 0) * (o.initialProductCost || 0) / 100;
+  return (o.initialProductCost || 0)
+    + (o.boletoCost || 0)
+    + calcFreightTotal(o.freight)
+    + (o.giftCost || 0)
+    + (o.creditCostValue || 0)
+    + (o.debitCostValue || 0)
+    + purchaseTaxOnInitial
+    + (o.salesTaxValue || 0)
+    + calcDirectSupplyCost(o.directSupplyItems);
 }
 
 export function calcProfit(o: Partial<Order>): number {
@@ -302,7 +341,7 @@ const baseOrder = (over: Partial<Order>): Order => ({
   initialProductCost: 0, finalProductCost: 0, boletoCost: 0, giftCost: 0,
   creditCostPercent: 0, creditCostValue: 0, debitCostPercent: 0, debitCostValue: 0,
   purchaseTaxPercent: 0, purchaseTaxValue: 0, salesTaxPercent: 0, salesTaxValue: 0,
-  salesValue: 0, items: [], freight: [],
+  salesValue: 0, items: [], directSupplyItems: [], freight: [],
   ...over,
 });
 

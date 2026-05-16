@@ -2,28 +2,30 @@ from pydantic import BaseModel, field_validator
 from datetime import date, datetime
 from decimal import Decimal
 from uuid import UUID
-from typing import Optional, List
+from typing import Optional, List, Any
 from app.schemas.produto import ProdutoResponse
 
 
 VALID_STATUSES = [
-    "To Buy", "Bought", "Received", "To Invoice", "Invoiced",
+    "To Buy", "Bought", "Received", "To Invoice",
+    "Invoiced and Received", "Invoiced and Awaiting Receipt",
     "To Pack", "Ready for Delivery", "Out for Delivery",
     "Delivered", "Delayed", "Cancelled",
 ]
 
 VALID_TRANSITIONS: dict[str, list[str]] = {
-    "To Buy":              ["Bought", "Cancelled"],
-    "Bought":              ["Received", "Cancelled"],
-    "Received":            ["To Invoice", "Cancelled"],
-    "To Invoice":          ["Invoiced", "Cancelled"],
-    "Invoiced":            ["To Pack", "Cancelled"],
-    "To Pack":             ["Ready for Delivery", "Cancelled"],
-    "Ready for Delivery":  ["Out for Delivery", "Delayed", "Cancelled"],
-    "Out for Delivery":    ["Delivered", "Delayed", "Cancelled"],
-    "Delivered":           [],
-    "Delayed":             ["Out for Delivery", "Cancelled"],
-    "Cancelled":           [],
+    "To Buy":                        ["Bought", "Cancelled"],
+    "Bought":                        ["Received", "Cancelled"],
+    "Received":                      ["To Invoice", "Cancelled"],
+    "To Invoice":                    ["Invoiced and Received", "Invoiced and Awaiting Receipt", "Cancelled"],
+    "Invoiced and Received":         ["To Pack", "Cancelled"],
+    "Invoiced and Awaiting Receipt": ["Invoiced and Received", "To Pack", "Cancelled"],
+    "To Pack":                       ["Ready for Delivery", "Cancelled"],
+    "Ready for Delivery":            ["Out for Delivery", "Delayed", "Cancelled"],
+    "Out for Delivery":              ["Delivered", "Delayed", "Cancelled"],
+    "Delivered":                     [],
+    "Delayed":                       ["Out for Delivery", "Cancelled"],
+    "Cancelled":                     [],
 }
 
 
@@ -107,6 +109,12 @@ class PedidoCreate(BaseModel):
     nota_fiscal_fornecedor: Optional[str] = None
     formas_pagamento: List[FormaPagamentoIn] = []
     custo: Optional[CustoPedidoIn] = None
+    data_pagamento: Optional[date] = None
+    multa: Optional[Decimal] = None
+    juros: Optional[Decimal] = None
+    forma_pagamento_efetiva: Optional[str] = None
+    num_parcelas_efetivas: Optional[int] = None
+    plano_parcelas: Optional[List[Any]] = None
 
     @field_validator("status")
     @classmethod
@@ -132,6 +140,13 @@ class PedidoUpdate(BaseModel):
     observacao: Optional[str] = None
     fornecedor_principal: Optional[str] = None
     nota_fiscal_fornecedor: Optional[str] = None
+    custo: Optional[CustoPedidoIn] = None
+    data_pagamento: Optional[date] = None
+    multa: Optional[Decimal] = None
+    juros: Optional[Decimal] = None
+    forma_pagamento_efetiva: Optional[str] = None
+    num_parcelas_efetivas: Optional[int] = None
+    plano_parcelas: Optional[List[Any]] = None
 
 
 class StatusChangeRequest(BaseModel):
@@ -215,6 +230,13 @@ class PedidoListItemResponse(BaseModel):
     formas_pagamento: List[FormaPagamentoOut] = []
     fretes: List[FreteOut] = []
     produtos: List[ProdutoResponse] = []
+    custo: Optional[CustoPedidoOut] = None
+    data_pagamento: Optional[date] = None
+    multa: Optional[Decimal] = None
+    juros: Optional[Decimal] = None
+    forma_pagamento_efetiva: Optional[str] = None
+    num_parcelas_efetivas: Optional[int] = None
+    plano_parcelas: Optional[List[Any]] = None
 
     class Config:
         from_attributes = True

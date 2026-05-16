@@ -10,10 +10,13 @@ interface AuthContextType {
   isLoggedIn: boolean;
   email: string;
   isPending: boolean;
+  isResending: boolean;
   /** Step 1: call POST /auth/login. Returns error message or null on success. */
   login: (email: string, pass: string) => Promise<string | null>;
   /** Step 2: call POST /auth/verify-2fa. Returns error message or null on success. */
   verifyCode: (code: string) => Promise<string | null>;
+  /** Resend 2FA code: call POST /auth/resend-2fa. Returns error message or null on success. */
+  resendCode: () => Promise<string | null>;
   resetToLogin: () => void;
   logout: () => void;
 }
@@ -24,6 +27,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [stage, setStage] = useState<AuthStage>('login');
   const [email, setEmail] = useState('');
   const [isPending, setIsPending] = useState(false);
+  const [isResending, setIsResending] = useState(false);
 
   const login = async (emailInput: string, pass: string): Promise<string | null> => {
     setIsPending(true);
@@ -62,6 +66,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const resendCode = async (): Promise<string | null> => {
+    if (!email) return 'Nenhum e-mail para reenviar.';
+    setIsResending(true);
+    try {
+      await axios.post(`${BASE_URL}/auth/resend-2fa`, { email });
+      return null;
+    } catch {
+      return 'Erro ao reenviar código. Tente novamente.';
+    } finally {
+      setIsResending(false);
+    }
+  };
+
   const resetToLogin = () => {
     setStage('login');
     setEmail('');
@@ -82,8 +99,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   return (
     <AuthContext.Provider value={{
-      stage, isLoggedIn: stage === 'authed', email, isPending,
-      login, verifyCode, resetToLogin, logout,
+      stage, isLoggedIn: stage === 'authed', email, isPending, isResending,
+      login, verifyCode, resendCode, resetToLogin, logout,
     }}>
       {children}
     </AuthContext.Provider>

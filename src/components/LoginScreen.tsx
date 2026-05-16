@@ -89,7 +89,7 @@ function LoginStage() {
 
 /* -------------------- VERIFY STAGE -------------------- */
 function VerifyStage() {
-  const { email, verifyCode, resetToLogin, isPending } = useAuth();
+  const { email, verifyCode, resendCode, resetToLogin, isPending, isResending } = useAuth();
   const [code, setCode] = useState('');
   const [error, setError] = useState('');
 
@@ -98,6 +98,15 @@ function VerifyStage() {
     setError('');
     const err = await verifyCode(code);
     if (err) setError(err);
+  };
+
+  const handleResend = async () => {
+    const err = await resendCode();
+    if (err) {
+      toast.error(err);
+    } else {
+      toast.success('Novo código enviado para o seu e-mail.');
+    }
   };
 
   return (
@@ -146,7 +155,15 @@ function VerifyStage() {
       </button>
 
       <p className="text-xs text-center text-muted-foreground">
-        Não recebeu? <button type="button" onClick={() => toast.success('Novo código enviado.')} className="underline hover:text-secondary">Reenviar código</button>
+        Não recebeu?{' '}
+        <button
+          type="button"
+          onClick={handleResend}
+          disabled={isResending}
+          className="underline hover:text-secondary disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          {isResending ? 'Enviando...' : 'Reenviar código'}
+        </button>
       </p>
     </form>
   );

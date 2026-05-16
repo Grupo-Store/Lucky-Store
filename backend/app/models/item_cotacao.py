@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime, timezone
-from sqlalchemy import Column, String, Text, Integer, DateTime, ForeignKey
+from sqlalchemy import Column, String, Text, Integer, DateTime, ForeignKey, Boolean
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.types import Numeric
 from sqlalchemy.orm import relationship
@@ -23,6 +23,9 @@ class ItemCotacao(Base):
     # valor_total_fechamento é coluna gerada no DB (quantidade * valor_fechamento) — não mapeada aqui
 
     fornecedor = Column(Text, nullable=True)
+    is_direct_supply = Column(Boolean, nullable=False, default=False)
+    porcentagem_fornecedor = Column(Numeric(5, 2), nullable=True)
+    frete_fornecedor = Column(Numeric(12, 2), nullable=True)
 
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
     updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc), nullable=False)

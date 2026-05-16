@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { apiFetch } from '@/lib/api'
-import type { ProdutoApiItem } from '@/types/api'
+import type { ProdutoApiItem, CustoPedido } from '@/types/api'
 
 export interface OrderFilters {
   page: number
@@ -44,6 +44,13 @@ export interface PedidoListItem {
   formas_pagamento: { id: string; forma: string }[]
   fretes: FreteApiItem[]
   produtos: ProdutoApiItem[]
+  custo: CustoPedido | null
+  data_pagamento: string | null
+  multa: string | null
+  juros: string | null
+  forma_pagamento_efetiva: string | null
+  num_parcelas_efetivas: number | null
+  plano_parcelas: { date: string; value: number }[] | null
 }
 
 export interface PedidoListResponse {

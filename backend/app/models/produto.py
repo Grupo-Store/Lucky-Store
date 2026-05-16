@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime, timezone
 from decimal import Decimal
-from sqlalchemy import Column, String, Integer, Date, DateTime, Text, Numeric, ForeignKey, CheckConstraint  # type: ignore[import]
+from sqlalchemy import Column, String, Integer, Date, DateTime, Text, Numeric, ForeignKey, CheckConstraint, Boolean  # type: ignore[import]
 from sqlalchemy.dialects.postgresql import UUID, JSONB  # type: ignore[import]
 from sqlalchemy.orm import relationship
 from app.database import Base
@@ -31,6 +31,10 @@ class Produto(Base):
     sub_compras = Column(JSONB, nullable=True)
 
     fornecedor = Column(Text, nullable=True)
+    is_direct_supply = Column(Boolean, nullable=False, default=False)
+    porcentagem_fornecedor = Column(Numeric(5, 2), nullable=True)
+    frete_fornecedor = Column(Numeric(12, 2), nullable=True)
+    nota_fiscal_item = Column(String(100), nullable=True)
     data_compra = Column(Date, nullable=True)
     prazo_entrega = Column(Date, nullable=True)
     data_recebimento = Column(Date, nullable=True)

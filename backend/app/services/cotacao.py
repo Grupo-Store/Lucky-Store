@@ -88,6 +88,9 @@ class CotacaoService:
                 valor_unitario=item_data.valor_unitario,
                 valor_fechamento=item_data.valor_fechamento,
                 fornecedor=item_data.fornecedor,
+                is_direct_supply=item_data.is_direct_supply,
+                porcentagem_fornecedor=item_data.porcentagem_fornecedor,
+                frete_fornecedor=item_data.frete_fornecedor,
             ))
 
         _audit(db, AuditAction.CREATE, cotacao.id, current_user_id,
@@ -109,7 +112,9 @@ class CotacaoService:
         data_fim: Optional[str] = None,
         sort_by: str = "data_cotacao",
         sort_dir: str = "desc",
+        eligible_for_order: Optional[bool] = None,
     ):
+        from sqlalchemy import or_
         q = db.query(Cotacao).filter(Cotacao.deleted_at.is_(None))
 
         if id_loja:
@@ -122,6 +127,8 @@ class CotacaoService:
             q = q.filter(Cotacao.data_cotacao >= data_inicio)
         if data_fim:
             q = q.filter(Cotacao.data_cotacao <= data_fim)
+        if eligible_for_order:
+            q = q.filter(or_(Cotacao.status_fechada == True, Cotacao.status_caida == True))
 
         sort_col = getattr(Cotacao, sort_by, Cotacao.data_cotacao)
         q = q.order_by(desc(sort_col) if sort_dir == "desc" else asc(sort_col))

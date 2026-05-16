@@ -3,7 +3,7 @@
 ## Project Overview
 **Orderly Hub** is a comprehensive order management system for multi-company operations (Lucky Store, BTech, AJJ) with complete audit trail, LGPD compliance, and production-ready architecture.
 
-**Status:** Auth (9 endpoints) ✅ | Orders CRUD (6 endpoints) ✅ | Order Items (3 endpoints) ✅ | Order Costs (2 endpoints) ✅ | Order Payments (1 endpoint) ✅ | RMA API (5 endpoints) ✅ | Users management (4 endpoints) ✅ | Quotes API ✅ | Audit & LGPD (3 endpoints) ✅
+**Status:** Auth (10 endpoints) ✅ | Orders CRUD (6 endpoints) ✅ | Order Items (3 endpoints) ✅ | Order Costs (2 endpoints) ✅ | Order Payments (1 endpoint) ✅ | RMA API (5 endpoints) ✅ | Users management (4 endpoints) ✅ | Quotes API ✅ | Audit & LGPD (3 endpoints) ✅ | Dashboard KPIs ✅ | Frontend 2.4 (Sales + Dashboard integração) ✅
 
 **Team:** Rafael, Gustavo, Duda, Peu  
 **Target MVP:** 8-10 weeks  
@@ -35,9 +35,37 @@
 | 1.8 API Testing | Unit tests + perf | Unit tests | Integration tests | Swagger + E2E |
 | 2.x Frontend | Quote Modal + Sales Page | React Query + Audit Log UI | Order Modal + Status UI | API Client + RMA Modal |
 | 2.5 Compliance UI | LGPD Export backend | Audit Log component | Status History component | LGPD Deletion UI |
-| 2.6 Dashboard | KPIs backend | Goals + Projections | Financial backend | Dashboard frontend |
+| 2.6 Dashboard | 2.6.1 Dashboard Backend APIs (KPIs ✅ + Goals CRUD + Projections + breakdowns + filters) | 2.6.4 Financial Calendar frontend | 2.6.2 Financial Backend (Expenses + Calendar API) + 2.6.5 Goal Management UI | 2.6.3 Dashboard Frontend (KPI cards + charts + breakdown tables + filtering) |
 | 3.x Testing | Segurança + perf | Backend tests | Frontend tests | E2E |
 | 4.x Deploy | CI/CD | Railway PostgreSQL | Monitoring | Vercel |
+
+---
+
+## What's New in This Update (May 15, 2026)
+
+✅ **Phase 2.4 — List View Integration completo:**
+- Sales page busca pedidos, cotações e RMAs da API com React Query
+- Paginação, filtros por status/data/loja/vendedor e ordenação funcionando
+- Loading skeletons em todas as listas
+- Inline status editing: status dos pedidos editável direto na tabela, com `PATCH /pedidos/:id/status`
+- Correção do constraint `pedidos_status_check` — migration `c3d4e5f6a7b8` atualiza lista de statuses válidos no banco
+
+✅ **Phase 2.6.1 — Dashboard KPIs integrado:**
+- `GET /api/dashboard/kpis` implementado e consumido com React Query
+- KPI cards exibem dados reais do backend
+
+✅ **Novos endpoints Auth:**
+- `POST /api/auth/resend-2fa` — reenvio de código de verificação por email; botão "Reenviar código" na tela de login agora funcional
+
+✅ **Persistência de dados — Financeiro e Pagamento:**
+- Seção Financeiro: campos de custo salvos corretamente via `custo` em `PedidoUpdate`; lista de pedidos eager-load custo
+- Custo Inicial e Custo Final agora calculados automaticamente: `Σ (valor_projetado × qtd)` e `Σ (valor_compra × qtd)`
+- Seção Pagamento: 6 novos campos adicionados ao modelo `Pedido` (`data_pagamento`, `multa`, `juros`, `forma_pagamento_efetiva`, `num_parcelas_efetivas`, `plano_parcelas`); migration `d4e5f6a7b8c9` aplicada
+
+✅ **RMA — melhorias de UI:**
+- Status da tabela de RMAs exibe o status de menor prioridade dos **itens** do RMA (lógica de prioridade idêntica à dos produtos)
+- Colunas "Status" e "Pedido Origem" trocadas de posição na tabela
+- Modal de edição de RMA: campo "Status" removido de Informações Gerais (status deriva dos itens)
 
 ---
 
@@ -304,6 +332,7 @@
 - [x] POST /api/auth/2fa/setup → **Gustavo** ✅
 - [x] POST /api/auth/2fa/confirm → **Gustavo** ✅
 - [x] POST /api/auth/change-password → **Rafael** ✅
+- [x] POST /api/auth/resend-2fa → **Rafael** ✅
 - [x] GET /api/users → **Rafael** ✅
 - [x] GET /api/users/me → **Rafael** ✅
 - [x] GET /api/users/:id → **Rafael** ✅
@@ -363,11 +392,12 @@
 **Order Costs:** → **Rafael** ✅ COMPLETO
 - [x] POST /api/pedidos/:id/costs (set costs 1:1) → **Rafael** ✅
 - [x] PUT /api/pedidos/:id/costs (update costs) → **Rafael** ✅
-- [ ] Calculate financial totals and margins → **Peu**
+- [x] Calculate financial totals and margins → **Rafael** ✅ (economia = valor_venda − custo_produto_final − custo_servico)
 
 **Order Payments:** → **Rafael** ✅ COMPLETO
 - [x] POST /api/pedidos/:id/payment-methods → **Rafael** ✅
-- [ ] Track multiple payment methods per order → **Peu**
+- [x] Track multiple payment methods per order → **Rafael** ✅
+- [x] Persistir dados de pagamento efetivo (data, multa, juros, forma, parcelas, plano) → **Rafael** ✅
 
 **Business Logic Validation:** → **Rafael**
 - [x] Unique numero_nf per store (UNIQUE constraint enforced via DB) → **Rafael** ✅
@@ -582,14 +612,16 @@
 **Priority:** P0 - BLOCKER
 
 **Frontend Team Tasks:**
-- [ ] Update Sales page to fetch orders from API → **Peu**
-  - [ ] Implement filtering → **Peu**
-  - [ ] Implement pagination → **Peu**
-  - [ ] Implement sorting → **Peu**
-  - [ ] Show loading skeleton → **Peu**
-- [ ] Update Dashboard to fetch analytics from API → **Gustavo**
+- [x] Update Sales page to fetch orders from API → **Rafael** ✅
+  - [x] Implement filtering → **Rafael** ✅
+  - [x] Implement pagination → **Rafael** ✅
+  - [x] Implement sorting → **Rafael** ✅
+  - [x] Show loading skeleton → **Rafael** ✅
+- [x] Update Dashboard to fetch analytics from API → **Rafael** ✅ (KPI cards com React Query)
 - [ ] Implement real-time updates (refetch on interval) → **Gustavo**
 - [ ] Display order status history in UI → **Gustavo**
+- [x] Inline status editing na tabela de pedidos → **Rafael** ✅
+- [x] Status de RMA derivado de itens (prioridade mínima) → **Rafael** ✅
 
 **Effort:** 2 frontend devs, 2-3 days  
 **Success Criteria:**
@@ -714,31 +746,31 @@
 ## Phase 2.6: Dashboard & Financial Management (Weeks 6-7)
 
 ### 2.6.1 Dashboard Backend APIs
-**Priority:** P1 - Required for MVP
+**Priority:** P1 - Required for MVP  
+**Responsável:** → **Rafael**
 
-**Backend Team Tasks:**
-- [ ] GET /api/dashboard/kpis - Retrieve KPI metrics for period → **Rafael**
-  - [ ] Revenue (total, by company, by seller) → **Rafael**
-  - [ ] Costs (total, by category: purchase tax, sales tax, other) → **Rafael**
-  - [ ] Profit (total, by company, by seller) → **Rafael**
-  - [ ] Margin % (profit/revenue) → **Rafael**
-  - [ ] Sales count → **Rafael**
-  - [ ] Ticket average (revenue/sales, cost/sales, profit/sales) → **Rafael**
-  - [ ] Cancellation tracking (count, value lost) → **Rafael**
-  - [ ] Today's revenue → **Rafael**
-- [ ] GET /api/dashboard/goals - Retrieve sales targets for period → **Gustavo**
-- [ ] POST /api/dashboard/goals - Create/update sales target → **Gustavo**
-- [ ] DELETE /api/dashboard/goals/:key - Delete sales target → **Gustavo**
-- [ ] GET /api/dashboard/projections - Calculate daily targets → **Gustavo**
-  - [ ] Remaining business days → **Gustavo**
-  - [ ] Elapsed business days → **Gustavo**
-  - [ ] Daily average → **Gustavo**
-  - [ ] Projection for month → **Gustavo**
-  - [ ] Dynamic daily target to meet goal → **Gustavo**
-- [ ] GET /api/dashboard/breakdown-by-company - Per-company KPIs → **Rafael**
-- [ ] GET /api/dashboard/breakdown-by-seller - Per-seller KPIs → **Rafael**
-- [ ] Implement date range filtering (month or custom range) → **Rafael**
-- [ ] Filter by company (all, Lucky Store, BTech, AJJ) → **Rafael**
+- [x] GET /api/dashboard/kpis - Retrieve KPI metrics for period ✅
+  - [x] Revenue (total, by company, by seller) ✅
+  - [x] Costs (total, by category: purchase tax, sales tax, other) ✅
+  - [x] Profit (total, by company, by seller) ✅
+  - [x] Margin % (profit/revenue) ✅
+  - [x] Sales count ✅
+  - [x] Ticket average (revenue/sales, cost/sales, profit/sales) ✅
+  - [x] Cancellation tracking (count, value lost) ✅
+  - [x] Today's revenue ✅
+- [ ] GET /api/dashboard/breakdown-by-company - Per-company KPIs
+- [ ] GET /api/dashboard/breakdown-by-seller - Per-seller KPIs
+- [ ] Implement date range filtering (month or custom range)
+- [ ] Filter by company (all, Lucky Store, BTech, AJJ)
+- [ ] GET /api/dashboard/goals - Retrieve sales targets for period
+- [ ] POST /api/dashboard/goals - Create/update sales target
+- [ ] DELETE /api/dashboard/goals/:key - Delete sales target
+- [ ] GET /api/dashboard/projections - Calculate daily targets
+  - [ ] Remaining business days
+  - [ ] Elapsed business days
+  - [ ] Daily average
+  - [ ] Projection for month
+  - [ ] Dynamic daily target to meet goal
 
 **Effort:** 1 backend dev, 3-4 days  
 **Success Criteria:**
@@ -751,21 +783,21 @@
 ---
 
 ### 2.6.2 Financial Management Backend (Expenses & Penalties)
-**Priority:** P2 - Required after MVP
+**Priority:** P2 - Required after MVP  
+**Responsável:** → **Duda**
 
-**Backend Team Tasks:** → **Duda**
-- [ ] Implement Expense model (predicted vs paid) → **Duda**
-- [ ] POST /api/expenses - Create expense → **Duda**
-- [ ] PATCH /api/expenses/:id - Update expense → **Duda**
-- [ ] DELETE /api/expenses/:id - Delete expense → **Duda**
-- [ ] GET /api/expenses - List with filtering → **Duda**
-- [ ] Expense installment plan support (credit card payments) → **Duda**
-- [ ] Calculate penalty and interest on orders → **Duda**
-- [ ] GET /api/calendar/entries - Financial calendar → **Duda**
-  - [ ] Return expense entries → **Duda**
-  - [ ] Return order penalties → **Duda**
-  - [ ] Return order interest → **Duda**
-  - [ ] Return installment entries → **Duda**
+- [ ] Implement Expense model (predicted vs paid)
+- [ ] POST /api/expenses - Create expense
+- [ ] PATCH /api/expenses/:id - Update expense
+- [ ] DELETE /api/expenses/:id - Delete expense
+- [ ] GET /api/expenses - List with filtering
+- [ ] Expense installment plan support (credit card payments)
+- [ ] Calculate penalty and interest on orders
+- [ ] GET /api/calendar/entries - Financial calendar
+  - [ ] Return expense entries
+  - [ ] Return order penalties
+  - [ ] Return order interest
+  - [ ] Return installment entries
 
 **Effort:** 1 backend dev, 4-5 days  
 **Success Criteria:**
@@ -777,62 +809,57 @@
 ---
 
 ### 2.6.3 Dashboard Frontend Components
-**Priority:** P1 - Required for MVP
+**Priority:** P1 - Required for MVP  
+**Responsável:** → **Peu**
 
-**Frontend Team Tasks:**
-- [ ] Create Dashboard.tsx page (already exists, enhance) → **Duda**
-  - [ ] KPI cards layout → **Duda**
-  - [ ] Month/year selector → **Duda**
-  - [ ] Date range picker → **Duda**
-  - [ ] Company filter tabs → **Duda**
-  - [ ] View mode toggle (company vs seller) → **Duda**
-- [ ] Create KPI cards component → **Peu**
-  - [ ] Revenue card with today's total → **Peu**
-  - [ ] Profit card (with color: green if positive, red if negative) → **Peu**
-  - [ ] Margin % card → **Peu**
-  - [ ] Sales count card → **Peu**
-  - [ ] Cancellations card → **Peu**
-  - [ ] Target achievement % card → **Peu**
-  - [ ] Projection card → **Peu**
-  - [ ] Gap to target card → **Peu**
-  - [ ] Dynamic daily target card → **Peu**
-  - [ ] Average ticket cards → **Peu**
-- [ ] Create Pie chart (cost composition) → **Duda**
-  - [ ] Purchase tax → **Duda**
-  - [ ] Sales tax → **Duda**
-  - [ ] Other costs → **Duda**
-- [ ] Create Bar chart (ticket comparison) → **Duda**
-  - [ ] Ticket sale average → **Duda**
-  - [ ] Ticket cost average → **Duda**
-  - [ ] Ticket profit average → **Duda**
-- [ ] Create breakdown tables → **Peu**
-  - [ ] Per-company breakdown (all metrics) → **Peu**
-  - [ ] Per-seller breakdown (all metrics) → **Peu**
-- [ ] Implement filtering logic → **Duda**
-  - [ ] Filter by month or date range → **Duda**
-  - [ ] Filter by company → **Duda**
-  - [ ] Toggle between company/seller views → **Duda**
-- [ ] Implement goal management modal → **Peu**
-  - [ ] Display existing goals → **Peu**
-  - [ ] Add new goal → **Peu**
-  - [ ] Edit goal → **Peu**
-  - [ ] Delete goal → **Peu**
+- [ ] Create Dashboard.tsx page (already exists, enhance)
+  - [ ] KPI cards layout
+  - [ ] Month/year selector
+  - [ ] Date range picker
+  - [ ] Company filter tabs
+  - [ ] View mode toggle (company vs seller)
+- [ ] Create KPI cards component
+  - [ ] Revenue card with today's total
+  - [ ] Profit card (with color: green if positive, red if negative)
+  - [ ] Margin % card
+  - [ ] Sales count card
+  - [ ] Cancellations card
+  - [ ] Target achievement % card
+  - [ ] Projection card
+  - [ ] Gap to target card
+  - [ ] Dynamic daily target card
+  - [ ] Average ticket cards
+- [ ] Create Pie chart (cost composition)
+  - [ ] Purchase tax
+  - [ ] Sales tax
+  - [ ] Other costs
+- [ ] Create Bar chart (ticket comparison)
+  - [ ] Ticket sale average
+  - [ ] Ticket cost average
+  - [ ] Ticket profit average
+- [ ] Create breakdown tables
+  - [ ] Per-company breakdown (all metrics)
+  - [ ] Per-seller breakdown (all metrics)
+- [ ] Implement filtering logic
+  - [ ] Filter by month or date range
+  - [ ] Filter by company
+  - [ ] Toggle between company/seller views
+- [ ] Wire up React Query hooks for all dashboard data
 
-**Effort:** 2 frontend devs, 4-5 days  
+**Effort:** 1 frontend dev, 4-5 days  
 **Success Criteria:**
 - ✅ Dashboard displays all KPIs
 - ✅ Charts render correctly
 - ✅ Filtering works
-- ✅ Goal management modal working
 - ✅ Real-time updates on filter change
 - ✅ Responsive on mobile
 
 ---
 
 ### 2.6.4 Financial Calendar (Post-MVP Enhancement)
-**Priority:** P2 - Nice to have
+**Priority:** P2 - Nice to have  
+**Responsável:** → **Gustavo**
 
-**Frontend Team Tasks:**
 - [ ] Create Financial Calendar page
   - [ ] Calendar view of month
   - [ ] Color-coded entries (expense, payment, penalty, interest)
@@ -852,9 +879,9 @@
 ---
 
 ### 2.6.5 Goal Management UI
-**Priority:** P1 - Required for MVP
+**Priority:** P1 - Required for MVP  
+**Responsável:** → **Duda**
 
-**Frontend & Backend Tasks:**
 - [ ] Goals modal in Dashboard
   - [ ] Create goal for any month/year
   - [ ] Set target value (R$)
@@ -862,14 +889,14 @@
   - [ ] Save goal
   - [ ] View all goals in table
   - [ ] Delete goal
-- [ ] Store goals persistently
-- [ ] Use goals for KPI calculations
+- [ ] Store goals persistently (backend model + migration)
+- [ ] Wire goals to KPI calculations
   - [ ] % of target achieved
   - [ ] Gap to target
   - [ ] Dynamic daily target
   - [ ] Projection vs target
 
-**Effort:** 1 backend + 1 frontend dev, 2 days  
+**Effort:** 1 backend + 1 frontend dev, 2-3 days  
 **Success Criteria:**
 - ✅ Goals can be created/viewed/deleted
 - ✅ Goals affect KPI calculations
@@ -1195,8 +1222,22 @@ Any delay in Week 1-3 → Delays Week 10 launch
 - [x] **FEITO:** Modal integration (2.3) → OrderModal, QuoteModal, RmaModal chamando API ✅
 - [x] **FEITO:** Testes unitários Phase 2.3 (13 hook + 29 component = 42 unit tests) ✅
 - [x] **FEITO:** Testes E2E Phase 2.3 (5 testes Playwright — login, create order, cancel quote) ✅
-- [ ] **PRÓXIMO:** List View integration (2.4) → Peu
-- [ ] **PRÓXIMO:** Dashboard APIs (2.6.1) → Rafael + Gustavo
+- [x] **FEITO:** List View integration (2.4) → Sales page + filtros + paginação + sorting + skeletons ✅
+- [x] **FEITO:** Dashboard KPIs da API com React Query (2.6.1 parcial) ✅
+- [x] **FEITO:** POST /api/auth/resend-2fa + botão frontend funcional ✅
+- [x] **FEITO:** Persistência seção Financeiro (custo em PedidoUpdate, eager-load na listagem) ✅
+- [x] **FEITO:** Custo Inicial/Final calculados automaticamente a partir dos itens ✅
+- [x] **FEITO:** Persistência seção Pagamento (6 novos campos no banco, migration d4e5f6a7b8c9) ✅
+- [x] **FEITO:** Status inline editável na tabela de pedidos ✅
+- [x] **FEITO:** Migration c3d4e5f6a7b8 — atualiza constraint pedidos_status_check com todos os 12 statuses ✅
+- [x] **FEITO:** RMA status na tabela derivado de itens (prioridade mínima de ItemRmaStatus) ✅
+- [x] **FEITO:** Tabela RMA — coluna Pedido Origem movida para 2ª posição ✅
+- [x] **FEITO:** Modal RMA — campo Status removido de Informações Gerais ✅
+- [ ] **PRÓXIMO:** Goals API (2.6.1) + Projections → Gustavo
+- [ ] **PRÓXIMO:** Dashboard breakdown by company/seller (2.6.1) → Rafael
+- [ ] **PRÓXIMO:** Real-time refetch interval (2.4) → Gustavo
+- [ ] **PRÓXIMO:** Status history timeline UI (2.5.1) → Duda
+- [ ] **PRÓXIMO:** Merge feature/list-view-integration → develop
 
 ---
 

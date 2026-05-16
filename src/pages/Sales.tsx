@@ -4,8 +4,8 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useOrdersQuery, OrderFilters, PedidoListItem, FreteApiItem } from '@/hooks/use-orders-query';
 import { useQuotes as useQuotesAPI, useDeleteQuote } from '@/api/hooks/useQuotes';
 import { useRmas } from '@/api/hooks/useRma';
-import { useUpdateItemStatus } from '@/api/hooks/useOrders';
-import type { CotacaoResponse, CotacaoFilters, RmaFilters, RmaResponse, RmaStatus } from '@/types/api';
+import { useUpdateItemStatus, useUpdateOrderStatusInline } from '@/api/hooks/useOrders';
+import type { CotacaoResponse, CotacaoFilters, RmaFilters, RmaResponse, RmaStatus, PedidoStatus, ItemRmaStatus } from '@/types/api';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -17,13 +17,13 @@ import { ArrowUp, ArrowDown, Plus, Search, X, AlertTriangle } from 'lucide-react
 import { format, differenceInCalendarDays } from 'date-fns';
 import { cn } from '@/lib/utils';
 import {
-  useOrders, Order, OrderItem, SubPurchase, OrderStatus, ItemStatus, Company, Seller,
+  useOrders, Order, OrderItem, DirectSupplyOrderItem, SubPurchase, OrderStatus, ItemStatus, Company, Seller,
   ORDER_STATUS_COLORS, ORDER_STATUS_LABELS, ITEM_STATUS_COLORS,
   WARN_STATUSES, isOpenOrder, calcItemLatestDelivery,
-  RMA_STATUS_LABELS, RMA_STATUS_COLORS,
+  RMA_STATUS_LABELS, RMA_STATUS_COLORS, PaymentInstallment, PaymentMethod,
 } from '@/store/OrderStore';
 import {
-  useQuotes as useLocalQuotes, Quote, QuotePhaseKey, QUOTE_PHASE_LABELS, QUOTE_PHASE_COLORS,
+  useQuotes as useLocalQuotes, Quote, DirectSupplyQuoteItem, QuotePhaseKey, QUOTE_PHASE_LABELS, QUOTE_PHASE_COLORS,
   getHighestPhase, getPhaseDate, getDisplayValue, emptyPhases,
 } from '@/store/QuoteStore';
 import { LOJA_IDS, VENDEDOR_IDS, FORMA_PAGAMENTO_MAP } from '@/api/storeConfig';
@@ -89,6 +89,8 @@ function cleanStr(v: string | null | undefined): string {
 }
 
 function cotacaoToQuote(c: CotacaoResponse): Quote {
+  const allItems = c.itens ?? [];
+  const hasDirect = allItems.some(i => i.is_direct_supply);
   return {
     id: c.id,
     index: '',
@@ -99,11 +101,11 @@ function cotacaoToQuote(c: CotacaoResponse): Quote {
     requestDate: c.data_cotacao,
     b2bCompany: cleanStr(c.b2b_company),
     company: (LOJA_BY_ID[c.id_loja] ?? '') as any,
-    directBilling: !!c.fornecedor && cleanStr(c.fornecedor) !== '',
+    directBilling: c.is_direct_billing || hasDirect,
     supplier: cleanStr(c.fornecedor),
     seller: (VENDEDOR_BY_ID[c.id_vendedor] ?? '') as any,
     value: parseFloat(c.valor_total ?? '0') || 0,
-    items: (c.itens ?? []).map(i => ({
+    items: allItems.filter(i => !i.is_direct_supply).map(i => ({
       id: i.id,
       name: cleanStr(i.descricao),
       quantity: i.quantidade,
@@ -111,12 +113,26 @@ function cotacaoToQuote(c: CotacaoResponse): Quote {
       closingValue: i.valor_fechamento ? parseFloat(i.valor_fechamento) : 0,
       supplier: cleanStr(i.fornecedor),
     })),
+    directSupplyItems: allItems.filter(i => i.is_direct_supply).map(i => ({
+      id: i.id,
+      name: cleanStr(i.descricao),
+      quantity: i.quantidade,
+      quoteValue: parseFloat(i.valor_unitario) || 0,
+      closingValue: i.valor_fechamento ? parseFloat(i.valor_fechamento) : 0,
+      supplier: cleanStr(i.fornecedor),
+      supplierPct: parseFloat(i.porcentagem_fornecedor ?? '0') || 0,
+      supplierFreight: parseFloat(i.frete_fornecedor ?? '0') || 0,
+    } as DirectSupplyQuoteItem)),
     observations: cleanStr(c.observacao),
     phases: {
-      sent: { active: c.status_enviada },
-      forClosing: { active: c.status_em_fechamento },
-      closed: { active: c.status_fechada, value: parseFloat(c.valor_total ?? '0') || 0 },
-      dropped: { active: c.status_caida },
+      sent: { active: c.status_enviada, date: c.data_envio ?? undefined },
+      forClosing: { active: c.status_em_fechamento, expectedDate: c.data_prevista_fechamento ?? undefined },
+      closed: {
+        active: c.status_fechada,
+        date: c.data_fechamento ?? undefined,
+        value: c.valor_fechamento ? parseFloat(c.valor_fechamento) : (parseFloat(c.valor_total ?? '0') || 0),
+      },
+      dropped: { active: c.status_caida, date: c.data_queda ?? undefined },
     },
     taxLucky: parseFloat(c.pct_imposto_lucky ?? '0') || 0,
     taxBTech: parseFloat(c.pct_imposto_btech ?? '0') || 0,
@@ -138,6 +154,49 @@ const RMA_STATUS_OPTIONS: { value: RmaStatus; label: string; color: string }[] =
 ];
 const RMA_FULL_STATUS_LABELS: Record<string, string> = Object.fromEntries(RMA_STATUS_OPTIONS.map(o => [o.value, o.label]));
 const RMA_FULL_STATUS_COLORS: Record<string, string> = Object.fromEntries(RMA_STATUS_OPTIONS.map(o => [o.value, o.color]));
+
+const ITEM_RMA_STATUS_ORDER: ItemRmaStatus[] = [
+  'Not Received', 'Received', 'Sent for Repair', 'In Repair',
+  'Repaired Not Received', 'Repaired Received',
+  'To Pack', 'Ready for Delivery', 'Out for Delivery', 'Delivered',
+];
+
+const ITEM_RMA_STATUS_LABELS: Record<ItemRmaStatus, string> = {
+  'Not Received':          'Não Recebido',
+  'Received':              'Recebido',
+  'Sent for Repair':       'Enviado p/ Reparo',
+  'In Repair':             'Em Reparo',
+  'Repaired Not Received': 'Reparado (Não Recebido)',
+  'Repaired Received':     'Reparado e Recebido',
+  'To Pack':               'A Embalar',
+  'Ready for Delivery':    'Pronto p/ Entrega',
+  'Out for Delivery':      'Em Entrega',
+  'Delivered':             'Entregue',
+};
+
+const ITEM_RMA_STATUS_COLORS: Record<ItemRmaStatus, string> = {
+  'Not Received':          'bg-[hsl(var(--st-cancelled)/0.18)] text-[hsl(var(--st-cancelled))] border-[hsl(var(--st-cancelled)/0.5)]',
+  'Received':              'bg-[hsl(var(--st-received)/0.18)] text-[hsl(var(--st-received))] border-[hsl(var(--st-received)/0.5)]',
+  'Sent for Repair':       'bg-[hsl(var(--st-tobuy)/0.18)] text-[hsl(var(--st-tobuy))] border-[hsl(var(--st-tobuy)/0.5)]',
+  'In Repair':             'bg-[hsl(var(--st-bought)/0.18)] text-[hsl(var(--st-bought))] border-[hsl(var(--st-bought)/0.5)]',
+  'Repaired Not Received': 'bg-[hsl(var(--st-invoiced-pending)/0.18)] text-[hsl(var(--st-invoiced-pending))] border-[hsl(var(--st-invoiced-pending)/0.6)]',
+  'Repaired Received':     'bg-[hsl(var(--st-invoiced-received)/0.4)] text-[hsl(22_85%_30%)] border-[hsl(var(--st-invoiced-received))]',
+  'To Pack':               'bg-[hsl(var(--st-topack)/0.35)] text-[hsl(220_70%_30%)] border-[hsl(var(--st-topack))]',
+  'Ready for Delivery':    'bg-[hsl(var(--st-ready)/0.18)] text-[hsl(var(--st-ready))] border-[hsl(var(--st-ready)/0.6)]',
+  'Out for Delivery':      'bg-[hsl(var(--st-delivering)/0.4)] text-[hsl(140_70%_22%)] border-[hsl(var(--st-delivering))]',
+  'Delivered':             'bg-[hsl(var(--st-delivered)/0.18)] text-[hsl(var(--st-delivered))] border-[hsl(var(--st-delivered)/0.6)]',
+};
+
+function getRmaDisplayStatus(rma: RmaResponse): ItemRmaStatus | null {
+  if (!rma.itens || rma.itens.length === 0) return null;
+  let minIdx = Infinity;
+  let minStatus: ItemRmaStatus | null = null;
+  for (const item of rma.itens) {
+    const idx = ITEM_RMA_STATUS_ORDER.indexOf(item.status as ItemRmaStatus);
+    if (idx !== -1 && idx < minIdx) { minIdx = idx; minStatus = item.status as ItemRmaStatus; }
+  }
+  return minStatus;
+}
 
 function formatBRL(v: number) {
   return v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
@@ -176,14 +235,20 @@ function pedidoListToOrder(item: PedidoListItem): Order {
     isRMA: item.is_rma ?? false,
     cancelled: item.is_cancelled ?? false,
     observations: item.observacao ?? '',
-    initialProductCost: 0, finalProductCost: 0,
-    boletoCost: 0, giftCost: 0,
-    creditCostPercent: 0, creditCostValue: 0,
-    debitCostPercent: 0, debitCostValue: 0,
-    purchaseTaxPercent: 0, purchaseTaxValue: 0,
-    salesTaxPercent: 0, salesTaxValue: 0,
+    initialProductCost: parseFloat(item.custo?.custo_produto_inicial ?? '0') || 0,
+    finalProductCost:   parseFloat(item.custo?.custo_produto_final   ?? '0') || 0,
+    boletoCost:         parseFloat(item.custo?.custo_boleto           ?? '0') || 0,
+    giftCost:           parseFloat(item.custo?.brinde                 ?? '0') || 0,
+    creditCostPercent:  parseFloat(item.custo?.pct_custo_credito      ?? '0') || 0,
+    creditCostValue:    parseFloat(item.custo?.custo_credito          ?? '0') || 0,
+    debitCostPercent:   parseFloat(item.custo?.pct_custo_debito       ?? '0') || 0,
+    debitCostValue:     parseFloat(item.custo?.custo_debito           ?? '0') || 0,
+    purchaseTaxPercent: parseFloat(item.custo?.pct_imposto_compra     ?? '0') || 0,
+    purchaseTaxValue:   parseFloat(item.custo?.imposto_compra         ?? '0') || 0,
+    salesTaxPercent:    parseFloat(item.custo?.pct_imposto_venda      ?? '0') || 0,
+    salesTaxValue:      parseFloat(item.custo?.imposto_venda          ?? '0') || 0,
     salesValue: item.valor_venda ?? 0,
-    items: (item.produtos ?? []).map(p => ({
+    items: (item.produtos ?? []).filter(p => !p.is_direct_supply).map(p => ({
       id: p.id,
       name: p.descricao,
       quantity: p.quantidade,
@@ -191,12 +256,29 @@ function pedidoListToOrder(item: PedidoListItem): Order {
       projectedValue: parseFloat(String(p.valor_projetado)) || 0,
       purchaseValue: parseFloat(String(p.valor_compra ?? '0')) || 0,
     })),
+    directSupplyItems: (item.produtos ?? []).filter(p => p.is_direct_supply).map(p => ({
+      id: p.id,
+      name: p.descricao,
+      quantity: p.quantidade,
+      projectedValue: parseFloat(String(p.valor_projetado)) || 0,
+      closingValue: parseFloat(String(p.valor_compra ?? '0')) || 0,
+      supplier: p.fornecedor ?? '',
+      supplierPct: parseFloat(String(p.porcentagem_fornecedor ?? '0')) || 0,
+      supplierFreight: parseFloat(String(p.frete_fornecedor ?? '0')) || 0,
+      supplierInvoice: p.nota_fiscal_item ?? '',
+    } as DirectSupplyOrderItem)),
     freight: (item.fretes ?? []).map((f: FreteApiItem) => ({
       id: f.id,
       deliveryPerson: f.entregador ?? '',
       value: parseFloat(String(f.valor)) || 0,
       deliveryDate: f.data_frete ?? undefined,
     })),
+    paymentDate: item.data_pagamento ?? '',
+    penaltyValue: parseFloat(String(item.multa ?? '0')) || 0,
+    interestValue: parseFloat(String(item.juros ?? '0')) || 0,
+    paymentMethod: (Object.entries(FORMA_PAGAMENTO_MAP).find(([, v]) => v === item.forma_pagamento_efetiva)?.[0] ?? '') as PaymentMethod | '',
+    paymentInstallments: item.num_parcelas_efetivas ?? 1,
+    paymentInstallmentPlan: (item.plano_parcelas ?? []) as PaymentInstallment[],
   };
 }
 
@@ -266,8 +348,9 @@ export default function Sales() {
   );
   const { data: prodOrdersData } = useOrdersQuery(prodApiFilters, { enabled: tab === 'products' });
 
-  /* ---------- Item status update hook ---------- */
+  /* ---------- Item / Order status update hooks ---------- */
   const { mutate: updateItemStatusApi } = useUpdateItemStatus();
+  const { mutate: updateOrderStatusInline } = useUpdateOrderStatusInline();
 
   const displayedOrders = useMemo<PedidoListItem[]>(() => {
     if (orderView === 'rma') return [];
@@ -373,7 +456,7 @@ export default function Sales() {
       o => !o.is_rma && (prodView === 'all' || isOpenOrder(o.status as OrderStatus))
     );
     const list = sourceOrders
-      .flatMap(o => (o.produtos ?? []).map(p => ({
+      .flatMap(o => (o.produtos ?? []).filter(p => !p.is_direct_supply).map(p => ({
         id: p.id,
         name: p.descricao,
         quantity: p.quantidade,
@@ -571,7 +654,7 @@ export default function Sales() {
                         return (
                           <TableRow key={qt.id} className="cursor-pointer hover:bg-muted/50"
                             onClick={() => { setEditQuote(cotacaoToQuote(qt)); setQuoteModalOpen(true); }}>
-                            <TableCell className="font-medium">{qt.cliente}</TableCell>
+                            <TableCell className="font-medium">{qt.b2b_company?.trim() || qt.cliente}</TableCell>
                             <TableCell>{fmtDate(qt.data_cotacao)}</TableCell>
                             <TableCell>{qt.numero_requisicao || '—'}</TableCell>
                             <TableCell>{LOJA_BY_ID[qt.id_loja] || '—'}</TableCell>
@@ -757,11 +840,11 @@ export default function Sales() {
                         <TableHeader>
                           <TableRow className="bg-secondary/10">
                             <TableHead>Nº RMA</TableHead>
-                            <TableHead>Status</TableHead>
+                            <TableHead>Pedido Origem</TableHead>
                             <TableHead>Data Registro</TableHead>
                             <TableHead>Prazo Entrega</TableHead>
                             <TableHead>Itens</TableHead>
-                            <TableHead>Pedido Origem</TableHead>
+                            <TableHead>Status</TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody>
@@ -780,16 +863,19 @@ export default function Sales() {
                               onClick={() => { setEditingRma(rma); setRmaEditModalOpen(true); }}
                             >
                               <TableCell className="font-medium">{rma.numero_rma}</TableCell>
-                              <TableCell>
-                                <span className={cn('px-2 py-0.5 rounded text-xs font-semibold border', RMA_FULL_STATUS_COLORS[rma.status] ?? '')}>
-                                  {RMA_FULL_STATUS_LABELS[rma.status] ?? rma.status}
-                                </span>
+                              <TableCell className="text-muted-foreground text-sm">
+                                {rma.numero_os_origem ?? rma.id_pedido_origem}
                               </TableCell>
                               <TableCell>{fmtDate(rma.data_registro)}</TableCell>
                               <TableCell>{fmtDate(rma.prazo_entrega ?? undefined)}</TableCell>
                               <TableCell>{rma.itens?.length ?? 0}</TableCell>
-                              <TableCell className="text-muted-foreground text-sm">
-                                {rma.numero_os_origem ?? rma.id_pedido_origem}
+                              <TableCell>
+                                {(() => {
+                                  const s = getRmaDisplayStatus(rma);
+                                  return s
+                                    ? <span className={cn('px-2 py-0.5 rounded text-xs font-semibold border', ITEM_RMA_STATUS_COLORS[s])}>{ITEM_RMA_STATUS_LABELS[s]}</span>
+                                    : <span className="text-muted-foreground text-xs">—</span>;
+                                })()}
                               </TableCell>
                             </TableRow>
                           ))}
@@ -866,15 +952,29 @@ export default function Sales() {
                                 <TableCell>{item.nome_loja || '—'}</TableCell>
                                 <TableCell>{item.nome_vendedor || '—'}</TableCell>
                                 <TableCell>{fmtDate(item.data_entrega)}</TableCell>
-                                <TableCell>
-                                  {(() => {
-                                    const s = getOrderDisplayStatus(item);
-                                    return s ? (
-                                      <span className={cn('px-2 py-0.5 rounded text-xs font-semibold border', ITEM_STATUS_COLORS[s] ?? '')}>
-                                        {ITEM_STATUS_LABELS[s]}
-                                      </span>
-                                    ) : <span className="text-muted-foreground text-xs">—</span>;
-                                  })()}
+                                <TableCell onClick={e => e.stopPropagation()}>
+                                  <Select
+                                    value={item.status}
+                                    onValueChange={v =>
+                                      updateOrderStatusInline({ id: item.id, new_status: v as PedidoStatus })
+                                    }
+                                  >
+                                    <SelectTrigger className={cn(
+                                      'w-44 h-7 text-xs font-semibold border py-0',
+                                      ORDER_STATUS_COLORS[item.status as OrderStatus] ?? 'bg-muted',
+                                    )}>
+                                      <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      {ALL_STATUSES.map(s => (
+                                        <SelectItem key={s} value={s}>
+                                          <span className={cn('px-2 py-0.5 rounded text-xs font-medium', ORDER_STATUS_COLORS[s])}>
+                                            {ORDER_STATUS_LABELS[s]}
+                                          </span>
+                                        </SelectItem>
+                                      ))}
+                                    </SelectContent>
+                                  </Select>
                                 </TableCell>
                                 <TableCell className="text-right font-semibold">
                                   {item.is_rma || item.valor_venda == null

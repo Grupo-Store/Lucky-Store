@@ -44,7 +44,8 @@ export type PedidoStatus =
   | 'Bought'
   | 'Received'
   | 'To Invoice'
-  | 'Invoiced'
+  | 'Invoiced and Received'
+  | 'Invoiced and Awaiting Receipt'
   | 'To Pack'
   | 'Ready for Delivery'
   | 'Out for Delivery'
@@ -63,12 +64,16 @@ export interface CustoPedido {
   custo_produto_inicial: string | null;
   custo_produto_final: string | null;
   custo_servico: string | null;
+  brinde: string | null;
+  custo_boleto: string | null;
   pct_imposto_compra: string | null;
   imposto_compra: string | null;
   pct_imposto_venda: string | null;
   imposto_venda: string | null;
   pct_custo_credito: string | null;
   custo_credito: string | null;
+  pct_custo_debito: string | null;
+  custo_debito: string | null;
 }
 
 export interface PedidoResponse {
@@ -108,6 +113,7 @@ export interface CreatePedidoPayload {
   data_entrega: string;
   status: PedidoStatus;
   valor_venda?: string;
+  parcelas?: number;
   observacao?: string;
   numero_nf?: string;
   nota_fiscal_fornecedor?: string;
@@ -116,6 +122,12 @@ export interface CreatePedidoPayload {
   fornecedor_principal?: string;
   formas_pagamento?: { forma: string }[];
   custo?: Partial<Omit<CustoPedido, 'id' | 'id_pedido'>>;
+  data_pagamento?: string;
+  multa?: string;
+  juros?: string;
+  forma_pagamento_efetiva?: string;
+  num_parcelas_efetivas?: number;
+  plano_parcelas?: { date: string; value: number }[];
 }
 
 export type UpdatePedidoPayload = Partial<Omit<CreatePedidoPayload, 'id_loja' | 'id_vendedor' | 'nome_cliente' | 'status' | 'formas_pagamento'>>;
@@ -161,6 +173,10 @@ export interface ProdutoApiItem {
   data_compra: string | null;
   data_recebimento: string | null;
   fornecedor: string | null;
+  is_direct_supply: boolean;
+  porcentagem_fornecedor: string | null;
+  frete_fornecedor: string | null;
+  nota_fiscal_item: string | null;
   sub_compras: SubCompraApiItem[] | null;
 }
 
@@ -176,6 +192,9 @@ export interface ItemCotacao {
   valor_fechamento: string | null;
   valor_total_fechamento: string | null;
   fornecedor: string | null;
+  is_direct_supply: boolean;
+  porcentagem_fornecedor: string | null;
+  frete_fornecedor: string | null;
 }
 
 export interface CotacaoResponse {
@@ -188,15 +207,21 @@ export interface CotacaoResponse {
   data_cotacao: string;
   data_validade: string | null;
   b2b_company: string | null;
+  is_direct_billing: boolean;
   fornecedor: string | null;
   valor_total: string | null;
   pct_imposto_lucky: string | null;
   pct_imposto_btech: string | null;
   observacao: string | null;
   status_enviada: boolean;
+  data_envio: string | null;
   status_em_fechamento: boolean;
+  data_prevista_fechamento: string | null;
   status_fechada: boolean;
+  data_fechamento: string | null;
+  valor_fechamento: string | null;
   status_caida: boolean;
+  data_queda: string | null;
   itens: ItemCotacao[];
   created_by: string;
   created_at: string;
@@ -212,6 +237,7 @@ export interface CreateCotacaoPayload {
   numero_requisicao?: string;
   data_validade?: string;
   b2b_company?: string;
+  is_direct_billing?: boolean;
   fornecedor?: string;
   valor_total?: string;
   pct_imposto_lucky?: string;
@@ -223,6 +249,9 @@ export interface CreateCotacaoPayload {
     valor_unitario: string;
     valor_fechamento?: string;
     fornecedor?: string;
+    is_direct_supply?: boolean;
+    porcentagem_fornecedor?: string;
+    frete_fornecedor?: string;
   }[];
 }
 
@@ -234,7 +263,10 @@ export interface UpdateCotacaoFasePayload {
   status_em_fechamento?: boolean;
   data_prevista_fechamento?: string;
   status_fechada?: boolean;
+  data_fechamento?: string;
+  valor_fechamento?: string;
   status_caida?: boolean;
+  data_queda?: string;
 }
 
 export interface CotacaoFilters {
