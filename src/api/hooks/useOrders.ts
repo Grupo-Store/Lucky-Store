@@ -7,6 +7,7 @@ import type {
   UpdatePedidoPayload,
   PedidoFilters,
   PedidoStatus,
+  OrderHistoryResponse,
 } from '../../types/api';
 
 // ─── Query Keys ───────────────────────────────────────────────────────────────
@@ -17,6 +18,7 @@ export const orderKeys = {
   list: (filters: PedidoFilters) => [...orderKeys.lists(), filters] as const,
   details: () => [...orderKeys.all, 'detail'] as const,
   detail: (id: string) => [...orderKeys.details(), id] as const,
+  history: (id: string) => [...orderKeys.all, 'history', id] as const,
 };
 
 // ─── Queries ──────────────────────────────────────────────────────────────────
@@ -28,6 +30,16 @@ export function useOrders(filters: PedidoFilters = {}) {
     queryFn: () =>
       apiClient.get('/pedidos', { params: filters }).then((r) => r.data),
     staleTime: 30_000,
+  });
+}
+
+/** Busca o histórico de status de um pedido. Só executa quando enabled=true. */
+export function useOrderHistory(pedidoId: string, enabled: boolean) {
+  return useQuery<OrderHistoryResponse>({
+    queryKey: orderKeys.history(pedidoId),
+    queryFn: () => apiClient.get(`/pedidos/${pedidoId}/history`).then((r) => r.data),
+    enabled: enabled && !!pedidoId,
+    staleTime: 60_000,
   });
 }
 

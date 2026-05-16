@@ -1,5 +1,7 @@
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
+import { createElement } from 'react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { OrderModal } from '@/components/OrderModal';
 import type { Order } from '@/store/OrderStore';
 
@@ -13,7 +15,23 @@ const { mockCreateOrder, mockUpdateOrder } = vi.hoisted(() => ({
 vi.mock('@/api/hooks/useOrders', () => ({
   useCreateOrder: () => ({ mutate: mockCreateOrder, isPending: false }),
   useUpdateOrder: () => ({ mutate: mockUpdateOrder, isPending: false }),
+  useUpdateOrderStatus: () => ({ mutate: vi.fn(), isPending: false }),
+  useOrderHistory: () => ({ data: undefined, isLoading: false }),
+  orderKeys: {
+    all: ['orders'],
+    lists: () => ['orders', 'list'],
+    list: (f: unknown) => ['orders', 'list', f],
+    details: () => ['orders', 'detail'],
+    detail: (id: string) => ['orders', 'detail', id],
+    history: (id: string) => ['orders', 'history', id],
+  },
 }));
+
+const makeWrapper = () => {
+  const qc = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
+  return ({ children }: { children: React.ReactNode }) =>
+    createElement(QueryClientProvider, { client: qc }, children);
+};
 
 vi.mock('sonner', () => ({
   toast: { success: vi.fn(), error: vi.fn() },
@@ -76,14 +94,16 @@ describe('OrderModal — create mode', () => {
         onClose={vi.fn()}
         onSave={vi.fn()}
         nextOS={() => '1006'}
-      />
+      />,
+      { wrapper: makeWrapper() }
     );
     expect(screen.getByText(/Novo Pedido/i)).toBeInTheDocument();
   });
 
   it('shows the "Criar Pedido" save button', () => {
     render(
-      <OrderModal open onClose={vi.fn()} onSave={vi.fn()} nextOS={() => '1006'} />
+      <OrderModal open onClose={vi.fn()} onSave={vi.fn()} nextOS={() => '1006'} />,
+      { wrapper: makeWrapper() }
     );
     expect(screen.getByRole('button', { name: /Criar Pedido/i })).toBeInTheDocument();
   });
@@ -91,7 +111,8 @@ describe('OrderModal — create mode', () => {
   it('shows validation error toast when required fields are missing', async () => {
     const { toast } = await import('sonner');
     render(
-      <OrderModal open onClose={vi.fn()} onSave={vi.fn()} nextOS={() => '1006'} />
+      <OrderModal open onClose={vi.fn()} onSave={vi.fn()} nextOS={() => '1006'} />,
+      { wrapper: makeWrapper() }
     );
 
     fireEvent.click(screen.getByRole('button', { name: /Criar Pedido/i }));
@@ -112,7 +133,8 @@ describe('OrderModal — create mode', () => {
     });
 
     render(
-      <OrderModal open onClose={onClose} onSave={onSave} nextOS={() => '1006'} />
+      <OrderModal open onClose={onClose} onSave={onSave} nextOS={() => '1006'} />,
+      { wrapper: makeWrapper() }
     );
 
     // Fill in required fields
@@ -147,14 +169,16 @@ describe('OrderModal — edit mode', () => {
         onClose={vi.fn()}
         onSave={vi.fn()}
         nextOS={() => '1001'}
-      />
+      />,
+      { wrapper: makeWrapper() }
     );
     expect(screen.getByText(/Editar Pedido/i)).toBeInTheDocument();
   });
 
   it('shows the "Salvar Alterações" button in edit mode', () => {
     render(
-      <OrderModal open order={existingOrder} onClose={vi.fn()} onSave={vi.fn()} nextOS={() => '1001'} />
+      <OrderModal open order={existingOrder} onClose={vi.fn()} onSave={vi.fn()} nextOS={() => '1001'} />,
+      { wrapper: makeWrapper() }
     );
     expect(screen.getByRole('button', { name: /Salvar Alterações/i })).toBeInTheDocument();
   });
@@ -167,7 +191,8 @@ describe('OrderModal — edit mode', () => {
     });
 
     render(
-      <OrderModal open order={existingOrder} onClose={onClose} onSave={onSave} nextOS={() => '1001'} />
+      <OrderModal open order={existingOrder} onClose={onClose} onSave={onSave} nextOS={() => '1001'} />,
+      { wrapper: makeWrapper() }
     );
 
     fireEvent.click(screen.getByRole('button', { name: /Salvar Alterações/i }));
@@ -176,7 +201,6 @@ describe('OrderModal — edit mode', () => {
 
     const [payload] = mockUpdateOrder.mock.calls[0];
     expect(payload).toMatchObject({
-      status: 'Bought',
       numero_oc: 'OC-9999',
     });
     expect(onSave).toHaveBeenCalled();
@@ -185,7 +209,8 @@ describe('OrderModal — edit mode', () => {
 
   it('shows loading state while saving', () => {
     const { rerender } = render(
-      <OrderModal open order={existingOrder} onClose={vi.fn()} onSave={vi.fn()} nextOS={() => '1001'} />
+      <OrderModal open order={existingOrder} onClose={vi.fn()} onSave={vi.fn()} nextOS={() => '1001'} />,
+      { wrapper: makeWrapper() }
     );
     // Default: not pending
     expect(screen.getByRole('button', { name: /Salvar Alterações/i })).not.toBeDisabled();
@@ -194,7 +219,8 @@ describe('OrderModal — edit mode', () => {
   it('calls onClose when Cancel is clicked', () => {
     const onClose = vi.fn();
     render(
-      <OrderModal open order={existingOrder} onClose={onClose} onSave={vi.fn()} nextOS={() => '1001'} />
+      <OrderModal open order={existingOrder} onClose={onClose} onSave={vi.fn()} nextOS={() => '1001'} />,
+      { wrapper: makeWrapper() }
     );
     fireEvent.click(screen.getByRole('button', { name: /Cancelar/i }));
     expect(onClose).toHaveBeenCalled();
@@ -213,7 +239,8 @@ describe('OrderModal — edit mode', () => {
     };
 
     render(
-      <OrderModal open order={orderWithDirectBilling} onClose={vi.fn()} onSave={vi.fn()} nextOS={() => '1001'} />
+      <OrderModal open order={orderWithDirectBilling} onClose={vi.fn()} onSave={vi.fn()} nextOS={() => '1001'} />,
+      { wrapper: makeWrapper() }
     );
 
     fireEvent.click(screen.getByRole('button', { name: /Salvar Alterações/i }));

@@ -10,11 +10,19 @@ export interface PaginatedResponse<T> {
 
 export interface StatusHistoryEntry {
   id: string;
+  entity_type: string;
+  entity_id: string;
   old_status: string | null;
   new_status: string;
   changed_by: string;
   changed_at: string;
   reason: string | null;
+}
+
+export interface OrderHistoryResponse {
+  order_id: string;
+  status_history: StatusHistoryEntry[];
+  audit_logs: unknown[];
 }
 
 // ─── Auth ─────────────────────────────────────────────────────────────────────

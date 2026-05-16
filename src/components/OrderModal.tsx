@@ -22,6 +22,7 @@ import {
   calcFinalCost, calcPartialCost, calcDirectSupplyCost, calcProfit, calcFreightTotal,
 } from '@/store/OrderStore';
 import type { OrderPrefill } from '@/components/AddOrderChooser';
+import { StatusTimeline } from '@/components/StatusTimeline';
 import { useCreateOrder, useUpdateOrder, useUpdateOrderStatus, orderKeys } from '@/api/hooks/useOrders';
 import { useQueryClient } from '@tanstack/react-query';
 import { apiClient, getApiError } from '@/api/client';
@@ -934,6 +935,11 @@ export function OrderModal({ open, onClose, order, onSave, nextOS, prefill }: Pr
             </div>
           </div>
         </section>
+
+        {/* ============== 6. HISTÓRICO DE STATUS ============== */}
+        {isEdit && order?.id && (
+          <StatusTimeline pedidoId={order.id} />
+        )}
 
         {/* ============== FOOTER ============== */}
         <div className="flex justify-end gap-2 print:hidden">
