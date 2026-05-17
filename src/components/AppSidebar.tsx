@@ -1,4 +1,4 @@
-import { ShoppingCart, LayoutDashboard, LogOut, Wallet, Settings } from 'lucide-react';
+import { ShoppingCart, LayoutDashboard, LogOut, Wallet, Settings, UserCircle } from 'lucide-react';
 import { NavLink } from '@/components/NavLink';
 import { useAuth } from '@/store/AuthStore';
 import {
@@ -12,6 +12,7 @@ const navItems = [
   { title: 'Financeiro', url: '/financial', icon: Wallet },
   { title: 'Dashboard', url: '/dashboard', icon: LayoutDashboard },
   { title: 'Admin', url: '/admin', icon: Settings },
+  { title: 'Minha Conta', url: '/account', icon: UserCircle },
 ];
 
 export function AppSidebar() {

@@ -15,6 +15,7 @@ import Sales from "@/pages/Sales";
 import Financial from "@/pages/Financial";
 import Dashboard from "@/pages/Dashboard";
 import Admin from "@/pages/Admin";
+import Account from "@/pages/Account";
 import NotFound from "./pages/NotFound.tsx";
 
 const queryClient = new QueryClient({
@@ -47,6 +48,7 @@ function AuthGate() {
               <Route path="/financial" element={<Financial />} />
               <Route path="/dashboard" element={<Dashboard />} />
               <Route path="/admin" element={<Admin />} />
+              <Route path="/account" element={<Account />} />
             </Route>
             <Route path="*" element={<NotFound />} />
           </Routes>
