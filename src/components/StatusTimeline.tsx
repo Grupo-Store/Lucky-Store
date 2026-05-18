@@ -6,6 +6,8 @@ import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useOrderHistory, useItemHistory } from '@/api/hooks/useOrders';
 import { useQuoteHistory } from '@/api/hooks/useQuotes';
+import { useRmaHistory } from '@/api/hooks/useRma';
+import { useUserName } from '@/api/hooks/useUsers';
 import { ORDER_STATUS_LABELS } from '@/store/OrderStore';
 import type { StatusHistoryEntry } from '@/types/api';
 
@@ -27,6 +29,7 @@ function TimelineEntry({
   creationLabel: string;
 }) {
   const isCreation = entry.old_status === null;
+  const userName = useUserName(entry.changed_by);
 
   return (
     <div className="flex gap-3">
@@ -49,7 +52,7 @@ function TimelineEntry({
         <div className="text-xs text-muted-foreground mt-0.5">
           {formatDateTime(entry.changed_at)}
           <span className="mx-1">·</span>
-          <span>por {entry.changed_by.slice(0, 8)}</span>
+          <span>por {userName}</span>
         </div>
         {entry.reason && (
           <p className="text-xs italic text-muted-foreground mt-1">{entry.reason}</p>
@@ -131,6 +134,40 @@ export function ItemStatusTimeline({ pedidoId, itemId }: ItemTimelineProps) {
       {entries.map((entry, i) => (
         <TimelineEntry key={entry.id} entry={entry} isLast={i === entries.length - 1}
           labels={ITEM_STATUS_LABELS} creationLabel="Item adicionado" />
+      ))}
+    </TimelineShell>
+  );
+}
+
+// ─── Variant: RMA ────────────────────────────────────────────────────────────
+
+const RMA_STATUS_LABELS: Record<string, string> = {
+  Registered: 'Registrado',
+  'In Analysis': 'Em Análise',
+  Approved: 'Aprovado',
+  'In Repair': 'Em Reparo',
+  Repaired: 'Reparado',
+  Ready: 'Pronto',
+  Shipped: 'Enviado',
+  Delivered: 'Entregue',
+  Cancelled: 'Cancelado',
+  Completed: 'Concluído',
+};
+
+interface RmaTimelineProps {
+  rmaId: string;
+}
+
+export function RmaStatusTimeline({ rmaId }: RmaTimelineProps) {
+  const [open, setOpen] = useState(false);
+  const { data, isLoading } = useRmaHistory(rmaId, open);
+  const entries = data?.status_history ? [...data.status_history].reverse() : [];
+
+  return (
+    <TimelineShell open={open} onToggle={() => setOpen(v => !v)} isLoading={isLoading}>
+      {entries.map((entry, i) => (
+        <TimelineEntry key={entry.id} entry={entry} isLast={i === entries.length - 1}
+          labels={RMA_STATUS_LABELS} creationLabel="RMA registrado" />
       ))}
     </TimelineShell>
   );

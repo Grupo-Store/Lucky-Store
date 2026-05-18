@@ -13,6 +13,7 @@ import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
 import { apiClient, getApiError } from '@/api/client';
+import { RmaStatusTimeline } from '@/components/StatusTimeline';
 import { rmaKeys } from '@/api/hooks/useRma';
 import type { RmaResponse, ItemRmaStatus } from '@/types/api';
 
@@ -97,6 +98,7 @@ export function RmaEditModal({ open, onClose, rma }: Props) {
       }
 
       qc.invalidateQueries({ queryKey: rmaKeys.lists() });
+      qc.invalidateQueries({ queryKey: rmaKeys.history(rma.id) });
       toast.success('RMA atualizado com sucesso!');
       onClose();
     } catch (err) {
@@ -205,6 +207,8 @@ export function RmaEditModal({ open, onClose, rma }: Props) {
             ))}
           </div>
         </section>
+
+        <RmaStatusTimeline rmaId={rma.id} />
 
         <div className="flex justify-end gap-2">
           <Button variant="outline" onClick={onClose}>Cancelar</Button>

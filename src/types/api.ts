@@ -299,6 +299,7 @@ export interface CotacaoFilters {
   data_fim?: string;
   sort_by?: string;
   sort_dir?: 'asc' | 'desc';
+  numero_requisicao?: string;
 }
 
 export interface ConversaoResponse {
@@ -385,4 +386,11 @@ export interface RmaFilters {
   data_fim?: string;
   sort_by?: string;
   sort_dir?: 'asc' | 'desc';
+  numero_rma?: string;
+}
+
+export interface RmaHistoryResponse {
+  rma_id: string;
+  status_history: StatusHistoryEntry[];
+  audit_logs: unknown[];
 }

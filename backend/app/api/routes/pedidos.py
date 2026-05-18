@@ -57,6 +57,7 @@ def list_pedidos(
     data_fim: Optional[str] = Query(default=None, description="YYYY-MM-DD"),
     sort_by: str = Query(default="data_pedido"),
     sort_dir: str = Query(default="desc", pattern="^(asc|desc)$"),
+    numero_os: Optional[str] = Query(default=None),
     db: Session = Depends(get_db),
     _: User = Depends(get_current_user_dep),
 ):
@@ -65,6 +66,7 @@ def list_pedidos(
         status=status_filter, id_loja=id_loja, id_vendedor=id_vendedor,
         data_inicio=data_inicio, data_fim=data_fim,
         sort_by=sort_by, sort_dir=sort_dir,
+        numero_os=numero_os,
     )
     items_out = [
         PedidoListItemResponse(

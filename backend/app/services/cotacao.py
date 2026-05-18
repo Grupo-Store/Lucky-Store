@@ -135,6 +135,7 @@ class CotacaoService:
         sort_by: str = "data_cotacao",
         sort_dir: str = "desc",
         eligible_for_order: Optional[bool] = None,
+        numero_requisicao: Optional[str] = None,
     ):
         from sqlalchemy import or_
         q = db.query(Cotacao).filter(Cotacao.deleted_at.is_(None))
@@ -145,6 +146,8 @@ class CotacaoService:
             q = q.filter(Cotacao.id_vendedor == id_vendedor)
         if cliente:
             q = q.filter(Cotacao.cliente.ilike(f"%{cliente}%"))
+        if numero_requisicao:
+            q = q.filter(Cotacao.numero_requisicao.ilike(f"%{numero_requisicao}%"))
         if data_inicio:
             q = q.filter(Cotacao.data_cotacao >= data_inicio)
         if data_fim:
