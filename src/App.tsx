@@ -14,6 +14,7 @@ import { AppLayout } from "@/components/AppLayout";
 import Sales from "@/pages/Sales";
 import Financial from "@/pages/Financial";
 import Dashboard from "@/pages/Dashboard";
+import Admin from "@/pages/Admin";
 import NotFound from "./pages/NotFound.tsx";
 
 const queryClient = new QueryClient({
@@ -45,6 +46,7 @@ function AuthGate() {
               <Route path="/" element={<Sales />} />
               <Route path="/financial" element={<Financial />} />
               <Route path="/dashboard" element={<Dashboard />} />
+              <Route path="/admin" element={<Admin />} />
             </Route>
             <Route path="*" element={<NotFound />} />
           </Routes>

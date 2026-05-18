@@ -120,6 +120,7 @@ class PedidoService:
         data_fim: Optional[str] = None,
         sort_by: str = "data_pedido",
         sort_dir: str = "desc",
+        numero_os: Optional[str] = None,
     ):
         base_filters = [Pedido.deleted_at.is_(None)]
         if status:
@@ -132,6 +133,8 @@ class PedidoService:
             base_filters.append(Pedido.data_pedido >= data_inicio)
         if data_fim:
             base_filters.append(Pedido.data_pedido <= data_fim)
+        if numero_os:
+            base_filters.append(Pedido.numero_os.ilike(f"%{numero_os}%"))
 
         total = db.query(Pedido).filter(*base_filters).count()
 

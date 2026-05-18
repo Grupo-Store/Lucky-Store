@@ -25,6 +25,54 @@ def _audit(db: Session, action: AuditAction, entity_id, changed_by: UUID,
     ))
 
 
+_ITEM_STATUS_LEVEL = {
+    ItemRmaStatus.NOT_RECEIVED: 0,
+    ItemRmaStatus.RECEIVED: 1,
+    ItemRmaStatus.SENT_FOR_REPAIR: 2,
+    ItemRmaStatus.IN_REPAIR: 3,
+    ItemRmaStatus.REPAIRED_NOT_RECEIVED: 4,
+    ItemRmaStatus.REPAIRED_RECEIVED: 5,
+    ItemRmaStatus.TO_PACK: 6,
+    ItemRmaStatus.READY_FOR_DELIVERY: 7,
+    ItemRmaStatus.OUT_FOR_DELIVERY: 8,
+    ItemRmaStatus.DELIVERED: 9,
+}
+
+_RMA_STATUS_LEVEL = {
+    RmaStatus.REGISTERED: 0,
+    RmaStatus.IN_ANALYSIS: 1,
+    RmaStatus.APPROVED: 2,
+    RmaStatus.IN_REPAIR: 3,
+    RmaStatus.REPAIRED: 4,
+    RmaStatus.READY: 5,
+    RmaStatus.SHIPPED: 6,
+    RmaStatus.DELIVERED: 7,
+    RmaStatus.COMPLETED: 8,
+    RmaStatus.CANCELLED: 9,
+}
+
+
+def _derive_rma_status_from_items(items: list) -> RmaStatus | None:
+    """Returns the RMA status implied by the current item statuses, or None."""
+    if not items:
+        return None
+    levels = [_ITEM_STATUS_LEVEL[i.status] for i in items]
+    min_level = min(levels)
+    max_level = max(levels)
+
+    if min_level >= _ITEM_STATUS_LEVEL[ItemRmaStatus.DELIVERED]:
+        return RmaStatus.DELIVERED
+    if min_level >= _ITEM_STATUS_LEVEL[ItemRmaStatus.OUT_FOR_DELIVERY]:
+        return RmaStatus.SHIPPED
+    if min_level >= _ITEM_STATUS_LEVEL[ItemRmaStatus.READY_FOR_DELIVERY]:
+        return RmaStatus.READY
+    if min_level >= _ITEM_STATUS_LEVEL[ItemRmaStatus.REPAIRED_RECEIVED]:
+        return RmaStatus.REPAIRED
+    if max_level >= _ITEM_STATUS_LEVEL[ItemRmaStatus.IN_REPAIR]:
+        return RmaStatus.IN_REPAIR
+    return None
+
+
 def _generate_numero_rma(db: Session, numero_os: str, id_pedido: UUID) -> str:
     import re
     os_num = re.sub(r'^OS[-\s]?', '', numero_os, flags=re.IGNORECASE).strip('-').strip()
@@ -108,6 +156,7 @@ class RmaService:
         data_fim: Optional[date] = None,
         sort_by: str = "data_registro",
         sort_dir: str = "desc",
+        numero_rma: Optional[str] = None,
     ):
         q = db.query(Rma).options(joinedload(Rma.pedido)).filter(Rma.deleted_at.is_(None))
 
@@ -123,6 +172,8 @@ class RmaService:
             q = q.filter(Rma.data_registro >= data_inicio)
         if data_fim:
             q = q.filter(Rma.data_registro <= data_fim)
+        if numero_rma:
+            q = q.filter(Rma.numero_rma.ilike(f"%{numero_rma}%"))
 
         sort_col = getattr(Rma, sort_by, Rma.data_registro)
         q = q.order_by(desc(sort_col) if sort_dir == "desc" else asc(sort_col))
@@ -130,6 +181,18 @@ class RmaService:
         total = q.count()
         items = q.offset((page - 1) * limit).limit(limit).all()
         return items, total, math.ceil(total / limit) if total else 0
+
+    @staticmethod
+    def get_status_history(db: Session, rma_id: UUID):
+        return (
+            db.query(StatusHistory)
+            .filter(
+                StatusHistory.entity_type == EntityType.RMA,
+                StatusHistory.entity_id == rma_id,
+            )
+            .order_by(StatusHistory.changed_at.asc())
+            .all()
+        )
 
     @staticmethod
     def update(db: Session, rma_id: UUID, data: RmaUpdate, current_user_id: UUID) -> Rma:
@@ -214,6 +277,29 @@ class RmaService:
         ))
         _audit(db, AuditAction.UPDATE, item.id, current_user_id,
                old_values={"status": old_status}, new_values={"status": data.new_status})
+
+        # Auto-avança o status do RMA com base no estado conjunto dos itens
+        rma = db.query(Rma).filter(Rma.id == rma_id).first()
+        all_items = db.query(ItemRma).filter(ItemRma.id_rma == rma_id).all()
+        derived = _derive_rma_status_from_items(all_items)
+        non_terminal = rma.status not in (RmaStatus.COMPLETED, RmaStatus.CANCELLED)
+        if derived and non_terminal:
+            derived_level = _RMA_STATUS_LEVEL.get(derived, 0)
+            current_level = _RMA_STATUS_LEVEL.get(rma.status, 0)
+            if derived_level > current_level:
+                old_rma_status = rma.status
+                rma.status = derived
+                db.add(StatusHistory(
+                    entity_type=EntityType.RMA,
+                    entity_id=rma_id,
+                    old_status=old_rma_status,
+                    new_status=derived,
+                    changed_by=current_user_id,
+                    reason="Auto-avanço baseado nos itens",
+                ))
+                _audit(db, AuditAction.UPDATE, rma_id, current_user_id,
+                       old_values={"status": str(old_rma_status)},
+                       new_values={"status": str(derived)})
 
         db.commit()
         db.refresh(item)

@@ -7,6 +7,7 @@ import type {
   UpdateRmaPayload,
   RmaFilters,
   ItemRmaStatus,
+  RmaHistoryResponse,
 } from '../../types/api';
 
 // ─── Query Keys ───────────────────────────────────────────────────────────────
@@ -17,9 +18,20 @@ export const rmaKeys = {
   list: (filters: RmaFilters) => [...rmaKeys.lists(), filters] as const,
   details: () => [...rmaKeys.all, 'detail'] as const,
   detail: (id: string) => [...rmaKeys.details(), id] as const,
+  history: (id: string) => [...rmaKeys.all, 'history', id] as const,
 };
 
 // ─── Queries ──────────────────────────────────────────────────────────────────
+
+/** Busca o histórico de status de um RMA. Só executa quando enabled=true. */
+export function useRmaHistory(rmaId: string, enabled: boolean) {
+  return useQuery<RmaHistoryResponse>({
+    queryKey: rmaKeys.history(rmaId),
+    queryFn: () => apiClient.get(`/rma/${rmaId}/history`).then((r) => r.data),
+    enabled: enabled && !!rmaId,
+    staleTime: 60_000,
+  });
+}
 
 /** Lista RMAs com filtros e paginação. */
 export function useRmas(filters: RmaFilters = {}) {
@@ -64,6 +76,7 @@ export function useUpdateRma() {
     onSuccess: (data) => {
       qc.setQueryData(rmaKeys.detail(String(data.id)), data);
       qc.invalidateQueries({ queryKey: rmaKeys.lists() });
+      qc.invalidateQueries({ queryKey: rmaKeys.history(String(data.id)) });
     },
   });
 }
@@ -77,6 +90,7 @@ export function useCloseRma(id: string) {
     onSuccess: (data) => {
       qc.setQueryData(rmaKeys.detail(id), data);
       qc.invalidateQueries({ queryKey: rmaKeys.lists() });
+      qc.invalidateQueries({ queryKey: rmaKeys.history(id) });
     },
   });
 }

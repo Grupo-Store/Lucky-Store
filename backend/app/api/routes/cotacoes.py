@@ -51,6 +51,7 @@ def list_quotes(
     sort_by: str = Query(default="data_cotacao"),
     sort_dir: str = Query(default="desc", pattern="^(asc|desc)$"),
     eligible_for_order: Optional[bool] = Query(default=None, description="Se true, retorna apenas cotações fechadas ou caídas"),
+    numero_requisicao: Optional[str] = Query(default=None),
     db: Session = Depends(get_db),
     _: User = Depends(get_current_user_dep),
 ):
@@ -60,6 +61,7 @@ def list_quotes(
         data_inicio=data_inicio, data_fim=data_fim,
         sort_by=sort_by, sort_dir=sort_dir,
         eligible_for_order=eligible_for_order,
+        numero_requisicao=numero_requisicao,
     )
     return CotacaoListResponse(items=items, total=total, page=page, limit=limit, pages=pages)
 
