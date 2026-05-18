@@ -10,8 +10,21 @@ from app.models.cotacao import Cotacao
 from app.models.item_cotacao import ItemCotacao
 from app.models.cliente import Cliente
 from app.models.audit_log import AuditLog, AuditAction
+from app.models.status_history import StatusHistory, EntityType
 from app.schemas.cotacao import CotacaoCreate, CotacaoUpdate, PhaseUpdate
 from app.utils.errors import NotFoundException
+
+
+def _get_quote_phase(cotacao: Cotacao) -> str | None:
+    if cotacao.status_caida:
+        return "dropped"
+    if cotacao.status_fechada:
+        return "closed"
+    if cotacao.status_em_fechamento:
+        return "forClosing"
+    if cotacao.status_enviada:
+        return "sent"
+    return None
 
 
 def _upsert_cliente(db: Session, nome: str, cnpj: str | None) -> None:
@@ -95,6 +108,15 @@ class CotacaoService:
 
         _audit(db, AuditAction.CREATE, cotacao.id, current_user_id,
                new_values={"cliente": cotacao.cliente, "numero_requisicao": cotacao.numero_requisicao})
+
+        db.add(StatusHistory(
+            entity_type=EntityType.COTACAO,
+            entity_id=cotacao.id,
+            old_status=None,
+            new_status="created",
+            changed_by=current_user_id,
+            reason="Cotação criada",
+        ))
 
         db.commit()
         db.refresh(cotacao)
@@ -181,6 +203,7 @@ class CotacaoService:
     def update_phase(db: Session, cotacao_id: UUID, data: PhaseUpdate, current_user_id: UUID) -> Cotacao:
         cotacao = CotacaoService.get_by_id(db, cotacao_id)
 
+        old_phase = _get_quote_phase(cotacao)
         old_values = {
             "status_enviada": cotacao.status_enviada,
             "status_em_fechamento": cotacao.status_em_fechamento,
@@ -191,6 +214,7 @@ class CotacaoService:
         for field, value in data.model_dump(exclude_none=True).items():
             setattr(cotacao, field, value)
 
+        new_phase = _get_quote_phase(cotacao)
         new_values = {
             "status_enviada": cotacao.status_enviada,
             "status_em_fechamento": cotacao.status_em_fechamento,
@@ -200,6 +224,15 @@ class CotacaoService:
 
         _audit(db, AuditAction.UPDATE, cotacao.id, current_user_id,
                old_values=old_values, new_values=new_values)
+
+        if new_phase and new_phase != old_phase:
+            db.add(StatusHistory(
+                entity_type=EntityType.COTACAO,
+                entity_id=cotacao.id,
+                old_status=old_phase,
+                new_status=new_phase,
+                changed_by=current_user_id,
+            ))
 
         db.commit()
         db.refresh(cotacao)

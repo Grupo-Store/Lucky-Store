@@ -174,7 +174,10 @@ class PedidoService:
     def get_status_history(db: Session, pedido_id: UUID):
         return (
             db.query(StatusHistory)
-            .filter(StatusHistory.entity_id == pedido_id)
+            .filter(
+                StatusHistory.entity_type == EntityType.PEDIDO,
+                StatusHistory.entity_id == pedido_id,
+            )
             .order_by(StatusHistory.changed_at.asc())
             .all()
         )

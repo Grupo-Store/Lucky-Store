@@ -9,6 +9,7 @@ from app.models.produto import Produto
 from app.schemas.produto import ProdutoCreate, ProdutoUpdate
 from app.services.pedido import PedidoService
 from app.models.audit_log import AuditLog, AuditAction
+from app.models.status_history import StatusHistory, EntityType
 from app.utils.errors import NotFoundException
 
 
@@ -69,6 +70,14 @@ class ItemPedidoService:
             changed_by=current_user_id,
             new_values={"descricao": data.descricao, "quantidade": data.quantidade},
         ))
+        db.add(StatusHistory(
+            entity_type=EntityType.PRODUTO,
+            entity_id=produto.id,
+            old_status=None,
+            new_status="created",
+            changed_by=current_user_id,
+            reason="Item adicionado",
+        ))
 
         db.commit()
         db.refresh(produto)
@@ -114,6 +123,13 @@ class ItemPedidoService:
             changed_by=current_user_id,
             old_values={"status": old_status},
             new_values={"status": new_status},
+        ))
+        db.add(StatusHistory(
+            entity_type=EntityType.PRODUTO,
+            entity_id=item_id,
+            old_status=old_status,
+            new_status=new_status,
+            changed_by=current_user_id,
         ))
 
         db.commit()

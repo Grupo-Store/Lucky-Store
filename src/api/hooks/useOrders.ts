@@ -7,6 +7,8 @@ import type {
   UpdatePedidoPayload,
   PedidoFilters,
   PedidoStatus,
+  OrderHistoryResponse,
+  ItemHistoryResponse,
 } from '../../types/api';
 
 // ─── Query Keys ───────────────────────────────────────────────────────────────
@@ -17,6 +19,8 @@ export const orderKeys = {
   list: (filters: PedidoFilters) => [...orderKeys.lists(), filters] as const,
   details: () => [...orderKeys.all, 'detail'] as const,
   detail: (id: string) => [...orderKeys.details(), id] as const,
+  history: (id: string) => [...orderKeys.all, 'history', id] as const,
+  itemHistory: (pedidoId: string, itemId: string) => [...orderKeys.all, 'item-history', pedidoId, itemId] as const,
 };
 
 // ─── Queries ──────────────────────────────────────────────────────────────────
@@ -28,6 +32,26 @@ export function useOrders(filters: PedidoFilters = {}) {
     queryFn: () =>
       apiClient.get('/pedidos', { params: filters }).then((r) => r.data),
     staleTime: 30_000,
+  });
+}
+
+/** Busca o histórico de status de um item/produto. Só executa quando enabled=true. */
+export function useItemHistory(pedidoId: string, itemId: string, enabled: boolean) {
+  return useQuery<ItemHistoryResponse>({
+    queryKey: orderKeys.itemHistory(pedidoId, itemId),
+    queryFn: () => apiClient.get(`/pedidos/${pedidoId}/items/${itemId}/history`).then((r) => r.data),
+    enabled: enabled && !!pedidoId && !!itemId,
+    staleTime: 60_000,
+  });
+}
+
+/** Busca o histórico de status de um pedido. Só executa quando enabled=true. */
+export function useOrderHistory(pedidoId: string, enabled: boolean) {
+  return useQuery<OrderHistoryResponse>({
+    queryKey: orderKeys.history(pedidoId),
+    queryFn: () => apiClient.get(`/pedidos/${pedidoId}/history`).then((r) => r.data),
+    enabled: enabled && !!pedidoId,
+    staleTime: 60_000,
   });
 }
 
@@ -83,6 +107,7 @@ export function useUpdateOrderStatus(id: string) {
     onSuccess: (data) => {
       qc.setQueryData(orderKeys.detail(id), data);
       qc.invalidateQueries({ queryKey: orderKeys.lists() });
+      qc.invalidateQueries({ queryKey: orderKeys.history(id) });
     },
   });
 }
@@ -99,8 +124,9 @@ export function useUpdateOrderStatusInline() {
       apiClient
         .patch(`/pedidos/${id}/status`, { new_status, reason })
         .then((r) => r.data),
-    onSuccess: () => {
+    onSuccess: (_data, { id }) => {
       qc.invalidateQueries({ queryKey: orderKeys.lists() });
+      qc.invalidateQueries({ queryKey: orderKeys.history(id) });
     },
   });
 }
@@ -111,8 +137,9 @@ export function useUpdateItemStatus() {
   return useMutation<unknown, Error, { pedidoId: string; itemId: string; newStatus: string }>({
     mutationFn: ({ pedidoId, itemId, newStatus }) =>
       apiClient.patch(`/pedidos/${pedidoId}/items/${itemId}/status`, { new_status: newStatus }).then((r) => r.data),
-    onSuccess: () => {
+    onSuccess: (_data, { pedidoId, itemId }) => {
       qc.invalidateQueries({ queryKey: orderKeys.lists() });
+      qc.invalidateQueries({ queryKey: orderKeys.itemHistory(pedidoId, itemId) });
     },
   });
 }
