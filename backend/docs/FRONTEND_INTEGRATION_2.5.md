@@ -596,38 +596,38 @@ Usar `isAdmin` para condicionar a renderização de botões e seções administr
 
 ### 2.5.1 — Status History UI
 
-- [ ] Timeline de status visível dentro do modal do pedido
-- [ ] Cada entrada mostra: status anterior → novo status, data/hora e responsável
-- [ ] Primeira entrada (`old_status: null`) exibida como "Pedido criado"
-- [ ] Razão (`reason`) exibida quando presente
-- [ ] Skeleton de carregamento enquanto a API responde
-- [ ] Timeline carregada lazy (somente quando o usuário abre a seção)
+- [x] Timeline de status visível dentro do modal do pedido
+- [x] Cada entrada mostra: status anterior → novo status, data/hora e responsável
+- [x] Primeira entrada (`old_status: null`) exibida como "Pedido criado"
+- [x] Razão (`reason`) exibida quando presente
+- [x] Skeleton de carregamento enquanto a API responde
+- [x] Timeline carregada lazy (somente quando o usuário abre a seção)
 
 ### 2.5.2 — Audit Log Viewer
 
-- [ ] Tabela de audit logs visível no painel admin
-- [ ] Coluna de ação: CREATE / UPDATE / DELETE com badges distintos
-- [ ] Diff de valores exibido para ações UPDATE (somente campos alterados)
-- [ ] Data e hora formatadas
-- [ ] Componente não renderizado para usuários não-admin
+- [x] Tabela de audit logs visível no painel admin
+- [x] Coluna de ação: CREATE / UPDATE / DELETE com badges distintos
+- [x] Diff de valores exibido para ações UPDATE (somente campos alterados)
+- [x] Data e hora formatadas
+- [x] Componente não renderizado para usuários não-admin
 
 ### 2.5.3 — LGPD Data Export
 
-- [ ] Botão "Exportar meus dados" disponível nas configurações de conta
-- [ ] Clique dispara chamada ao `GET /api/users/{id}/data-export`
-- [ ] Download do arquivo `.json` iniciado automaticamente no navegador
-- [ ] Nome do arquivo inclui ID parcial do usuário e data atual
-- [ ] Estado de carregamento visível durante a requisição
-- [ ] Toast de sucesso após download iniciado
-- [ ] Toast de erro se a API falhar
+- [x] Botão "Exportar meus dados" disponível nas configurações de conta
+- [x] Clique dispara chamada ao `GET /api/users/{id}/data-export`
+- [x] Download do arquivo `.json` iniciado automaticamente no navegador
+- [x] Nome do arquivo inclui ID parcial do usuário e data atual
+- [x] Estado de carregamento visível durante a requisição
+- [x] Toast de sucesso após download iniciado
+- [x] Toast de erro se a API falhar
 
 ### 2.5.4 — Data Deletion
 
-- [ ] Botão "Excluir dados do usuário" disponível somente no painel admin
-- [ ] Botão não renderizado para não-admins
-- [ ] AlertDialog de confirmação exibido ao clicar
-- [ ] Descrição clara do que será apagado no dialog
-- [ ] Mutation chamada somente após confirmação explícita
-- [ ] Toast de sucesso após exclusão
-- [ ] Toast de erro se a API falhar ou retornar `deleted: false`
-- [ ] Lista de usuários atualizada automaticamente após exclusão
+- [x] Botão "Deletar minha conta" disponível na página Minha Conta (self-service — qualquer usuário pode deletar a própria conta)
+- [ ] Botão de exclusão de outro usuário disponível somente no painel admin (não implementado)
+- [x] Dialog de confirmação exibido ao clicar (checkbox + confirmação de senha)
+- [x] Descrição clara do que será apagado no dialog
+- [x] Mutation chamada somente após confirmação explícita
+- [x] Feedback de sucesso após exclusão (step de sucesso + logout automático)
+- [x] Toast de erro se a API falhar ou retornar `deleted: false`
+- [ ] Lista de usuários atualizada automaticamente após exclusão (não aplicável — usuário é deslogado após deletar a própria conta)

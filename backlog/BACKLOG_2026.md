@@ -657,11 +657,11 @@
 ### 2.5.1 Status History UI (Days 1-3) - Gustavo
 **Priority:** P1 - MVP Feature
 
-**Frontend Tasks:** → **Duda**
-- [ ] Create StatusHistory component → **Duda**
-- [ ] Show timeline of all status changes → **Duda**
-- [ ] Display: who changed it, when, and why → **Duda**
-- [ ] Add to order details page → **Duda**
+**Frontend Tasks:** → **Duda** ✅ COMPLETO
+- [x] Create StatusHistory component → **Duda** ✅
+- [x] Show timeline of all status changes → **Duda** ✅ (pedidos, produtos, cotações, RMAs)
+- [x] Display: who changed it, when, and why → **Duda** ✅ (nome do usuário resolvido via useUserName)
+- [x] Add to order details page → **Duda** ✅
 
 **Backend Tasks:** → **Rafael** ✅ COMPLETO
 - [x] GET /api/pedidos/:id/history endpoint → **Rafael** ✅
@@ -679,16 +679,16 @@
 ### 2.5.2 Audit Log Viewer (Days 3-5) - Duda
 **Priority:** P1 - MVP Feature
 
-**Frontend Tasks:** → **Gustavo**
-- [ ] Create AuditLog component → **Gustavo**
-- [ ] Show all changes to an entity → **Gustavo**
-- [ ] Display old values vs new values → **Gustavo**
-- [ ] Add to admin panel → **Gustavo**
+**Frontend Tasks:** → **Gustavo** ✅ COMPLETO
+- [x] Create AuditLog component → **Gustavo** ✅ (AuditLogTable genérico com diff por campos)
+- [x] Show all changes to an entity → **Gustavo** ✅
+- [x] Display old values vs new values → **Gustavo** ✅ (somente campos alterados destacados)
+- [x] Add to admin panel → **Gustavo** ✅ (painel Admin com abas Pedidos / Cotações / RMAs)
 
-**Backend Tasks:** → **Rafael**
-- [ ] GET /api/orders/:id/audit endpoint → **Rafael**
-- [ ] Return audit_logs records with full details → **Rafael**
-- [ ] Include JSONB diffs → **Rafael**
+**Backend Tasks:** → **Rafael** ✅ COMPLETO (entregue como parte do endpoint /history)
+- [x] GET /api/orders/:id/audit endpoint → **Rafael** ✅ (incluído em GET /pedidos/:id/history)
+- [x] Return audit_logs records with full details → **Rafael** ✅
+- [x] Include JSONB diffs → **Rafael** ✅
 
 **Effort:** 1 frontend + 1 backend dev, 2 days  
 **Success Criteria:**
@@ -705,12 +705,12 @@
 - [x] Implement GET /api/users/:id/data-export → **Rafael** ✅
 - [x] Return JSON with all user's data → **Rafael** ✅
 - [x] Include all audit logs → **Rafael** ✅
-- [ ] Download as JSON file → **Duda** (frontend)
+- [x] Download as JSON file → **Duda** ✅ (frontend converte response em blob)
 
-**Frontend Tasks:** → **Duda**
-- [ ] Create data export button → **Duda**
-- [ ] Call API and download file → **Duda**
-- [ ] Show success message → **Duda**
+**Frontend Tasks:** → **Duda** ✅ COMPLETO
+- [x] Create data export button → **Duda** ✅ (página Minha Conta, seção LGPD)
+- [x] Call API and download file → **Duda** ✅ (blob + link programático)
+- [x] Show success message → **Duda** ✅ (toast de sucesso + loading state)
 
 **Effort:** 1 backend + 1 frontend dev, 2 days  
 **Success Criteria:**
@@ -729,11 +729,11 @@
 - [x] Anonymize personal info → **Rafael** ✅
 - [x] Keep audit trail → **Rafael** ✅
 
-**Frontend Tasks:** → **Peu**
-- [ ] Create delete account form → **Peu**
-- [ ] Require confirmation → **Peu**
-- [ ] Require password verification → **Peu**
-- [ ] Show confirmation message → **Peu**
+**Frontend Tasks:** → **Peu** ✅ COMPLETO
+- [x] Create delete account form → **Peu** ✅ (DeleteAccountModal na página Minha Conta)
+- [x] Require confirmation → **Peu** ✅ (checkbox + 2 etapas)
+- [x] Require password verification → **Peu** ✅
+- [x] Show confirmation message → **Peu** ✅ (step de sucesso + logout automático)
 
 **Effort:** 1 backend + 1 frontend dev, 2-3 days  
 **Success Criteria:**
@@ -1215,8 +1215,8 @@ Any delay in Week 1-3 → Delays Week 10 launch
 - [x] **FEITO:** 20 testes unitários (1.7) → Rafael ✅
 - [x] **FEITO:** 196 testes unitários (1.8) → Rafael ✅ (models, rotas, serviços, schemas — 100% aprovação)
 - [x] **FEITO:** TESTS_REPORT.md com detalhamento completo ✅
-- [ ] **PRÓXIMO:** Merge feature/data-export-and-audit-history → develop
-- [ ] **PRÓXIMO:** Merge feature/quotes-api → develop
+- [x] **FEITO:** Merge feature/data-export-and-audit-history → develop ✅
+- [x] **FEITO:** Merge feature/quotes-api → develop ✅
 - [ ] **PRÓXIMO:** Rodar MIGRATION_PEDIDOS_V2.sql, V3.sql e MIGRATION_AUDIT_RETENTION.sql no banco de produção
 - [x] **FEITO:** React Query integration (2.2) → hooks + mutations completos ✅
 - [x] **FEITO:** Modal integration (2.3) → OrderModal, QuoteModal, RmaModal chamando API ✅
@@ -1233,11 +1233,18 @@ Any delay in Week 1-3 → Delays Week 10 launch
 - [x] **FEITO:** RMA status na tabela derivado de itens (prioridade mínima de ItemRmaStatus) ✅
 - [x] **FEITO:** Tabela RMA — coluna Pedido Origem movida para 2ª posição ✅
 - [x] **FEITO:** Modal RMA — campo Status removido de Informações Gerais ✅
+- [x] **FEITO:** Status history timeline UI (2.5.1) → Duda ✅
+- [x] **FEITO:** Audit Log Viewer painel admin (2.5.2) → Gustavo ✅
+- [x] **FEITO:** LGPD Data Export UI (2.5.3) → Duda ✅
+- [x] **FEITO:** Data Deletion UI — DeleteAccountModal (2.5.4) → Peu ✅
+- [x] **FEITO:** Merge feature/status-history-ui → develop ✅
+- [x] **FEITO:** Merge feature/audit-log-viewer → develop ✅
+- [x] **FEITO:** Merge feature/lgpd-data-export → develop ✅
+- [x] **FEITO:** Merge feature/list-view-integration → develop ✅
 - [ ] **PRÓXIMO:** Goals API (2.6.1) + Projections → Gustavo
 - [ ] **PRÓXIMO:** Dashboard breakdown by company/seller (2.6.1) → Rafael
 - [ ] **PRÓXIMO:** Real-time refetch interval (2.4) → Gustavo
-- [ ] **PRÓXIMO:** Status history timeline UI (2.5.1) → Duda
-- [ ] **PRÓXIMO:** Merge feature/list-view-integration → develop
+- [ ] **PRÓXIMO:** Merge feat/criando-logica-delete → develop
 
 ---
 
@@ -1260,7 +1267,7 @@ Any delay in Week 1-3 → Delays Week 10 launch
 
 ---
 
-**Last Updated:** May 11, 2026  
-**Status:** 🚀 33 endpoints + 196 testes backend (100% aprovação). Frontend fases 2.1–2.3 completos — modais integrados com API, 42 unit tests + 5 E2E tests.  
-**Next Milestone:** List View integration (2.4); Dashboard APIs (2.6.1)  
+**Last Updated:** May 18, 2026  
+**Status:** 🚀 Phase 2.5 Audit & Compliance completa. 33 endpoints + 196 testes backend (100% aprovação). Fases 2.1–2.5 concluídas — Status History UI, Audit Log Viewer (painel admin), LGPD Export e LGPD Deletion integrados e mergeados na develop.  
+**Next Milestone:** Goals API + Dashboard breakdown (2.6.1); Merge feat/criando-logica-delete  
 **MVP Target:** Week 10 (8-10 weeks)

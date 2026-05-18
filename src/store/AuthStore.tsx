@@ -55,6 +55,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const { data } = await axios.post(`${BASE_URL}/auth/verify-2fa`, { email, code });
       localStorage.setItem('access_token', data.access_token);
       localStorage.setItem('refresh_token', data.refresh_token);
+      window.history.replaceState({}, '', '/');
       setStage('authed');
       return null;
     } catch (err: any) {
