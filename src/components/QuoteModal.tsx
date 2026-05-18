@@ -20,6 +20,7 @@ import {
   QUOTE_PHASE_COLORS, QUOTE_PHASE_LABELS, emptyPhases,
 } from '@/store/QuoteStore';
 import { useCreateQuote, useUpdateQuote, useUpdateQuotePhase } from '@/api/hooks/useQuotes';
+import { QuoteStatusTimeline } from '@/components/StatusTimeline';
 import { apiClient, getApiError } from '@/api/client';
 import type { CreateCotacaoPayload, UpdateCotacaoPayload, UpdateCotacaoFasePayload } from '@/types/api';
 import { LOJA_IDS, VENDEDOR_IDS } from '@/api/storeConfig';
@@ -622,6 +623,11 @@ export function QuoteModal({ open, onClose, quote, onSave, onDelete, nextIndex }
             </div>
           </div>
         </section>
+
+        {/* ============== 7. HISTÓRICO DE STATUS ============== */}
+        {isEdit && form.id && (
+          <QuoteStatusTimeline quoteId={form.id} />
+        )}
 
         <div className="flex justify-between items-center print:hidden">
           <div>

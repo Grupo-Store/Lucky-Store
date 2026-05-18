@@ -8,6 +8,7 @@ import type {
   UpdateCotacaoFasePayload,
   CotacaoFilters,
   ConversaoResponse,
+  QuoteHistoryResponse,
 } from '../../types/api';
 
 // ─── Query Keys ───────────────────────────────────────────────────────────────
@@ -18,9 +19,20 @@ export const quoteKeys = {
   list: (filters: CotacaoFilters) => [...quoteKeys.lists(), filters] as const,
   details: () => [...quoteKeys.all, 'detail'] as const,
   detail: (id: string) => [...quoteKeys.details(), id] as const,
+  history: (id: string) => [...quoteKeys.all, 'history', id] as const,
 };
 
 // ─── Queries ──────────────────────────────────────────────────────────────────
+
+/** Busca o histórico de fases de uma cotação. Só executa quando enabled=true. */
+export function useQuoteHistory(quoteId: string, enabled: boolean) {
+  return useQuery<QuoteHistoryResponse>({
+    queryKey: quoteKeys.history(quoteId),
+    queryFn: () => apiClient.get(`/quotes/${quoteId}/history`).then((r) => r.data),
+    enabled: enabled && !!quoteId,
+    staleTime: 60_000,
+  });
+}
 
 /** Lista cotações com filtros e paginação. */
 export function useQuotes(filters: CotacaoFilters = {}) {
@@ -78,6 +90,7 @@ export function useUpdateQuotePhase(id: string) {
     onSuccess: (data) => {
       qc.setQueryData(quoteKeys.detail(id), data);
       qc.invalidateQueries({ queryKey: quoteKeys.lists() });
+      qc.invalidateQueries({ queryKey: quoteKeys.history(id) });
     },
   });
 }

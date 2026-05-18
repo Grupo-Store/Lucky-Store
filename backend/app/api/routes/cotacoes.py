@@ -1,17 +1,28 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
-from typing import Optional
+from typing import Optional, List
 from uuid import UUID
+from pydantic import BaseModel
 
 from app.database import get_db
 from app.models.user import User
+from app.models.status_history import StatusHistory, EntityType
+from app.models.audit_log import AuditLog
 from app.schemas.cotacao import (
     CotacaoCreate, CotacaoUpdate, CotacaoResponse,
     CotacaoListResponse, PhaseUpdate,
 )
+from app.schemas.status_history import StatusHistoryResponse
+from app.schemas.audit_log import AuditLogResponse
 from app.services.cotacao import CotacaoService
 from app.utils.errors import NotFoundException, BusinessLogicException, to_http_exception
 from app.api.routes.auth import get_current_user_dep
+
+
+class QuoteHistoryResponse(BaseModel):
+    quote_id: UUID
+    status_history: List[StatusHistoryResponse]
+    audit_logs: List[AuditLogResponse]
 
 router = APIRouter(prefix="/quotes", tags=["quotes"])
 
@@ -95,6 +106,34 @@ def update_phase(
         raise to_http_exception(exc)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc))
+
+
+@router.get("/{quote_id}/history", response_model=QuoteHistoryResponse)
+def get_quote_history(
+    quote_id: UUID,
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_user_dep),
+):
+    status_history = (
+        db.query(StatusHistory)
+        .filter(
+            StatusHistory.entity_type == EntityType.COTACAO,
+            StatusHistory.entity_id == quote_id,
+        )
+        .order_by(StatusHistory.changed_at.asc())
+        .all()
+    )
+    audit_logs = (
+        db.query(AuditLog)
+        .filter(AuditLog.entity_type == "cotacao", AuditLog.entity_id == quote_id)
+        .order_by(AuditLog.changed_at.asc())
+        .all()
+    )
+    return QuoteHistoryResponse(
+        quote_id=quote_id,
+        status_history=[StatusHistoryResponse.model_validate(h) for h in status_history],
+        audit_logs=[AuditLogResponse.model_validate(log) for log in audit_logs],
+    )
 
 
 @router.delete("/{quote_id}", status_code=status.HTTP_204_NO_CONTENT)

@@ -16,6 +16,7 @@ vi.mock('@/api/hooks/useQuotes', () => ({
   useCreateQuote: () => ({ mutate: mockCreateQuote, isPending: false }),
   useUpdateQuote: () => ({ mutate: mockUpdateQuote, isPending: false }),
   useUpdateQuotePhase: () => ({ mutate: mockUpdateQuotePhase, isPending: false }),
+  useQuoteHistory: () => ({ data: undefined, isLoading: false }),
 }));
 
 vi.mock('sonner', () => ({

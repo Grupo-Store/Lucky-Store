@@ -25,6 +25,18 @@ export interface OrderHistoryResponse {
   audit_logs: unknown[];
 }
 
+export interface QuoteHistoryResponse {
+  quote_id: string;
+  status_history: StatusHistoryEntry[];
+  audit_logs: unknown[];
+}
+
+export interface ItemHistoryResponse {
+  item_id: string;
+  status_history: StatusHistoryEntry[];
+  audit_logs: unknown[];
+}
+
 // ─── Auth ─────────────────────────────────────────────────────────────────────
 
 export interface UserResponse {

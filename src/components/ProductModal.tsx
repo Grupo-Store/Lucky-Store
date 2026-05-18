@@ -14,6 +14,7 @@ import { ptBR } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
 import { apiClient, getApiError } from '@/api/client';
 import { orderKeys } from '@/api/hooks/useOrders';
+import { ItemStatusTimeline } from '@/components/StatusTimeline';
 import {
   Order, OrderItem, SubPurchase, ItemStatus, PaymentMethod,
   ITEM_STATUS_COLORS, PAYMENT_METHODS, PAYMENT_METHOD_LABELS,
@@ -282,6 +283,11 @@ export function ProductModal({ open, onClose, order, item, onSave }: Props) {
             </div>
           </div>
         </section>
+
+        {/* ============== 4. HISTÓRICO DE STATUS ============== */}
+        {order.id && item.id && (
+          <ItemStatusTimeline pedidoId={order.id} itemId={item.id} />
+        )}
 
         <div className="flex justify-end gap-2 print:hidden">
           <Button variant="outline" onClick={() => window.print()}>
