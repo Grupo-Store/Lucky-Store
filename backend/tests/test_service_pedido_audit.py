@@ -32,7 +32,7 @@ class TestPedidoAuditIpCapture:
         data = PedidoCreate(
             id_loja=uuid.uuid4(),
             id_vendedor=uuid.uuid4(),
-            id_cliente=uuid.uuid4(),
+            nome_cliente="Cliente Teste",
             data_pedido=date.today(),
             data_entrega=date.today(),
             status="To Buy",

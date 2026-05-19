@@ -25,6 +25,7 @@ def _fake_rma(rma_id=None):
     r.id_vendedor = uuid.uuid4()
     r.id_loja = uuid.uuid4()
     r.numero_rma = f"RMA-2026-000001"
+    r.numero_os_origem = None
     r.data_registro = date.today()
     r.prazo_entrega = None
     r.status = RmaStatus.REGISTERED
@@ -259,11 +260,11 @@ class TestUpdateItemStatus:
         item_id = uuid.uuid4()
         fake_item = _fake_item_rma(rma_id)
         fake_item.id = item_id
-        fake_item.status = ItemRmaStatus.REPAIRED
+        fake_item.status = ItemRmaStatus.REPAIRED_RECEIVED
         fake_item.consertado_por = "Técnico João"
         with patch("app.api.routes.rma.RmaService.update_item_status",
                    return_value=fake_item) as mock_upd:
             client.patch(f"/rma/{rma_id}/items/{item_id}/status",
-                         json={"new_status": "Repaired", "consertado_por": "Técnico João"})
+                         json={"new_status": "Repaired Received", "consertado_por": "Técnico João"})
         call_args = mock_upd.call_args.args
         assert call_args[3].consertado_por == "Técnico João"

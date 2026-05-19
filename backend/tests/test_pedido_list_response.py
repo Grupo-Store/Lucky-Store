@@ -37,6 +37,10 @@ def _make_produto_response(**overrides):
         prazo_entrega=None,
         data_recebimento=None,
         status="To Buy",
+        is_direct_supply=False,
+        porcentagem_fornecedor=None,
+        frete_fornecedor=None,
+        nota_fiscal_item=None,
         created_at=datetime.now(timezone.utc),
         updated_at=datetime.now(timezone.utc),
     )

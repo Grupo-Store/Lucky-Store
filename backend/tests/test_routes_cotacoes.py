@@ -68,6 +68,8 @@ def _fake_item_cotacao(cotacao_id=None):
     item.fornecedor = None
     item.valor_total = None
     item.valor_total_fechamento = None
+    item.porcentagem_fornecedor = None
+    item.frete_fornecedor = None
     item.created_at = datetime.now(timezone.utc)
     item.updated_at = datetime.now(timezone.utc)
     return item
