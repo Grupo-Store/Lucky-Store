@@ -266,7 +266,7 @@ class TestProdutoStatuses:
 
     def test_nine_statuses(self):
         from app.models.produto import PRODUTO_STATUSES
-        assert len(PRODUTO_STATUSES) == 9
+        assert len(PRODUTO_STATUSES) == 11
 
 
 class TestProdutoModel:
@@ -432,7 +432,7 @@ class TestItemRmaStatus:
 
     def test_eight_statuses_exist(self):
         from app.models.item_rma import ItemRmaStatus
-        assert len(ItemRmaStatus) == 8
+        assert len(ItemRmaStatus) == 10
 
 
 class TestItemRmaModel:

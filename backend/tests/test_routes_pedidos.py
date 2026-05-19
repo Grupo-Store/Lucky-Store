@@ -44,16 +44,34 @@ def _fake_pedido(pedido_id=None):
     p.updated_at = datetime.now(timezone.utc)
     p.economia = None
     p.formas_pagamento = []
+    p.fretes = []
+    p.produtos = []
     p.custo = None
     p.deleted_at = None
     p.status_history = []
+    p.data_pagamento = None
+    p.multa = None
+    p.juros = None
+    p.forma_pagamento_efetiva = None
+    p.num_parcelas_efetivas = None
+    p.plano_parcelas = None
+    cliente = MagicMock()
+    cliente.nome = None
+    cliente.cnpj = None
+    p.cliente = cliente
+    loja = MagicMock()
+    loja.nome = None
+    p.loja = loja
+    vendedor = MagicMock()
+    vendedor.nome = None
+    p.vendedor = vendedor
     return p
 
 
 _PEDIDO_PAYLOAD = {
     "id_loja": str(uuid.uuid4()),
     "id_vendedor": str(uuid.uuid4()),
-    "id_cliente": str(uuid.uuid4()),
+    "nome_cliente": "Cliente Teste",
     "data_pedido": str(date.today()),
     "data_entrega": str(date.today()),
     "status": "To Buy",

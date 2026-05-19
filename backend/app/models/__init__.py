@@ -15,6 +15,7 @@ from app.models.meta_vendedor import MetaVendedor
 from app.models.status_history import StatusHistory, EntityType
 from app.models.audit_log import AuditLog, AuditAction
 from app.models.email_verification import EmailVerificationCode
+from app.models.dashboard_goal import DashboardGoal
 
 __all__ = [
     "User",
@@ -33,4 +34,5 @@ __all__ = [
     "Pedido", "PedidoFormaPagamento", "CustoPedido", "Frete",
     "Produto",
     "EmailVerificationCode",
+    "DashboardGoal",
 ]
