@@ -35,9 +35,32 @@
 | 1.8 API Testing | Unit tests + perf | Unit tests | Integration tests | Swagger + E2E |
 | 2.x Frontend | Quote Modal + Sales Page | React Query + Audit Log UI | Order Modal + Status UI | API Client + RMA Modal |
 | 2.5 Compliance UI | LGPD Export backend | Audit Log component | Status History component | LGPD Deletion UI |
-| 2.6 Dashboard | 2.6.1 Dashboard Backend APIs (KPIs ✅ + Goals CRUD + Projections + breakdowns + filters) | 2.6.4 Financial Calendar frontend | 2.6.2 Financial Backend (Expenses + Calendar API) + 2.6.5 Goal Management UI | 2.6.3 Dashboard Frontend (KPI cards + charts + breakdown tables + filtering) |
+| 2.6 Dashboard | 2.6.1 Dashboard Backend APIs (KPIs ✅ + Goals CRUD + Projections + breakdowns + filters) | 2.6.4 Financial Calendar frontend + 2.6.6 Fretes Integration | 2.6.2 Financial Backend (Expenses + Calendar API) + 2.6.5 Goal Management UI | 2.6.3 Dashboard Frontend (KPI cards + charts + breakdown tables + filtering) |
 | 3.x Testing | Segurança + perf | Backend tests | Frontend tests | E2E |
 | 4.x Deploy | CI/CD | Railway PostgreSQL | Monitoring | Vercel |
+
+---
+
+## What's New in This Update (May 20, 2026)
+
+✅ **Phase 2.6.1 — Dashboard Backend APIs completo (Rafael):**
+- `GET /api/dashboard/breakdown-by-company` e `GET /api/dashboard/breakdown-by-seller` implementados
+- Date range filtering (`mes`, `ano`, `data_inicio`, `data_fim`, `id_loja`) funcionando em todos os endpoints
+- Goals CRUD completo: `GET/POST /api/dashboard/goals`, `DELETE /api/dashboard/goals/{id}` (upsert por ano+mês+loja)
+- `GET /api/dashboard/projections` com cálculo de dias úteis, média diária, projeção mensal e meta dinâmica
+- Migration `f0a1b2c3d4e5` — tabela `dashboard_goals` criada e aplicada
+- 267 testes backend passando (100% aprovação) — branch `dashboard-backend-apis` subida
+
+✅ **Phase 2.6.2 — Financial Backend completo (Duda):**
+- Model `Expense` e migration `f6a7b8c9d0e1` criados e aplicados
+- CRUD completo: `POST`, `GET`, `PATCH`, `DELETE /api/expenses` (soft delete)
+- `GET /api/calendar/entries` agrega despesas, multas, juros e parcelas de plano indexados por data
+- Migration de merge `c6c8376ba5c2` criada para unificar heads `dashboard_goals` + `expenses`
+- Branch `feature/financial-backend` rebased na develop e subida
+
+✅ **Backlog atualizado:**
+- Task 2.6.6 Fretes Tab Integration adicionada (Rafael backend + Gustavo frontend)
+- Documentação `FRONTEND_INTEGRATION_2.6.md` atualizada com seção 2.6.6
 
 ---
 
@@ -758,19 +781,19 @@
   - [x] Ticket average (revenue/sales, cost/sales, profit/sales) ✅
   - [x] Cancellation tracking (count, value lost) ✅
   - [x] Today's revenue ✅
-- [ ] GET /api/dashboard/breakdown-by-company - Per-company KPIs
-- [ ] GET /api/dashboard/breakdown-by-seller - Per-seller KPIs
-- [ ] Implement date range filtering (month or custom range)
-- [ ] Filter by company (all, Lucky Store, BTech, AJJ)
-- [ ] GET /api/dashboard/goals - Retrieve sales targets for period
-- [ ] POST /api/dashboard/goals - Create/update sales target
-- [ ] DELETE /api/dashboard/goals/:key - Delete sales target
-- [ ] GET /api/dashboard/projections - Calculate daily targets
-  - [ ] Remaining business days
-  - [ ] Elapsed business days
-  - [ ] Daily average
-  - [ ] Projection for month
-  - [ ] Dynamic daily target to meet goal
+- [x] GET /api/dashboard/breakdown-by-company - Per-company KPIs ✅
+- [x] GET /api/dashboard/breakdown-by-seller - Per-seller KPIs ✅
+- [x] Implement date range filtering (month or custom range) ✅
+- [x] Filter by company (all, Lucky Store, BTech, AJJ) ✅
+- [x] GET /api/dashboard/goals - Retrieve sales targets for period ✅
+- [x] POST /api/dashboard/goals - Create/update sales target (upsert) ✅
+- [x] DELETE /api/dashboard/goals/:key - Delete sales target ✅
+- [x] GET /api/dashboard/projections - Calculate daily targets ✅
+  - [x] Remaining business days ✅
+  - [x] Elapsed business days ✅
+  - [x] Daily average ✅
+  - [x] Projection for month ✅
+  - [x] Dynamic daily target to meet goal ✅
 
 **Effort:** 1 backend dev, 3-4 days  
 **Success Criteria:**
@@ -786,18 +809,18 @@
 **Priority:** P2 - Required after MVP  
 **Responsável:** → **Duda**
 
-- [ ] Implement Expense model (predicted vs paid)
-- [ ] POST /api/expenses - Create expense
-- [ ] PATCH /api/expenses/:id - Update expense
-- [ ] DELETE /api/expenses/:id - Delete expense
-- [ ] GET /api/expenses - List with filtering
+- [x] Implement Expense model (predicted vs paid) ✅
+- [x] POST /api/expenses - Create expense ✅
+- [x] PATCH /api/expenses/:id - Update expense ✅
+- [x] DELETE /api/expenses/:id - Soft delete ✅
+- [x] GET /api/expenses - List with filtering (id_loja, data_inicio, data_fim, page, limit) ✅
 - [ ] Expense installment plan support (credit card payments)
-- [ ] Calculate penalty and interest on orders
-- [ ] GET /api/calendar/entries - Financial calendar
-  - [ ] Return expense entries
-  - [ ] Return order penalties
-  - [ ] Return order interest
-  - [ ] Return installment entries
+- [x] Calculate penalty and interest on orders (returned via calendar) ✅
+- [x] GET /api/calendar/entries - Financial calendar ✅
+  - [x] Return expense entries ✅
+  - [x] Return order penalties (multa) ✅
+  - [x] Return order interest (juros) ✅
+  - [x] Return installment entries (plano_parcelas JSONB) ✅
 
 **Effort:** 1 backend dev, 4-5 days  
 **Success Criteria:**
@@ -902,6 +925,34 @@
 - ✅ Goals affect KPI calculations
 - ✅ UI shows goal progress
 - ✅ Persistent storage working
+
+---
+
+### 2.6.6 Fretes Tab Integration
+**Priority:** P2 - Required after MVP  
+**Responsável:** → **Rafael**
+
+- [ ] GET /api/fretes/summary - Aggregate freight data by delivery person
+  - [ ] Filter by id_loja, data_inicio, data_fim
+  - [ ] Return total deliveries count, active delivery persons count, total value
+  - [ ] Return per-person breakdown (entregador, qtd_entregas, valor_total)
+- [ ] GET /api/fretes/detail - List individual deliveries for a given person
+  - [ ] Filter by id_loja, data_inicio, data_fim, entregador
+  - [ ] Return id_pedido, numero_os, nome_cliente, data_frete, valor per entry
+- [ ] Register fretes routes in backend/app/api/__init__.py
+- [ ] Unit tests for fretes service
+- [ ] Create useFretesSummary hook in src/api/hooks/useFretes.ts
+- [ ] Create useFretesDetail hook in the same file
+- [ ] Replace local derivation in FinancialManager.tsx (orders.flatMap freight) with React Query hooks
+- [ ] Add loading skeletons to KPI cards and aggregated table
+- [ ] Connect existing period filters and search to hook query params
+
+**Effort:** 1 backend dev + 1 frontend dev, 2-3 days  
+**Success Criteria:**
+- ✅ Fretes tab shows all deliveries for the period regardless of order pagination
+- ✅ KPI cards (total deliveries, active persons, total value) reflect real data
+- ✅ Per-person table and detail modal working with API data
+- ✅ Period filters and delivery person search connected to API query params
 
 ---
 
@@ -1241,10 +1292,19 @@ Any delay in Week 1-3 → Delays Week 10 launch
 - [x] **FEITO:** Merge feature/audit-log-viewer → develop ✅
 - [x] **FEITO:** Merge feature/lgpd-data-export → develop ✅
 - [x] **FEITO:** Merge feature/list-view-integration → develop ✅
-- [ ] **PRÓXIMO:** Goals API (2.6.1) + Projections → Gustavo
-- [ ] **PRÓXIMO:** Dashboard breakdown by company/seller (2.6.1) → Rafael
+- [x] **FEITO:** Goals API + Projections (2.6.1) → Rafael ✅
+- [x] **FEITO:** Dashboard breakdown by company/seller (2.6.1) → Rafael ✅
+- [x] **FEITO:** Financial Backend — Expenses + Calendar API (2.6.2) → Duda ✅
+- [x] **FEITO:** Merge feat/criando-logica-delete → develop ✅
+- [x] **FEITO:** Branch dashboard-backend-apis subida (2.6.1) ✅
+- [x] **FEITO:** Branch feature/financial-backend rebased e subida (2.6.2) ✅
+- [ ] **PRÓXIMO:** Abrir PR dashboard-backend-apis → develop (2.6.1) → Rafael
+- [ ] **PRÓXIMO:** Abrir PR feature/financial-backend → develop (2.6.2) → Duda
+- [ ] **PRÓXIMO:** Dashboard Frontend — substituir computeStats local pelos hooks de API (2.6.3) → Peu
+- [ ] **PRÓXIMO:** Financial Calendar UI — página e grid mensal (2.6.4) → Gustavo
+- [ ] **PRÓXIMO:** Goal Management Modal — conectar ao backend (2.6.5) → Duda
+- [ ] **PRÓXIMO:** Fretes Tab Integration — endpoints + hooks React Query (2.6.6) → Rafael + Gustavo
 - [ ] **PRÓXIMO:** Real-time refetch interval (2.4) → Gustavo
-- [ ] **PRÓXIMO:** Merge feat/criando-logica-delete → develop
 
 ---
 
@@ -1267,7 +1327,7 @@ Any delay in Week 1-3 → Delays Week 10 launch
 
 ---
 
-**Last Updated:** May 18, 2026  
-**Status:** 🚀 Phase 2.5 Audit & Compliance completa. 33 endpoints + 196 testes backend (100% aprovação). Fases 2.1–2.5 concluídas — Status History UI, Audit Log Viewer (painel admin), LGPD Export e LGPD Deletion integrados e mergeados na develop.  
+**Last Updated:** May 20, 2026  
+**Status:** 🚀 Phases 2.6.1 e 2.6.2 completas. 267 testes backend (100% aprovação). Dashboard Backend APIs (KPIs, breakdowns, goals, projeções) e Financial Backend (expenses, calendar) implementados e prontos para PR. Pendente: 2.6.3 frontend, 2.6.4 calendário, 2.6.5 modal metas, 2.6.6 fretes.
 **Next Milestone:** Goals API + Dashboard breakdown (2.6.1); Merge feat/criando-logica-delete  
 **MVP Target:** Week 10 (8-10 weeks)

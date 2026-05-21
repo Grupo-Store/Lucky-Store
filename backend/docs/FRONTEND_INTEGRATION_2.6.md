@@ -2,9 +2,9 @@
 
 **Documento:** Detalhamento técnico das fases de Dashboard & Financial Management  
 **Fase:** 2.6 Dashboard & Financial Management  
-**Responsáveis:** Rafael (2.6.1 backend), Peu (2.6.3 frontend), Duda (2.6.2 + 2.6.5), Gustavo (2.6.4)  
+**Responsáveis:** Rafael (2.6.1 + 2.6.6 backend), Peu (2.6.3 frontend), Duda (2.6.2 + 2.6.5), Gustavo (2.6.4 + 2.6.6 frontend)  
 **Pré-requisito obrigatório:** Phase 2.5 concluída e mergeada na develop  
-**Atualizado em:** 18 de maio de 2026
+**Atualizado em:** 20 de maio de 2026
 
 ---
 
@@ -18,6 +18,7 @@ O objetivo da fase 2.6 é migrar toda essa lógica para o backend:
 - **2.6.3** — Frontend substitui os cálculos locais por React Query apontando para a API
 - **2.6.4** — Frontend cria o calendário financeiro visual
 - **2.6.5** — Frontend cria o modal de gestão de metas
+- **2.6.6** — Backend + Frontend integra a aba Fretes do Financeiro com dados reais da API
 
 O Dashboard já tem a estrutura visual pronta (`src/pages/Dashboard.tsx`). O trabalho é substituir as fontes de dados, não redesenhar a UI.
 
@@ -719,6 +720,156 @@ O `apiClient` envia o token automaticamente. Nenhuma das rotas do dashboard exig
 
 ---
 
+## Phase 2.6.6 — Fretes Integration
+
+**Responsável:** Rafael (backend) + Gustavo (frontend)  
+**Branch backend:** `feature/fretes-backend`  
+**Branch frontend:** `feature/fretes-frontend`  
+**Depende de:** nenhuma dependência de 2.6.1–2.6.5
+
+### Contexto
+
+A aba **Fretes** em `src/components/finance/FinancialManager.tsx` (linhas 498–643) já tem UI completa:
+- Cards de KPI: total de entregas, entregadores ativos, valor total
+- Tabela agregada por entregador (qtd + valor)
+- Modal de detalhes por entregador com link para o pedido
+
+O problema: dados vêm do `OrderStore` local (`useOrders()`), que só contém os pedidos carregados na sessão (paginados). Um relatório de fretes do mês inteiro fica incompleto se o usuário não tiver carregado todos os pedidos.
+
+A tabela `fretes` já existe no banco com FK para `pedidos`. O trabalho é criar endpoints dedicados e trocar a fonte de dados no frontend.
+
+### Endpoints a criar
+
+#### `GET /api/fretes/summary`
+
+Parâmetros: `id_loja` (obrigatório), `data_inicio`, `data_fim`
+
+```json
+{
+  "total_entregas": 35,
+  "entregadores_ativos": 3,
+  "valor_total": 5250.00,
+  "items": [
+    { "entregador": "João", "qtd_entregas": 12, "valor_total": 1800.00 },
+    { "entregador": "Maria", "qtd_entregas": 23, "valor_total": 3450.00 }
+  ]
+}
+```
+
+#### `GET /api/fretes/detail`
+
+Parâmetros: `id_loja`, `data_inicio`, `data_fim`, `entregador`
+
+```json
+{
+  "items": [
+    {
+      "id": "uuid",
+      "id_pedido": "uuid",
+      "numero_os": "OS-042",
+      "nome_cliente": "Empresa ABC",
+      "entregador": "João",
+      "data_frete": "2026-05-10",
+      "valor": 150.00
+    }
+  ]
+}
+```
+
+### Implementação do service (backend)
+
+```python
+# backend/app/services/fretes.py
+from sqlalchemy import func
+from app.models.pedido import Pedido, Frete
+from app.models.cliente import Cliente
+
+def get_summary(db, id_loja, data_inicio, data_fim):
+    q = (
+        db.query(
+            Frete.entregador,
+            func.count(Frete.id).label("qtd_entregas"),
+            func.sum(Frete.valor).label("valor_total"),
+        )
+        .join(Pedido, Frete.id_pedido == Pedido.id)
+        .filter(
+            Pedido.id_loja == id_loja,
+            Pedido.deleted_at.is_(None),
+            Frete.data_frete >= data_inicio,
+            Frete.data_frete <= data_fim,
+        )
+        .group_by(Frete.entregador)
+        .order_by(func.sum(Frete.valor).desc())
+        .all()
+    )
+    ...
+
+def get_detail(db, id_loja, data_inicio, data_fim, entregador):
+    q = (
+        db.query(Frete, Pedido)
+        .join(Pedido, Frete.id_pedido == Pedido.id)
+        .filter(
+            Pedido.id_loja == id_loja,
+            Pedido.deleted_at.is_(None),
+            Frete.entregador == entregador,
+            Frete.data_frete >= data_inicio,
+            Frete.data_frete <= data_fim,
+        )
+        .order_by(Frete.data_frete.desc())
+        .all()
+    )
+    ...
+```
+
+### Hooks do frontend
+
+```tsx
+// src/api/hooks/useFretes.ts
+import { useQuery } from '@tanstack/react-query';
+import { apiClient } from '../client';
+
+export function useFretesSummary(idLoja?: string, dataInicio?: string, dataFim?: string) {
+  return useQuery({
+    queryKey: ['fretes', 'summary', { idLoja, dataInicio, dataFim }],
+    queryFn: () =>
+      apiClient
+        .get('/fretes/summary', { params: { id_loja: idLoja, data_inicio: dataInicio, data_fim: dataFim } })
+        .then(r => r.data),
+    enabled: !!idLoja,
+    staleTime: 60_000,
+  });
+}
+
+export function useFretesDetail(idLoja?: string, dataInicio?: string, dataFim?: string, entregador?: string) {
+  return useQuery({
+    queryKey: ['fretes', 'detail', { idLoja, dataInicio, dataFim, entregador }],
+    queryFn: () =>
+      apiClient
+        .get('/fretes/detail', { params: { id_loja: idLoja, data_inicio: dataInicio, data_fim: dataFim, entregador } })
+        .then(r => r.data),
+    enabled: !!idLoja && !!entregador,
+    staleTime: 60_000,
+  });
+}
+```
+
+### Ajuste no FinancialManager.tsx
+
+Trocar a derivação local:
+
+```tsx
+// Antes (local — só vê pedidos paginados da sessão)
+const freightRows = orders.flatMap(o =>
+  (o.freight ?? []).map(c => ({ ...c, orderId: o.id, os: o.numero_os, customer: o.nome_cliente }))
+);
+
+// Depois (API — todos os fretes do período)
+const { data: summary, isLoading } = useFretesSummary(idLoja, dataInicio, dataFim);
+const { data: detail } = useFretesDetail(idLoja, dataInicio, dataFim, freightDetail.person);
+```
+
+---
+
 ## Critérios de conclusão
 
 ### 2.6.1 — Dashboard Backend APIs
@@ -767,3 +918,18 @@ O `apiClient` envia o token automaticamente. Nenhuma das rotas do dashboard exig
 - [ ] Formulário de criação de meta (loja, target, floor)
 - [ ] Listagem de metas existentes com deleção
 - [ ] Invalidação de cache após upsert/delete atualiza KPIs e projeções
+
+### 2.6.6 — Fretes Integration
+
+**Backend (`feature/fretes-backend` → Rafael)**
+- [ ] `GET /api/fretes/summary?id_loja=&data_inicio=&data_fim=` — agrega fretes por entregador
+- [ ] `GET /api/fretes/detail?id_loja=&data_inicio=&data_fim=&entregador=` — lista fretes individuais de um entregador
+- [ ] Service com queries SQLAlchemy nas tabelas `fretes` e `pedidos` (JOIN para número OS e cliente)
+- [ ] Testes unitários para o service
+
+**Frontend (`feature/fretes-frontend` → Gustavo)**
+- [ ] Hook `useFretesSummary(idLoja, dataInicio, dataFim)` em `src/api/hooks/useFretes.ts`
+- [ ] Hook `useFretesDetail(idLoja, dataInicio, dataFim, entregador)` no mesmo arquivo
+- [ ] Substituir derivação local em `FinancialManager.tsx` (`.flatMap(o => o.freight)`) pelos hooks
+- [ ] Skeletons durante carregamento nos cards e na tabela agregada
+- [ ] Filtros de período existentes conectados aos params dos hooks

@@ -552,10 +552,10 @@ export default function Dashboard() {
         </div>
       ) : apiKpis ? (
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          <KpiCard label="Total de Pedidos" value={String(apiKpis.total_pedidos)} />
-          <KpiCard label="Pedidos Pendentes" value={String(apiKpis.pedidos_pendentes)} accent="text-orange-600" />
-          <KpiCard label="Faturamento do Mês" value={BRL(apiKpis.faturamento_mes)} accent="text-green-700" />
-          <KpiCard label="Ticket Médio" value={BRL(apiKpis.ticket_medio)} />
+          <KpiCard label="Total de Pedidos" value={String(apiKpis.num_pedidos ?? 0)} />
+          <KpiCard label="Cancelamentos" value={String(apiKpis.num_cancelamentos ?? 0)} accent="text-orange-600" />
+          <KpiCard label="Faturamento do Mês" value={BRL(apiKpis.receita ?? 0)} accent="text-green-700" />
+          <KpiCard label="Ticket Médio" value={BRL(apiKpis.ticket_venda ?? 0)} />
         </div>
       ) : null}
 
