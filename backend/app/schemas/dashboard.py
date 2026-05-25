@@ -45,6 +45,11 @@ class BreakdownItem(BaseModel):
     lucro: Decimal
     margem: Decimal
     num_pedidos: int
+    num_cancelamentos: int
+    valor_cancelamentos: Decimal
+    ticket_venda: Decimal
+    ticket_custo: Decimal
+    ticket_lucro: Decimal
 
 
 class BreakdownByCompanyResponse(BaseModel):

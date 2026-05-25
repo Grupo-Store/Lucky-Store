@@ -213,6 +213,10 @@ def get_breakdown_by_company(
                       CustoPedido.custo_produto_final + CustoPedido.custo_servico), else_=0)
             ), 0).label("custo"),
             func.count(case((Pedido.is_cancelled.is_(False), 1))).label("num_pedidos"),
+            func.count(case((Pedido.is_cancelled.is_(True), 1))).label("num_cancelamentos"),
+            func.coalesce(func.sum(
+                case((Pedido.is_cancelled.is_(True), Pedido.valor_venda), else_=0)
+            ), 0).label("valor_cancelamentos"),
         )
         .join(Loja, Loja.id == Pedido.id_loja)
         .outerjoin(CustoPedido, CustoPedido.id_pedido == Pedido.id)
@@ -236,13 +240,19 @@ def get_breakdown_by_company(
         custo = Decimal(str(row.custo or 0))
         lucro = receita - custo
         margem = (lucro / receita).quantize(Decimal("0.0001")) if receita > 0 else Decimal("0")
+        num_pedidos = row.num_pedidos or 0
         items.append(BreakdownItem(
             nome=row.nome,
             receita=receita,
             custo=custo,
             lucro=lucro,
             margem=margem,
-            num_pedidos=row.num_pedidos or 0,
+            num_pedidos=num_pedidos,
+            num_cancelamentos=row.num_cancelamentos or 0,
+            valor_cancelamentos=Decimal(str(row.valor_cancelamentos or 0)),
+            ticket_venda=(receita / num_pedidos).quantize(Decimal("0.01")) if num_pedidos else Decimal("0"),
+            ticket_custo=(custo / num_pedidos).quantize(Decimal("0.01")) if num_pedidos else Decimal("0"),
+            ticket_lucro=(lucro / num_pedidos).quantize(Decimal("0.01")) if num_pedidos else Decimal("0"),
         ))
     return BreakdownByCompanyResponse(items=items)
 
@@ -269,6 +279,10 @@ def get_breakdown_by_seller(
                       CustoPedido.custo_produto_final + CustoPedido.custo_servico), else_=0)
             ), 0).label("custo"),
             func.count(case((Pedido.is_cancelled.is_(False), 1))).label("num_pedidos"),
+            func.count(case((Pedido.is_cancelled.is_(True), 1))).label("num_cancelamentos"),
+            func.coalesce(func.sum(
+                case((Pedido.is_cancelled.is_(True), Pedido.valor_venda), else_=0)
+            ), 0).label("valor_cancelamentos"),
         )
         .join(Vendedor, Vendedor.id == Pedido.id_vendedor)
         .outerjoin(CustoPedido, CustoPedido.id_pedido == Pedido.id)
@@ -292,6 +306,7 @@ def get_breakdown_by_seller(
         custo = Decimal(str(row.custo or 0))
         lucro = receita - custo
         margem = (lucro / receita).quantize(Decimal("0.0001")) if receita > 0 else Decimal("0")
+        num_pedidos = row.num_pedidos or 0
         items.append(BreakdownBySellerItem(
             id_vendedor=row.id_vendedor,
             nome=row.nome,
@@ -299,7 +314,12 @@ def get_breakdown_by_seller(
             custo=custo,
             lucro=lucro,
             margem=margem,
-            num_pedidos=row.num_pedidos or 0,
+            num_pedidos=num_pedidos,
+            num_cancelamentos=row.num_cancelamentos or 0,
+            valor_cancelamentos=Decimal(str(row.valor_cancelamentos or 0)),
+            ticket_venda=(receita / num_pedidos).quantize(Decimal("0.01")) if num_pedidos else Decimal("0"),
+            ticket_custo=(custo / num_pedidos).quantize(Decimal("0.01")) if num_pedidos else Decimal("0"),
+            ticket_lucro=(lucro / num_pedidos).quantize(Decimal("0.01")) if num_pedidos else Decimal("0"),
         ))
     return BreakdownBySellerResponse(items=items)
 
