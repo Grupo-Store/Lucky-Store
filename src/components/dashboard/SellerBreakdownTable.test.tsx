@@ -12,6 +12,11 @@ const mockItems: SellerBreakdownItem[] = [
     lucro: 4000,
     margem: 0.4,
     num_pedidos: 20,
+    num_cancelamentos: 1,
+    valor_cancelamentos: 200,
+    ticket_venda: 500,
+    ticket_custo: 300,
+    ticket_lucro: 200,
   },
   {
     id_vendedor: 'v2',
@@ -21,6 +26,11 @@ const mockItems: SellerBreakdownItem[] = [
     lucro: -1000,
     margem: -0.2,
     num_pedidos: 10,
+    num_cancelamentos: 0,
+    valor_cancelamentos: 0,
+    ticket_venda: 500,
+    ticket_custo: 600,
+    ticket_lucro: -100,
   },
 ]
 
