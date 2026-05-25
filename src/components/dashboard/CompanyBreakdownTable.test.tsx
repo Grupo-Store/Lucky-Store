@@ -4,8 +4,8 @@ import { CompanyBreakdownTable } from './CompanyBreakdownTable'
 import { BreakdownItem } from '@/hooks/use-dashboard-query'
 
 const mockItems: BreakdownItem[] = [
-  { nome: 'Empresa Alpha', receita: 10000, custo: 6000, lucro: 4000, margem: 0.4, num_pedidos: 50 },
-  { nome: 'Empresa Beta', receita: 5000, custo: 6000, lucro: -1000, margem: -0.2, num_pedidos: 20 },
+  { nome: 'Empresa Alpha', receita: 10000, custo: 6000, lucro: 4000, margem: 0.4, num_pedidos: 50, num_cancelamentos: 2, valor_cancelamentos: 300, ticket_venda: 200, ticket_custo: 120, ticket_lucro: 80 },
+  { nome: 'Empresa Beta',  receita: 5000,  custo: 6000, lucro: -1000, margem: -0.2, num_pedidos: 20, num_cancelamentos: 0, valor_cancelamentos: 0,   ticket_venda: 250, ticket_custo: 300, ticket_lucro: -50 },
 ]
 
 describe('CompanyBreakdownTable', () => {
