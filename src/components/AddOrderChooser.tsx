@@ -143,6 +143,7 @@ export function AddOrderChooser({ open, onClose, onChooseNew, onChooseFromQuote 
         name: i.descricao,
         quantity: i.quantidade,
         projectedValue: parseFloat(i.valor_unitario) || 0,
+        purchaseValue: 0,
         closingValue: i.valor_fechamento ? parseFloat(i.valor_fechamento) : parseFloat(i.valor_unitario) || 0,
         supplier: i.fornecedor || '',
         supplierPct: parseFloat(i.porcentagem_fornecedor ?? '0') || 0,

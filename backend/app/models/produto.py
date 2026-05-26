@@ -25,6 +25,7 @@ class Produto(Base):
     quantidade = Column(Integer, nullable=False)
 
     valor_projetado = Column(Numeric(12, 2), nullable=False)
+    preco_custo = Column(Numeric(12, 2), nullable=True)
     valor_compra = Column(Numeric(12, 2), nullable=True)
     economia = Column(Numeric(12, 2), nullable=True)
 

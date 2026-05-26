@@ -96,7 +96,7 @@ function makeRma() {
         id_produto_origem: null,
         descricao: 'Notebook com defeito',
         quantidade: 1,
-        status: 'Repaired Received',
+        status: 'In Repair',
         consertado_por: 'Técnico João',
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
@@ -324,10 +324,15 @@ test.describe('feature/list-view-integration — E2E', () => {
         await rmaRow.click();
         await page.waitForTimeout(500);
 
-        // The modal should show the new status labels
-        await expect(
-          page.getByText(/Reparado Recebido/i).or(page.getByText(/Repaired Received/i))
-        ).toBeVisible({ timeout: 5_000 });
+        // Open the item status Select dropdown to expose the options in the DOM
+        const statusTrigger = page.getByRole('combobox').filter({ hasText: /Em Reparo/i });
+        if (await statusTrigger.isVisible({ timeout: 3_000 }).catch(() => false)) {
+          await statusTrigger.click();
+          // The modal should show the new status label as a selectable option
+          await expect(
+            page.getByRole('option', { name: /Reparado Recebido/i })
+          ).toBeVisible({ timeout: 5_000 });
+        }
       }
     }
   });

@@ -8,7 +8,7 @@ import {
 import { ptBR } from 'date-fns/locale';
 import {
   ChevronLeft, ChevronRight, Plus, Printer, CalendarDays, Table as TableIcon,
-  Search, Truck, X,
+  Search, Truck, X, CheckCircle2, Circle,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -31,6 +31,7 @@ import {
   useFinance, expandExpense, expandOrderFinancial, CalendarEntry, Expense,
 } from '@/store/FinanceStore';
 import { useOrders, calcTotal, Order } from '@/store/OrderStore';
+import { useToggleFretePago, useFretesSummary, useFretesDetail } from '@/hooks/useFretes';
 import { ExpenseModal } from './ExpenseModal';
 import { OrderModal } from '@/components/OrderModal';
 
@@ -61,6 +62,7 @@ const fmtDate = (iso: string) => format(new Date(iso + 'T12:00:00'), 'dd/MM/yyyy
 export function FinancialManager() {
   const { expenses, addExpense, updateExpense, deleteExpense } = useFinance();
   const { orders, updateOrder, deleteOrder, nextOS } = useOrders();
+  const { mutate: togglePago } = useToggleFretePago();
   const [view, setView] = useState<ViewMode>('all');
   const [layout, setLayout] = useState<Layout>('calendar');
   const [typeFilter, setTypeFilter] = useState<TypeFilter>('all');
@@ -77,12 +79,12 @@ export function FinancialManager() {
   const [tableRangeOpen, setTableRangeOpen] = useState(false);
 
   // Fretes filters
-  const [freightPeriod, setFreightPeriod] = useState<'week' | 'month' | 'custom'>('month');
+  const [freightPeriod, setFreightPeriod] = useState<'all' | 'week' | 'month' | 'custom'>('all');
   const [freightCursor, setFreightCursor] = useState<Date>(new Date());
   const [freightRange, setFreightRange] = useState<{ from?: Date; to?: Date }>({});
   const [freightRangeOpen, setFreightRangeOpen] = useState(false);
   const [freightSearch, setFreightSearch] = useState('');
-  const [freightDetail, setFreightDetail] = useState<{ open: boolean; person: string }>({ open: false, person: '' });
+  const [freightDetail, setFreightDetail] = useState<{ open: boolean; person: string; personKey: string }>({ open: false, person: '', personKey: '' });
 
   // Build calendar entries from expenses + auto-derived gains from orders + standard orders (general)
   const allEntries = useMemo<CalendarEntry[]>(() => {
@@ -192,7 +194,8 @@ export function FinancialManager() {
   }, [sortedEntries, tableSearch, tableRange, expenses]);
 
   /* ---------- Fretes data ---------- */
-  const freightInterval = useMemo(() => {
+  const freightInterval = useMemo((): { start: Date; end: Date } | null => {
+    if (freightPeriod === 'all') return null;
     if (freightPeriod === 'custom' && freightRange.from) {
       const from = new Date(freightRange.from); from.setHours(0,0,0,0);
       const to = freightRange.to ? new Date(freightRange.to) : new Date(freightRange.from);
@@ -205,45 +208,24 @@ export function FinancialManager() {
     return { start: startOfMonth(freightCursor), end: endOfMonth(freightCursor) };
   }, [freightPeriod, freightCursor, freightRange]);
 
-  // Flatten all freight cards from all orders (non-cancelled) within the freight interval
-  type FreightRow = {
-    orderId: string; os: string; customer: string; date: string; deliveryPerson: string; value: number;
-  };
-  const freightRows = useMemo<FreightRow[]>(() => {
-    const out: FreightRow[] = [];
-    orders.filter(o => !o.cancelled).forEach(o => {
-      const cards = [...(o.freight || []), ...(o.rmaFreight || [])];
-      cards.forEach(c => {
-        if (!c.deliveryPerson) return;
-        const dateIso = c.deliveryDate || o.deliveryDate;
-        if (!dateIso) return;
-        const d = new Date(dateIso + 'T12:00:00');
-        if (!isWithinInterval(d, freightInterval)) return;
-        out.push({
-          orderId: o.id, os: o.os, customer: o.customer,
-          date: dateIso, deliveryPerson: c.deliveryPerson, value: c.value || 0,
-        });
-      });
-    });
-    return out;
-  }, [orders, freightInterval]);
+  const freightApiFilters = useMemo(() => ({
+    data_inicio: freightInterval ? format(freightInterval.start, 'yyyy-MM-dd') : undefined,
+    data_fim: freightInterval ? format(freightInterval.end, 'yyyy-MM-dd') : undefined,
+  }), [freightInterval]);
+
+  const { data: summaryData, isLoading: summaryLoading } = useFretesSummary(freightApiFilters);
+
+  const { data: detailData, isLoading: detailLoading } = useFretesDetail(
+    freightDetail.person,
+    freightApiFilters,
+    { enabled: freightDetail.open && !!freightDetail.person },
+  );
 
   const freightAggregated = useMemo(() => {
+    const items = summaryData?.por_entregador ?? [];
     const q = freightSearch.toLowerCase().trim();
-    const map = new Map<string, { person: string; total: number; count: number }>();
-    freightRows.forEach(r => {
-      if (q && !r.deliveryPerson.toLowerCase().includes(q)) return;
-      const cur = map.get(r.deliveryPerson) || { person: r.deliveryPerson, total: 0, count: 0 };
-      cur.total += r.value; cur.count += 1;
-      map.set(r.deliveryPerson, cur);
-    });
-    return Array.from(map.values()).sort((a, b) => b.total - a.total);
-  }, [freightRows, freightSearch]);
-
-  const freightDetailRows = useMemo(
-    () => freightRows.filter(r => r.deliveryPerson === freightDetail.person).sort((a, b) => b.date.localeCompare(a.date)),
-    [freightRows, freightDetail.person]
-  );
+    return q ? items.filter(e => e.entregador.toLowerCase().includes(q)) : items;
+  }, [summaryData, freightSearch]);
 
   return (
     <div className="space-y-4">
@@ -503,9 +485,10 @@ export function FinancialManager() {
                 <div className="flex items-end gap-2 flex-wrap">
                   <div>
                     <label className="text-xs text-muted-foreground block mb-1">Período</label>
-                    <Select value={freightPeriod} onValueChange={v => setFreightPeriod(v as 'week' | 'month' | 'custom')}>
+                    <Select value={freightPeriod} onValueChange={v => setFreightPeriod(v as 'all' | 'week' | 'month' | 'custom')}>
                       <SelectTrigger className="w-[140px]"><SelectValue /></SelectTrigger>
                       <SelectContent>
+                        <SelectItem value="all">Todos</SelectItem>
                         <SelectItem value="week">Semana</SelectItem>
                         <SelectItem value="month">Mês</SelectItem>
                         <SelectItem value="custom">Personalizado</SelectItem>
@@ -513,7 +496,7 @@ export function FinancialManager() {
                     </Select>
                   </div>
 
-                  {freightPeriod !== 'custom' && (
+                  {(freightPeriod === 'week' || freightPeriod === 'month') && (
                     <div className="flex items-center gap-1">
                       <Button variant="outline" size="icon"
                         onClick={() => setFreightCursor(freightPeriod === 'week'
@@ -522,7 +505,7 @@ export function FinancialManager() {
                         <ChevronLeft className="h-4 w-4" />
                       </Button>
                       <span className="text-sm font-medium min-w-[180px] text-center">
-                        {freightPeriod === 'week'
+                        {freightPeriod === 'week' && freightInterval
                           ? `${format(freightInterval.start, 'dd/MM')} – ${format(freightInterval.end, 'dd/MM/yy')}`
                           : format(freightCursor, "MMMM 'de' yyyy", { locale: ptBR })}
                       </span>
@@ -567,10 +550,19 @@ export function FinancialManager() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                <Card><CardContent className="pt-4"><p className="text-xs text-muted-foreground">Total de Entregas</p><p className="text-xl font-bold text-secondary">{freightRows.length}</p></CardContent></Card>
-                <Card><CardContent className="pt-4"><p className="text-xs text-muted-foreground">Entregadores Ativos</p><p className="text-xl font-bold text-secondary">{freightAggregated.length}</p></CardContent></Card>
-                <Card><CardContent className="pt-4"><p className="text-xs text-muted-foreground">Valor Total</p><p className="text-xl font-bold text-green-700">{BRL(freightAggregated.reduce((s, r) => s + r.total, 0))}</p></CardContent></Card>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                {summaryLoading ? (
+                  Array.from({ length: 4 }).map((_, i) => (
+                    <Card key={i}><CardContent className="pt-4"><div className="h-3 w-28 bg-muted animate-pulse rounded mb-2" /><div className="h-7 w-16 bg-muted animate-pulse rounded" /></CardContent></Card>
+                  ))
+                ) : (
+                  <>
+                    <Card><CardContent className="pt-4"><p className="text-xs text-muted-foreground">Total de Entregas</p><p className="text-xl font-bold text-secondary">{summaryData?.total_entregas ?? 0}</p></CardContent></Card>
+                    <Card><CardContent className="pt-4"><p className="text-xs text-muted-foreground">Entregadores Ativos</p><p className="text-xl font-bold text-secondary">{freightAggregated.length}</p></CardContent></Card>
+                    <Card><CardContent className="pt-4"><p className="text-xs text-muted-foreground">Valor Total</p><p className="text-xl font-bold text-green-700">{BRL(parseFloat(String(summaryData?.valor_total ?? 0)))}</p></CardContent></Card>
+                    <Card><CardContent className="pt-4"><p className="text-xs text-muted-foreground">A Pagar</p><p className="text-xl font-bold text-red-600">{BRL(parseFloat(String(summaryData?.a_pagar ?? 0)))}</p></CardContent></Card>
+                  </>
+                )}
               </div>
 
               <div className="overflow-x-auto rounded-lg border">
@@ -580,19 +572,33 @@ export function FinancialManager() {
                       <TableHead>Entregador</TableHead>
                       <TableHead className="text-right">Qtd. Entregas</TableHead>
                       <TableHead className="text-right">Soma dos Valores</TableHead>
+                      <TableHead className="text-right">A Pagar</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {freightAggregated.map(row => (
-                      <TableRow key={row.person} className="cursor-pointer hover:bg-muted/50"
-                        onClick={() => setFreightDetail({ open: true, person: row.person })}>
-                        <TableCell className="font-medium">{row.person}</TableCell>
-                        <TableCell className="text-right">{row.count}</TableCell>
-                        <TableCell className="text-right font-semibold text-green-700">{BRL(row.total)}</TableCell>
-                      </TableRow>
-                    ))}
-                    {freightAggregated.length === 0 && (
-                      <TableRow><TableCell colSpan={3} className="text-center py-8 text-muted-foreground">Nenhum frete encontrado no período</TableCell></TableRow>
+                    {summaryLoading ? (
+                      Array.from({ length: 3 }).map((_, i) => (
+                        <TableRow key={i}>
+                          {Array.from({ length: 4 }).map((__, j) => (
+                            <TableCell key={j}><div className="h-4 bg-muted animate-pulse rounded w-24" /></TableCell>
+                          ))}
+                        </TableRow>
+                      ))
+                    ) : (
+                      <>
+                        {freightAggregated.map(row => (
+                          <TableRow key={row.entregador} className="cursor-pointer hover:bg-muted/50"
+                            onClick={() => setFreightDetail({ open: true, person: row.entregador, personKey: row.entregador.trim().toLowerCase() })}>
+                            <TableCell className="font-medium">{row.entregador}</TableCell>
+                            <TableCell className="text-right">{row.qtd_entregas}</TableCell>
+                            <TableCell className="text-right font-semibold text-green-700">{BRL(parseFloat(String(row.valor_total)))}</TableCell>
+                            <TableCell className="text-right font-semibold text-red-600">{parseFloat(String(row.a_pagar)) > 0 ? BRL(parseFloat(String(row.a_pagar))) : '—'}</TableCell>
+                          </TableRow>
+                        ))}
+                        {freightAggregated.length === 0 && (
+                          <TableRow><TableCell colSpan={4} className="text-center py-8 text-muted-foreground">Nenhum frete encontrado no período</TableCell></TableRow>
+                        )}
+                      </>
                     )}
                   </TableBody>
                 </Table>
@@ -614,29 +620,43 @@ export function FinancialManager() {
                       <TableHead>OS</TableHead>
                       <TableHead>Cliente</TableHead>
                       <TableHead className="text-right">Valor</TableHead>
+                      <TableHead className="text-center">Pago?</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {freightDetailRows.map((r, i) => {
-                      const ord = orders.find(o => o.id === r.orderId);
-                      return (
-                        <TableRow key={i} className="cursor-pointer hover:bg-muted/50"
-                          onClick={() => { if (ord) { setFreightDetail({ open: false, person: '' }); setOrderModal({ open: true, order: ord }); } }}>
-                          <TableCell>{fmtDate(r.date)}</TableCell>
-                          <TableCell className="font-medium">{r.os}</TableCell>
-                          <TableCell>{r.customer}</TableCell>
-                          <TableCell className="text-right font-semibold">{BRL(r.value)}</TableCell>
-                        </TableRow>
-                      );
-                    })}
-                    {freightDetailRows.length === 0 && (
-                      <TableRow><TableCell colSpan={4} className="text-center py-6 text-muted-foreground">Sem entregas no período</TableCell></TableRow>
+                    {detailLoading ? (
+                      <TableRow><TableCell colSpan={5} className="text-center py-6 text-muted-foreground">A carregar...</TableCell></TableRow>
+                    ) : (detailData?.items ?? []).map((r) => (
+                      <TableRow key={r.id}>
+                        <TableCell>{fmtDate(r.data_frete)}</TableCell>
+                        <TableCell className="font-medium">{r.numero_os}</TableCell>
+                        <TableCell>{r.nome_cliente ?? '—'}</TableCell>
+                        <TableCell className="text-right font-semibold">{BRL(parseFloat(String(r.valor)))}</TableCell>
+                        <TableCell className="text-center">
+                          <button
+                            title={r.pago ? 'Pago' : 'Não pago'}
+                            className="inline-flex items-center justify-center p-1 rounded hover:bg-muted"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              togglePago({ pedidoId: String(r.id_pedido), freteId: String(r.id), pago: !r.pago });
+                            }}
+                          >
+                            {r.pago
+                              ? <CheckCircle2 className="h-5 w-5 text-green-600" />
+                              : <Circle className="h-5 w-5 text-muted-foreground" />}
+                          </button>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                    {!detailLoading && (detailData?.items ?? []).length === 0 && (
+                      <TableRow><TableCell colSpan={5} className="text-center py-6 text-muted-foreground">Sem entregas no período</TableCell></TableRow>
                     )}
                   </TableBody>
                 </Table>
               </div>
-              <div className="flex justify-end pt-2 text-sm text-muted-foreground">
-                Total: <span className="ml-2 font-semibold text-green-700">{BRL(freightDetailRows.reduce((s, r) => s + r.value, 0))}</span>
+              <div className="flex justify-between pt-2 text-sm text-muted-foreground">
+                <span>A Pagar: <span className="font-semibold text-red-600">{BRL((detailData?.items ?? []).filter(r => !r.pago).reduce((s, r) => s + parseFloat(String(r.valor)), 0))}</span></span>
+                <span>Total: <span className="ml-1 font-semibold text-green-700">{BRL((detailData?.items ?? []).reduce((s, r) => s + parseFloat(String(r.valor)), 0))}</span></span>
               </div>
             </DialogContent>
           </Dialog>

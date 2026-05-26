@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { format } from 'date-fns';
-import { Download, Loader2, User, Mail, Shield, Calendar, Trash2 } from 'lucide-react';
+import { Download, Loader2, User, Mail, Shield, Calendar, Trash2, UserPlus } from 'lucide-react';
 import { toast } from 'sonner';
 import { apiClient, getApiError } from '@/api/client';
 import { API } from '@/api/endpoints';
@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 import { DeleteAccountModal } from '@/components/DeleteAccountModal';
+import { RegisterUserModal } from '@/components/RegisterUserModal';
 import type { UserResponse } from '@/types/api';
 
 function DataExportButton({ userId }: { userId: string }) {
@@ -57,6 +58,7 @@ const roleLabels: Record<string, string> = {
 
 export default function Account() {
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const [registerOpen, setRegisterOpen] = useState(false);
   const { data: user, isLoading, isError } = useQuery<UserResponse>({
     queryKey: ['users', 'me'],
     queryFn: () => apiClient.get(API.users.me).then((r) => r.data),
@@ -129,7 +131,11 @@ export default function Account() {
           </p>
         </CardContent>
       </Card>
-      <div className="flex justify-end">
+      <div className="flex justify-between">
+        <Button variant="outline" onClick={() => setRegisterOpen(true)}>
+          <UserPlus className="h-4 w-4 mr-2" />
+          Cadastrar Usuário
+        </Button>
         <Button
           variant="destructive"
           className="opacity-70 hover:opacity-100"
@@ -141,6 +147,7 @@ export default function Account() {
       </div>
 
       <DeleteAccountModal open={deleteOpen} onOpenChange={setDeleteOpen} />
+      <RegisterUserModal open={registerOpen} onOpenChange={setRegisterOpen} />
     </div>
   );
 }

@@ -18,11 +18,12 @@ import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import {
   Order, OrderItem, ItemStatus, RmaItem, RmaItemStatus, FreightCard,
-  Company, Seller, SELLERS,
+  Company, Seller,
   RMA_ITEM_STATUSES, RMA_STATUS_LABELS, RMA_STATUS_COLORS,
   calcFreightTotal,
 } from '@/store/OrderStore';
 import { useCreateRma } from '@/api/hooks/useRma';
+import { useVendedores } from '@/hooks/useVendedores';
 import { getApiError } from '@/api/client';
 import type { CreateRmaPayload } from '@/types/api';
 import { useOrdersQuery, PedidoListItem } from '@/hooks/use-orders-query';
@@ -60,6 +61,8 @@ export function RmaModal({ open, onClose, orders, rma, onSave, nextRmaNumber }: 
   const [step, setStep] = useState<Step>(isEdit ? 'form' : 'pick-order');
 
   const { mutate: createRma, isPending } = useCreateRma();
+  const { data: vendedoresData } = useVendedores();
+  const vendedores = vendedoresData?.items ?? [];
 
   /* ---------- Step 1: delivered orders from API ---------- */
   const [orderSearch, setOrderSearch] = useState('');
@@ -464,7 +467,7 @@ export function RmaModal({ open, onClose, orders, rma, onSave, nextRmaNumber }: 
                   <Select value={seller || ''} onValueChange={v => setSeller(v as Seller)}>
                     <SelectTrigger className="bg-white border-border"><SelectValue placeholder="Selecionar" /></SelectTrigger>
                     <SelectContent>
-                      {SELLERS.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                      {vendedores.map(v => <SelectItem key={v.id} value={v.nome}>{v.nome}</SelectItem>)}
                     </SelectContent>
                   </Select>
                 </div>

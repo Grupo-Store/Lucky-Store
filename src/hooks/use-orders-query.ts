@@ -19,6 +19,7 @@ export interface FreteApiItem {
   entregador: string | null
   valor: string | number
   data_frete: string
+  pago?: boolean
 }
 
 export interface PedidoListItem {

@@ -9,7 +9,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
-import { CalendarIcon, Plus, Trash2, Printer } from 'lucide-react';
+import { CalendarIcon, Plus, Trash2, Printer, CheckCircle2, Circle } from 'lucide-react';
 import { format, addDays } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
@@ -18,7 +18,7 @@ import {
   Order, OrderItem, DirectSupplyOrderItem, ItemStatus, PaymentMethod, Company, Seller, OrderStatus, FreightCard,
   PaymentInstallment,
   ITEM_STATUS_COLORS, ORDER_STATUS_COLORS, ORDER_STATUS_LABELS,
-  PAYMENT_METHODS, PAYMENT_METHOD_LABELS, SELLERS,
+  PAYMENT_METHODS, PAYMENT_METHOD_LABELS,
   calcFinalCost, calcPartialCost, calcDirectSupplyCost, calcProfit, calcFreightTotal,
 } from '@/store/OrderStore';
 import type { OrderPrefill } from '@/components/AddOrderChooser';
@@ -28,6 +28,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { apiClient, getApiError } from '@/api/client';
 import type { CreatePedidoPayload, UpdatePedidoPayload, PedidoStatus } from '@/types/api';
 import { LOJA_IDS, VENDEDOR_IDS, FORMA_PAGAMENTO_MAP } from '@/api/storeConfig';
+import { useVendedores } from '@/hooks/useVendedores';
 
 const emptyOrder = (os: string): Partial<Order> => ({
   os, createdAt: Date.now(),
@@ -71,6 +72,11 @@ export function OrderModal({ open, onClose, order, onSave, nextOS, prefill }: Pr
   const isEdit = !!order;
 
   const qc = useQueryClient();
+  const { data: vendedoresData } = useVendedores();
+  const vendedores = vendedoresData?.items ?? [];
+  const vendorIdByName = (nome: string) =>
+    vendedores.find(v => v.nome === nome)?.id ?? VENDEDOR_IDS[nome] ?? '';
+
   const { mutate: createOrder, isPending: isCreating } = useCreateOrder();
   const { mutate: updateOrder, isPending: isUpdating } = useUpdateOrder(order?.id ?? '');
   const { mutate: updateOrderStatus, isPending: isUpdatingStatus } = useUpdateOrderStatus(order?.id ?? '');
@@ -78,6 +84,8 @@ export function OrderModal({ open, onClose, order, onSave, nextOS, prefill }: Pr
 
   const [editingField, setEditingField] = useState<string | null>(null);
   const [editingValue, setEditingValue] = useState('');
+  const [editingDsField, setEditingDsField] = useState<{ id: string; field: string } | null>(null);
+  const [editingDsValue, setEditingDsValue] = useState('');
   const [orderDateOpen, setOrderDateOpen] = useState(false);
   const [deliveryDateOpen, setDeliveryDateOpen] = useState(false);
 
@@ -109,12 +117,20 @@ export function OrderModal({ open, onClose, order, onSave, nextOS, prefill }: Pr
 
   /* ---------------- Derived calculations ---------------- */
   const derivedInitialProductCost = useMemo(
-    () => (form.items || []).reduce((s, i) => s + (i.projectedValue || 0) * (i.quantity || 0), 0),
-    [form.items]
+    () => {
+      const regular = (form.items || []).reduce((s, i) => s + (i.projectedValue || 0) * (i.quantity || 0), 0);
+      const ds = (form.directSupplyItems || []).reduce((s, i) => s + (i.projectedValue || 0) * (i.quantity || 0), 0);
+      return regular + ds;
+    },
+    [form.items, form.directSupplyItems]
   );
   const derivedFinalProductCost = useMemo(
-    () => (form.items || []).reduce((s, i) => s + (i.purchaseValue || 0) * (i.quantity || 0), 0),
-    [form.items]
+    () => {
+      const regular = (form.items || []).reduce((s, i) => s + (i.purchaseValue || 0) * (i.quantity || 0), 0);
+      const ds = (form.directSupplyItems || []).reduce((s, i) => s + (i.purchaseValue || 0) * (i.quantity || 0), 0);
+      return regular + ds;
+    },
+    [form.items, form.directSupplyItems]
   );
   const derivedFreightTotal = useMemo(() => calcFreightTotal(form.freight), [form.freight]);
 
@@ -164,7 +180,8 @@ export function OrderModal({ open, onClose, order, onSave, nextOS, prefill }: Pr
 
   /* ---------------- Freight ---------------- */
   const addFreight = () => set('freight', [...(form.freight || []), {
-    id: crypto.randomUUID(), deliveryPerson: '', value: 0, deliveryDate: undefined,
+    id: crypto.randomUUID(), deliveryPerson: '', value: 0,
+    deliveryDate: format(new Date(), 'yyyy-MM-dd'),
   } as FreightCard]);
   const updateFreight = (id: string, field: keyof FreightCard, value: any) => {
     set('freight', (form.freight || []).map(f => f.id === id ? { ...f, [field]: value } : f));
@@ -173,7 +190,7 @@ export function OrderModal({ open, onClose, order, onSave, nextOS, prefill }: Pr
 
   /* ---------------- Direct supply items ---------------- */
   const addDsItem = () => set('directSupplyItems', [...(form.directSupplyItems || []), {
-    id: crypto.randomUUID(), name: '', quantity: 1, projectedValue: 0, closingValue: 0,
+    id: crypto.randomUUID(), name: '', quantity: 1, projectedValue: 0, purchaseValue: 0, closingValue: 0,
     supplier: '', supplierPct: 0, supplierFreight: 0, supplierInvoice: '',
   } as DirectSupplyOrderItem]);
   const updateDsItem = (id: string, field: keyof DirectSupplyOrderItem, value: any) => {
@@ -299,7 +316,7 @@ export function OrderModal({ open, onClose, order, onSave, nextOS, prefill }: Pr
         ...pagamentoPayload,
       };
       const statusChanged = order && o.status !== order.status;
-      const sellerId = VENDEDOR_IDS[(o.seller as string) ?? ''] ?? '';
+      const sellerId = vendorIdByName((o.seller as string) ?? '');
 
       // ── Item diff ───────────────────────────────────────────────────────────
       const origItems = order?.items ?? [];
@@ -316,7 +333,8 @@ export function OrderModal({ open, onClose, order, onSave, nextOS, prefill }: Pr
         || o.directSupplyItems.some(curr => {
           const orig = origDsItems.find(x => x.id === curr.id);
           return !orig || orig.name !== curr.name || orig.quantity !== curr.quantity
-            || orig.projectedValue !== curr.projectedValue || orig.closingValue !== curr.closingValue
+            || orig.projectedValue !== curr.projectedValue || orig.purchaseValue !== curr.purchaseValue
+            || orig.closingValue !== curr.closingValue
             || orig.supplier !== curr.supplier || orig.supplierPct !== curr.supplierPct
             || orig.supplierFreight !== curr.supplierFreight || orig.supplierInvoice !== curr.supplierInvoice;
         });
@@ -327,13 +345,14 @@ export function OrderModal({ open, onClose, order, onSave, nextOS, prefill }: Pr
       const fretesToDelete = origFretes.filter(orig => !o.freight.some(f => f.id === orig.id));
       const fretesToUpdate = o.freight.filter(f => {
         const orig = origFretes.find(orig => orig.id === f.id);
-        return orig && (orig.value !== f.value || orig.deliveryPerson !== f.deliveryPerson || orig.deliveryDate !== f.deliveryDate);
+        return orig && (orig.value !== f.value || orig.deliveryPerson !== f.deliveryPerson || orig.deliveryDate !== f.deliveryDate || orig.pago !== f.pago);
       });
 
       const freteBody = (f: FreightCard) => ({
         entregador: f.deliveryPerson || null,
         valor: f.value || 0,
         data_frete: f.deliveryDate || o.deliveryDate,
+        pago: f.pago ?? false,
       });
 
       const syncItems = async (pedidoId: string) => {
@@ -356,6 +375,7 @@ export function OrderModal({ open, onClose, order, onSave, nextOS, prefill }: Pr
             descricao: item.name || 'Item',
             quantidade: item.quantity || 1,
             valor_projetado: Math.max(0.01, item.projectedValue),
+            preco_custo: item.purchaseValue > 0 ? item.purchaseValue : undefined,
             valor_compra: item.closingValue > 0 ? item.closingValue : undefined,
             status: 'To Buy',
             is_direct_supply: true,
@@ -394,7 +414,7 @@ export function OrderModal({ open, onClose, order, onSave, nextOS, prefill }: Pr
     } else {
       const payload: CreatePedidoPayload = {
         id_loja: LOJA_IDS[o.company] ?? '',
-        id_vendedor: VENDEDOR_IDS[o.seller] ?? '',
+        id_vendedor: vendorIdByName(o.seller ?? ''),
         nome_cliente: o.customer,
         cpf_cnpj: o.cnpj || undefined,
         data_pedido: o.orderDate,
@@ -446,6 +466,7 @@ export function OrderModal({ open, onClose, order, onSave, nextOS, prefill }: Pr
                     descricao: item.name || 'Item',
                     quantidade: item.quantity || 1,
                     valor_projetado: Math.max(0.01, item.projectedValue),
+                    preco_custo: item.purchaseValue > 0 ? item.purchaseValue : undefined,
                     valor_compra: item.closingValue > 0 ? item.closingValue : undefined,
                     status: 'To Buy',
                     is_direct_supply: true,
@@ -468,6 +489,7 @@ export function OrderModal({ open, onClose, order, onSave, nextOS, prefill }: Pr
                   entregador: f.deliveryPerson || null,
                   valor: f.value || 0,
                   data_frete: f.deliveryDate || o.deliveryDate,
+                  pago: f.pago ?? false,
                 }))
               );
             } catch (err) {
@@ -600,7 +622,7 @@ export function OrderModal({ open, onClose, order, onSave, nextOS, prefill }: Pr
               <Select value={form.seller || ''} onValueChange={v => set('seller', v)}>
                 <SelectTrigger className="bg-white border-border"><SelectValue placeholder="Selecionar" /></SelectTrigger>
                 <SelectContent>
-                  {SELLERS.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                  {vendedores.map(v => <SelectItem key={v.id} value={v.nome}>{v.nome}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>
@@ -737,18 +759,18 @@ export function OrderModal({ open, onClose, order, onSave, nextOS, prefill }: Pr
             </div>
             <div className="space-y-2">
               {dsItems.map(item => {
-                const lineProj = (item.projectedValue || 0) * (item.quantity || 0);
-                const lineFinal = (item.closingValue || 0) * (item.quantity || 0);
-                const lineDiff = lineFinal - lineProj;
-                const supplierProfit = lineDiff * (item.supplierPct || 0) / 100;
-                const internalProfit = lineDiff - supplierProfit;
+                const custoFornecedor = ((item.closingValue || 0) - (item.purchaseValue || 0)) * (item.quantity || 0) * (item.supplierPct || 0) / 100 + (item.supplierFreight || 0);
+                const dsEditing = (field: string) => editingDsField?.id === item.id && editingDsField?.field === field;
+                const dsFocus = (field: string, raw: number) => { setEditingDsField({ id: item.id, field }); setEditingDsValue(raw ? String(raw) : ''); };
+                const dsBlurBRL = (field: keyof typeof item) => { updateDsItem(item.id, field, parseBRL(editingDsValue) || parseFloat(editingDsValue) || 0); setEditingDsField(null); };
+                const dsBlurPct = () => { updateDsItem(item.id, 'supplierPct', parseFloat(editingDsValue.replace(',', '.')) || 0); setEditingDsField(null); };
                 return (
                   <div key={item.id} className="border rounded-md p-2 bg-white space-y-2">
                     <div className="grid gap-2 items-start grid-cols-12">
                       <div className="col-span-4">
                         <Input placeholder="Nome" className="bg-white border-border"
                           value={item.name || ''} onChange={e => updateDsItem(item.id, 'name', e.target.value)} onKeyDown={handleEnterBlur} />
-                        <span className="text-[10px] text-muted-foreground">Nome</span>
+                        <span className="text-[10px] text-muted-foreground">Produto</span>
                       </div>
                       <div className="col-span-1">
                         <Input type="number" min={1} className="bg-white border-border"
@@ -756,19 +778,28 @@ export function OrderModal({ open, onClose, order, onSave, nextOS, prefill }: Pr
                         <span className="text-[10px] text-muted-foreground">Qtd</span>
                       </div>
                       <div className="col-span-2">
-                        <Input type="number" step="0.01" className="bg-white border-border"
-                          value={item.projectedValue || ''} onChange={e => updateDsItem(item.id, 'projectedValue', parseFloat(e.target.value) || 0)} onKeyDown={handleEnterBlur} />
+                        <Input className="bg-white border-border"
+                          value={dsEditing('projectedValue') ? editingDsValue : toBRL(item.projectedValue || 0)}
+                          onFocus={() => dsFocus('projectedValue', item.projectedValue || 0)}
+                          onBlur={() => dsBlurBRL('projectedValue')}
+                          onChange={e => setEditingDsValue(e.target.value)} onKeyDown={handleEnterBlur} />
                         <span className="text-[10px] text-muted-foreground">Val. Projetado</span>
                       </div>
                       <div className="col-span-2">
-                        <Input type="number" step="0.01" className="bg-white border-border"
-                          value={item.closingValue || ''} onChange={e => updateDsItem(item.id, 'closingValue', parseFloat(e.target.value) || 0)} onKeyDown={handleEnterBlur} />
-                        <span className="text-[10px] text-muted-foreground">Val. Venda</span>
+                        <Input className="bg-white border-border"
+                          value={dsEditing('purchaseValue') ? editingDsValue : toBRL(item.purchaseValue || 0)}
+                          onFocus={() => dsFocus('purchaseValue', item.purchaseValue || 0)}
+                          onBlur={() => dsBlurBRL('purchaseValue')}
+                          onChange={e => setEditingDsValue(e.target.value)} onKeyDown={handleEnterBlur} />
+                        <span className="text-[10px] text-muted-foreground">Val. Compra</span>
                       </div>
                       <div className="col-span-2">
                         <Input className="bg-white border-border"
-                          value={item.supplier || ''} onChange={e => updateDsItem(item.id, 'supplier', e.target.value)} onKeyDown={handleEnterBlur} />
-                        <span className="text-[10px] text-muted-foreground">Fornecedor</span>
+                          value={dsEditing('closingValue') ? editingDsValue : toBRL(item.closingValue || 0)}
+                          onFocus={() => dsFocus('closingValue', item.closingValue || 0)}
+                          onBlur={() => dsBlurBRL('closingValue')}
+                          onChange={e => setEditingDsValue(e.target.value)} onKeyDown={handleEnterBlur} />
+                        <span className="text-[10px] text-muted-foreground">Val. Venda</span>
                       </div>
                       <div className="col-span-1 flex items-start justify-center pt-1">
                         <Button variant="ghost" size="icon" onClick={() => removeDsItem(item.id)}>
@@ -778,22 +809,29 @@ export function OrderModal({ open, onClose, order, onSave, nextOS, prefill }: Pr
                     </div>
                     <div className="grid grid-cols-5 gap-2">
                       <div>
-                        <Input type="number" step="0.01" min={0} max={100} className="bg-white border-border"
-                          value={item.supplierPct || ''} onChange={e => updateDsItem(item.id, 'supplierPct', parseFloat(e.target.value) || 0)} onKeyDown={handleEnterBlur} />
+                        <Input className="bg-white border-border"
+                          value={item.supplier || ''} onChange={e => updateDsItem(item.id, 'supplier', e.target.value)} onKeyDown={handleEnterBlur} />
+                        <span className="text-[10px] text-muted-foreground">Fornecedor</span>
+                      </div>
+                      <div>
+                        <Input className="bg-white border-border"
+                          value={dsEditing('supplierPct') ? editingDsValue : (item.supplierPct ? `${(item.supplierPct).toFixed(2).replace('.', ',')}%` : '')}
+                          onFocus={() => dsFocus('supplierPct', item.supplierPct || 0)}
+                          onBlur={dsBlurPct}
+                          onChange={e => setEditingDsValue(e.target.value)} onKeyDown={handleEnterBlur} />
                         <span className="text-[10px] text-muted-foreground">% Fornecedor</span>
                       </div>
                       <div>
-                        <Input readOnly className="bg-muted border-border font-semibold" value={toBRL(supplierProfit)} />
-                        <span className="text-[10px] text-muted-foreground">Lucro Fornecedor</span>
-                      </div>
-                      <div>
-                        <Input type="number" step="0.01" className="bg-white border-border"
-                          value={item.supplierFreight || ''} onChange={e => updateDsItem(item.id, 'supplierFreight', parseFloat(e.target.value) || 0)} onKeyDown={handleEnterBlur} />
+                        <Input className="bg-white border-border"
+                          value={dsEditing('supplierFreight') ? editingDsValue : toBRL(item.supplierFreight || 0)}
+                          onFocus={() => dsFocus('supplierFreight', item.supplierFreight || 0)}
+                          onBlur={() => dsBlurBRL('supplierFreight')}
+                          onChange={e => setEditingDsValue(e.target.value)} onKeyDown={handleEnterBlur} />
                         <span className="text-[10px] text-muted-foreground">Frete Fornecedor</span>
                       </div>
                       <div>
-                        <Input readOnly className="bg-muted border-border font-semibold" value={toBRL(internalProfit)} />
-                        <span className="text-[10px] text-muted-foreground">Lucro Interno</span>
+                        <Input readOnly className="bg-muted border-border font-semibold" value={toBRL(custoFornecedor)} />
+                        <span className="text-[10px] text-muted-foreground">Custo Fornecedor</span>
                       </div>
                       <div>
                         <Input className="bg-white border-border"
@@ -820,45 +858,56 @@ export function OrderModal({ open, onClose, order, onSave, nextOS, prefill }: Pr
             </Button>
           </div>
           <div className="space-y-2">
-            {(form.items || []).map(item => (
-              <div key={item.id} className="grid grid-cols-12 gap-2 items-center border rounded-md p-2 bg-muted/20">
-                <Input placeholder="Nome do Item" className="col-span-4 bg-white border-border"
-                  value={item.name} onChange={e => updateItem(item.id, 'name', e.target.value)} onKeyDown={handleEnterBlur} />
-                <Input type="number" min="1" placeholder="Qtd" className="col-span-1 bg-white border-border"
-                  value={item.quantity} onChange={e => updateItem(item.id, 'quantity', parseInt(e.target.value) || 1)} onKeyDown={handleEnterBlur} />
-                <Select value={item.status} onValueChange={v => updateItem(item.id, 'status', v)}>
-                  <SelectTrigger className={cn('col-span-2 border', ITEM_STATUS_COLORS[item.status])}>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {(['To Buy', 'Bought', 'In Stock'] as ItemStatus[]).map(s => (
-                      <SelectItem key={s} value={s}>
-                        <span className={cn('px-1 rounded text-xs font-medium', ITEM_STATUS_COLORS[s])}>
-                          {s === 'To Buy' ? 'A Comprar' : s === 'Bought' ? 'Comprado' : 'Em Estoque'}
-                        </span>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <div className="col-span-2">
-                  <Input type="number" step="0.01" placeholder="Valor Projetado R$" className="bg-white border-border"
-                    value={item.projectedValue || ''} onChange={e => updateItem(item.id, 'projectedValue', parseFloat(e.target.value) || 0)} onKeyDown={handleEnterBlur} />
+            {(form.items || []).map(item => {
+              const itEditing = (field: string) => editingDsField?.id === item.id && editingDsField?.field === field;
+              const itFocus = (field: string, raw: number) => { setEditingDsField({ id: item.id, field }); setEditingDsValue(raw ? String(raw) : ''); };
+              const itBlurBRL = (field: 'projectedValue' | 'purchaseValue') => { updateItem(item.id, field, parseBRL(editingDsValue) || parseFloat(editingDsValue) || 0); setEditingDsField(null); };
+              return (
+                <div key={item.id} className="grid grid-cols-12 gap-2 items-center border rounded-md p-2 bg-muted/20">
+                  <Input placeholder="Nome do Item" className="col-span-4 bg-white border-border"
+                    value={item.name} onChange={e => updateItem(item.id, 'name', e.target.value)} onKeyDown={handleEnterBlur} />
+                  <Input type="number" min="1" placeholder="Qtd" className="col-span-1 bg-white border-border"
+                    value={item.quantity} onChange={e => updateItem(item.id, 'quantity', parseInt(e.target.value) || 1)} onKeyDown={handleEnterBlur} />
+                  <Select value={item.status} onValueChange={v => updateItem(item.id, 'status', v)}>
+                    <SelectTrigger className={cn('col-span-2 border', ITEM_STATUS_COLORS[item.status])}>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {(['To Buy', 'Bought', 'In Stock'] as ItemStatus[]).map(s => (
+                        <SelectItem key={s} value={s}>
+                          <span className={cn('px-1 rounded text-xs font-medium', ITEM_STATUS_COLORS[s])}>
+                            {s === 'To Buy' ? 'A Comprar' : s === 'Bought' ? 'Comprado' : 'Em Estoque'}
+                          </span>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <div className="col-span-2">
+                    <Input placeholder="Valor Projetado R$" className="bg-white border-border"
+                      value={itEditing('projectedValue') ? editingDsValue : toBRL(item.projectedValue || 0)}
+                      onFocus={() => itFocus('projectedValue', item.projectedValue || 0)}
+                      onBlur={() => itBlurBRL('projectedValue')}
+                      onChange={e => setEditingDsValue(e.target.value)} onKeyDown={handleEnterBlur} />
+                  </div>
+                  <div className="col-span-2">
+                    {item.subPurchases && item.subPurchases.length > 0 ? (
+                      <Input readOnly placeholder="Valor de Compra R$" className="bg-muted border-border"
+                        title="Sincronizado a partir do Modal de Produto"
+                        value={toBRL(item.purchaseValue || 0)} />
+                    ) : (
+                      <Input placeholder="Valor de Compra R$" className="bg-white border-border"
+                        value={itEditing('purchaseValue') ? editingDsValue : toBRL(item.purchaseValue || 0)}
+                        onFocus={() => itFocus('purchaseValue', item.purchaseValue || 0)}
+                        onBlur={() => itBlurBRL('purchaseValue')}
+                        onChange={e => setEditingDsValue(e.target.value)} onKeyDown={handleEnterBlur} />
+                    )}
+                  </div>
+                  <Button variant="ghost" size="icon" className="col-span-1" onClick={() => removeItem(item.id)}>
+                    <Trash2 className="h-4 w-4 text-destructive" />
+                  </Button>
                 </div>
-                <div className="col-span-2">
-                  {item.subPurchases && item.subPurchases.length > 0 ? (
-                    <Input readOnly placeholder="Valor de Compra R$" className="bg-muted border-border"
-                      title="Sincronizado a partir do Modal de Produto"
-                      value={(item.purchaseValue || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} />
-                  ) : (
-                    <Input type="number" step="0.01" placeholder="Valor de Compra R$" className="bg-white border-border"
-                      value={item.purchaseValue || ''} onChange={e => updateItem(item.id, 'purchaseValue', parseFloat(e.target.value) || 0)} onKeyDown={handleEnterBlur} />
-                  )}
-                </div>
-                <Button variant="ghost" size="icon" className="col-span-1" onClick={() => removeItem(item.id)}>
-                  <Trash2 className="h-4 w-4 text-destructive" />
-                </Button>
-              </div>
-            ))}
+              );
+            })}
             {(form.items || []).length === 0 && (
               <p className="text-sm text-muted-foreground text-center py-4">Nenhum item adicionado</p>
             )}
@@ -931,6 +980,11 @@ export function OrderModal({ open, onClose, order, onSave, nextOS, prefill }: Pr
             <div>
               <Label>Lucro</Label>
               <Input readOnly value={toBRL(profit)}
+                className={cn('font-bold border', profit >= 0 ? 'bg-[hsl(var(--st-delivered)/0.15)] text-[hsl(var(--st-delivered))]' : 'bg-[hsl(var(--st-cancelled)/0.15)] text-[hsl(var(--st-cancelled))]')} />
+            </div>
+            <div>
+              <Label>Margem do Pedido</Label>
+              <Input readOnly value={(form.salesValue || 0) > 0 ? `${((profit / (form.salesValue || 1)) * 100).toFixed(1)}%` : '—'}
                 className={cn('font-bold border', profit >= 0 ? 'bg-[hsl(var(--st-delivered)/0.15)] text-[hsl(var(--st-delivered))]' : 'bg-[hsl(var(--st-cancelled)/0.15)] text-[hsl(var(--st-cancelled))]')} />
             </div>
           </div>
@@ -1009,7 +1063,7 @@ function FreightRow({ idx, card, onChange, onRemove }: {
   return (
     <div className="grid grid-cols-12 gap-2 items-center border rounded-md p-2 bg-muted/20">
       <span className="col-span-1 text-xs font-bold text-secondary">#{idx + 1}</span>
-      <Input placeholder="Entregador" className="col-span-4 bg-white border-border"
+      <Input placeholder="Entregador" className="col-span-3 bg-white border-border"
         value={card.deliveryPerson} onChange={e => onChange('deliveryPerson', e.target.value)} onKeyDown={handleEnterBlur} />
       <div className="col-span-3">
         <Input placeholder="R$ 0,00" className="bg-white border-border"
@@ -1035,6 +1089,13 @@ function FreightRow({ idx, card, onChange, onRemove }: {
           </PopoverContent>
         </Popover>
       </div>
+      <Button variant="ghost" size="icon" className="col-span-1"
+        title={card.pago ? 'Pago' : 'Não pago'}
+        onClick={() => onChange('pago', !card.pago)}>
+        {card.pago
+          ? <CheckCircle2 className="h-5 w-5 text-green-600" />
+          : <Circle className="h-5 w-5 text-muted-foreground" />}
+      </Button>
       <Button variant="ghost" size="icon" className="col-span-1" onClick={onRemove}>
         <Trash2 className="h-4 w-4 text-destructive" />
       </Button>

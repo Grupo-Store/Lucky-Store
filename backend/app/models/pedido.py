@@ -102,6 +102,7 @@ class Frete(Base):
     valor = Column(Numeric(12, 2), nullable=False)
     entregador = Column(String(255), nullable=True)
     data_frete = Column(Date, nullable=False)
+    pago = Column(Boolean, nullable=False, default=False)
 
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=True)
     updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc), nullable=True)

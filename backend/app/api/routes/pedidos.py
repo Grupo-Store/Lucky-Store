@@ -7,6 +7,7 @@ from app.models.user import User
 from app.models.audit_log import AuditLog
 from app.models.status_history import StatusHistory, EntityType
 from app.schemas.pedido import (
+    FretePagoUpdate,
     PedidoCreate, PedidoUpdate, PedidoResponse,
     PedidoDetailResponse, PedidoListResponse, PedidoListItemResponse,
     StatusChangeRequest, StatusHistoryOut,
@@ -218,7 +219,7 @@ def add_frete(
         PedidoService.get_by_id(db, pedido_id)
     except NotFoundException as exc:
         raise to_http_exception(exc)
-    frete = Frete(id_pedido=pedido_id, entregador=data.entregador, valor=data.valor, data_frete=data.data_frete)
+    frete = Frete(id_pedido=pedido_id, entregador=data.entregador, valor=data.valor, data_frete=data.data_frete, pago=data.pago)
     db.add(frete)
     db.commit()
     db.refresh(frete)
@@ -239,6 +240,24 @@ def update_frete(
     frete.entregador = data.entregador
     frete.valor = data.valor
     frete.data_frete = data.data_frete
+    frete.pago = data.pago
+    db.commit()
+    db.refresh(frete)
+    return FreteOut.model_validate(frete)
+
+
+@router.patch("/{pedido_id}/fretes/{frete_id}/pago", response_model=FreteOut)
+def toggle_frete_pago(
+    pedido_id: UUID,
+    frete_id: UUID,
+    data: FretePagoUpdate,
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_user_dep),
+):
+    frete = db.query(Frete).filter(Frete.id == frete_id, Frete.id_pedido == pedido_id).first()
+    if not frete:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Frete não encontrado")
+    frete.pago = data.pago
     db.commit()
     db.refresh(frete)
     return FreteOut.model_validate(frete)

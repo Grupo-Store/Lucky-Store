@@ -49,6 +49,11 @@ class FreteCreate(BaseModel):
     entregador: Optional[str] = None
     valor: Decimal
     data_frete: date
+    pago: bool = False
+
+
+class FretePagoUpdate(BaseModel):
+    pago: bool
 
 
 class FreteOut(BaseModel):
@@ -56,6 +61,7 @@ class FreteOut(BaseModel):
     entregador: Optional[str]
     valor: Decimal
     data_frete: date
+    pago: bool = False
 
     class Config:
         from_attributes = True

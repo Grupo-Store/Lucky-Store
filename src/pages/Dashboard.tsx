@@ -20,6 +20,7 @@ import {
 } from 'recharts';
 import { cn } from '@/lib/utils';
 import { useOrders, calcTotal, calcFinalCost, calcProfit, Order, SELLERS, calcFreightTotal } from '@/store/OrderStore';
+import { useVendedores } from '@/hooks/useVendedores';
 import { useFinance, Goal, GoalScopeType, goalKey, expandExpense } from '@/store/FinanceStore';
 import { useQuotes } from '@/store/QuoteStore';
 import { useDashboardFilters } from '@/store/DashboardFilterStore';
@@ -165,18 +166,21 @@ function GoalsModal({
   const [floor, setFloor] = useState<number>(0);
   const [editingKey, setEditingKey] = useState<string | null>(null);
 
+  const { data: vendedoresData } = useVendedores();
+  const goalSellerNames = vendedoresData?.items.map(v => v.nome) ?? SELLERS;
+
   const companyOptions: { value: string; label: string }[] = [
     { value: 'all', label: 'Geral (todas as empresas)' },
     { value: 'Lucky Store', label: 'Lucky Store' },
     { value: 'BTech', label: 'BTech' },
     { value: 'AJJ', label: 'AJJ' },
   ];
-  const sellerOptions = SELLERS.map(s => ({ value: s, label: s }));
+  const sellerOptions = goalSellerNames.map(s => ({ value: s, label: s }));
   const scopeOptions = scopeType === 'company' ? companyOptions : sellerOptions;
 
   const onScopeTypeChange = (v: GoalScopeType) => {
     setScopeType(v);
-    setScopeId(v === 'company' ? 'all' : SELLERS[0]);
+    setScopeId(v === 'company' ? 'all' : (goalSellerNames[0] ?? ''));
   };
 
   const resetForm = () => {
@@ -305,6 +309,8 @@ function GoalsModal({
 
 export default function Dashboard() {
   const { orders } = useOrders();
+  const { data: vendedoresData } = useVendedores();
+  const sellerNames = vendedoresData?.items.map(v => v.nome) ?? SELLERS;
   const { goals, upsertGoal, deleteGoal, expenses } = useFinance();
   const { quotes } = useQuotes();
   const { filters: globalFilters, setFilters: setGlobalFilters, mode, section } = useDashboardFilters();
@@ -342,7 +348,7 @@ export default function Dashboard() {
   const stats = useMemo(() => computeStats(filtered, orders, filters, goal), [filtered, orders, filters, goal]);
 
   const perSeller = useMemo(() => {
-    return SELLERS.map(seller => {
+    return sellerNames.map(seller => {
       const list = filtered.filter(o => o.seller === seller);
       const sGoal = goals.find(g =>
         g.year === filters.year && g.month === filters.month + 1 &&
@@ -351,7 +357,7 @@ export default function Dashboard() {
       const s = computeStats(list, orders, filters, sGoal);
       return { seller, ...s };
     });
-  }, [filtered, orders, filters, goals]);
+  }, [filtered, orders, filters, goals, sellerNames]);
 
   const quotesCount = useMemo(() => {
     return quotes.filter(q => {
