@@ -306,8 +306,8 @@ test.describe('feature/list-view-integration — E2E', () => {
       await rmaTab.click();
       await page.waitForTimeout(500);
 
-      // The RMA we mock has status "In Repair"
-      await expect(page.getByText(/Em Reparo/i)).toBeVisible({ timeout: 5_000 });
+      // The RMA we mock has item status "Repaired Received"
+      await expect(page.getByText(/Reparado e Recebido/i)).toBeVisible({ timeout: 5_000 });
     }
   });
 

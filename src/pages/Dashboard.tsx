@@ -20,6 +20,8 @@ import {
 } from 'recharts';
 import { cn } from '@/lib/utils';
 import { useOrders, calcTotal, calcFinalCost, calcProfit, Order, SELLERS, calcFreightTotal } from '@/store/OrderStore';
+import { Skeleton } from '@/components/ui/skeleton';
+import { useGoals, useUpsertGoal, useDeleteGoal, type ApiGoal, LOJA_ID, LOJA_NAME } from '@/api/hooks/useDashboard';
 import { useVendedores } from '@/hooks/useVendedores';
 import { useFinance, Goal, GoalScopeType, goalKey, expandExpense } from '@/store/FinanceStore';
 import { useQuotes } from '@/store/QuoteStore';
@@ -76,7 +78,7 @@ function applyFilters(orders: Order[], f: FilterCriteria): Order[] {
   });
 }
 
-function computeStats(orders: Order[], all: Order[], f: FilterCriteria, goal?: Goal) {
+function computeStats(orders: Order[], all: Order[], f: FilterCriteria, goal?: { target: number; floor: number }) {
   const revenue = orders.reduce((s, o) => s + calcTotal(o), 0);
   const cost = orders.reduce((s, o) => s + calcFinalCost(o), 0);
   const profit = orders.reduce((s, o) => s + calcProfit(o), 0);
@@ -152,19 +154,22 @@ function KpiCard({ label, value, sub, accent }: { label: string; value: string; 
 }
 
 function GoalsModal({
-  open, onClose, goals, upsertGoal, deleteGoal, year, month,
+  open, onClose, year, month,
 }: {
-  open: boolean; onClose: () => void; goals: Goal[];
-  upsertGoal: (g: Goal) => void; deleteGoal: (key: string) => void;
+  open: boolean; onClose: () => void;
   year: number; month: number;
 }) {
   const [y, setY] = useState(year);
   const [m, setM] = useState(month + 1);
-  const [scopeType, setScopeType] = useState<GoalScopeType>('company');
-  const [scopeId, setScopeId] = useState<string>('all');
+  const defaultLojaId = LOJA_ID['Lucky Store'] ?? Object.values(LOJA_ID)[0] ?? '';
+  const [idLoja, setIdLoja] = useState<string>(defaultLojaId);
   const [target, setTarget] = useState<number>(0);
   const [floor, setFloor] = useState<number>(0);
-  const [editingKey, setEditingKey] = useState<string | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
+
+  const { data: goals = [], isLoading } = useGoals({ ano: y, mes: m });
+  const { mutate: upsert, isPending: saving } = useUpsertGoal();
+  const { mutate: removeGoal } = useDeleteGoal();
 
   const { data: vendedoresData } = useVendedores();
   const goalSellerNames = vendedoresData?.items.map(v => v.nome) ?? SELLERS;
@@ -183,55 +188,40 @@ function GoalsModal({
     setScopeId(v === 'company' ? 'all' : (goalSellerNames[0] ?? ''));
   };
 
+
   const resetForm = () => {
-    setTarget(0); setFloor(0); setEditingKey(null);
+    setTarget(0); setFloor(0); setEditingId(null);
   };
 
   const save = () => {
-    const key = goalKey(y, m, scopeType, scopeId);
-    upsertGoal({ key, year: y, month: m, scopeType, scopeId, target, floor });
-    resetForm();
+    upsert({ ano: y, mes: m, id_loja: idLoja, target, floor }, { onSuccess: resetForm });
   };
 
-  const loadForEdit = (g: Goal) => {
-    setY(g.year);
-    setM(g.month);
-    setScopeType(g.scopeType);
-    setScopeId(g.scopeId);
+  const loadForEdit = (g: ApiGoal) => {
+    setY(g.ano);
+    setM(g.mes);
+    setIdLoja(String(g.id_loja));
     setTarget(g.target);
     setFloor(g.floor);
-    setEditingKey(g.key);
+    setEditingId(g.id);
   };
 
-  const scopeLabel = (g: Goal) =>
-    g.scopeType === 'company'
-      ? (g.scopeId === 'all' ? 'Empresa: Geral' : `Empresa: ${g.scopeId}`)
-      : `Vendedor: ${g.scopeId}`;
+  const lojaLabel = (id: string) => LOJA_NAME[id] ?? id;
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
       <DialogContent className="max-w-3xl">
         <DialogHeader>
-          <DialogTitle>{editingKey ? 'Editar Meta' : 'Configurar Metas'}</DialogTitle>
+          <DialogTitle>{editingId ? 'Editar Meta' : 'Configurar Metas'}</DialogTitle>
         </DialogHeader>
         <div className="space-y-4">
           <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
             <div>
-              <Label>Tipo de Meta</Label>
-              <Select value={scopeType} onValueChange={(v) => onScopeTypeChange(v as GoalScopeType)}>
+              <Label>Empresa</Label>
+              <Select value={idLoja} onValueChange={setIdLoja}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="company">Empresa</SelectItem>
-                  <SelectItem value="seller">Vendedor</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label>{scopeType === 'company' ? 'Empresa' : 'Vendedor'}</Label>
-              <Select value={scopeId} onValueChange={setScopeId}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {scopeOptions.map(o => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
+                  {companyOptions.map(o => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>
@@ -258,10 +248,10 @@ function GoalsModal({
             </div>
           </div>
           <div className="flex gap-2">
-            <Button onClick={save} className="flex-1">
-              {editingKey ? 'Atualizar Meta' : 'Salvar Meta'}
+            <Button onClick={save} disabled={saving} className="flex-1">
+              {editingId ? 'Atualizar Meta' : 'Salvar Meta'}
             </Button>
-            {editingKey && (
+            {editingId && (
               <Button variant="outline" onClick={resetForm}>Cancelar Edição</Button>
             )}
           </div>
@@ -269,20 +259,30 @@ function GoalsModal({
           <div className="border-t pt-4">
             <h4 className="font-semibold mb-2">Metas registradas</h4>
             <p className="text-xs text-muted-foreground mb-2">Clique em uma meta para editá-la.</p>
-            {goals.length === 0 ? (
-              <p className="text-sm text-muted-foreground">Nenhuma meta cadastrada.</p>
+            {isLoading ? (
+              <Skeleton className="h-24 w-full" />
+            ) : goals.length === 0 ? (
+              <p className="text-sm text-muted-foreground">Nenhuma meta cadastrada para este período.</p>
             ) : (
               <Table>
-                <TableHeader><TableRow><TableHead>Mês/Ano</TableHead><TableHead>Escopo</TableHead><TableHead>Meta</TableHead><TableHead>Piso</TableHead><TableHead></TableHead></TableRow></TableHeader>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Mês/Ano</TableHead>
+                    <TableHead>Empresa</TableHead>
+                    <TableHead>Meta</TableHead>
+                    <TableHead>Piso</TableHead>
+                    <TableHead></TableHead>
+                  </TableRow>
+                </TableHeader>
                 <TableBody>
                   {goals.map(g => (
                     <TableRow
-                      key={g.key}
-                      className={cn('cursor-pointer hover:bg-muted/50', editingKey === g.key && 'bg-secondary/10')}
+                      key={g.id}
+                      className={cn('cursor-pointer hover:bg-muted/50', editingId === g.id && 'bg-secondary/10')}
                       onClick={() => loadForEdit(g)}
                     >
-                      <TableCell>{MONTHS[g.month - 1]}/{g.year}</TableCell>
-                      <TableCell>{scopeLabel(g)}</TableCell>
+                      <TableCell>{MONTHS[g.mes - 1]}/{g.ano}</TableCell>
+                      <TableCell>{lojaLabel(g.id_loja)}</TableCell>
                       <TableCell>{BRL(g.target)}</TableCell>
                       <TableCell>{BRL(g.floor)}</TableCell>
                       <TableCell className="flex gap-1" onClick={e => e.stopPropagation()}>
@@ -290,8 +290,8 @@ function GoalsModal({
                           <Pencil className="h-3.5 w-3.5" />
                         </Button>
                         <Button size="sm" variant="destructive" onClick={() => {
-                          deleteGoal(g.key);
-                          if (editingKey === g.key) resetForm();
+                          removeGoal(g.id);
+                          if (editingId === g.id) resetForm();
                         }}>Excluir</Button>
                       </TableCell>
                     </TableRow>
@@ -315,6 +315,7 @@ export default function Dashboard() {
   const { quotes } = useQuotes();
   const { filters: globalFilters, setFilters: setGlobalFilters, mode, section } = useDashboardFilters();
   const { data: apiKpis, isLoading: kpisLoading } = useDashboardKpis();
+  const { data: apiGoals = [] } = useGoals({ ano: globalFilters.year, mes: globalFilters.month + 1 });
 
   // Local: company sub-filter
   const [company, setCompany] = useState<CompanyKey>('all');
@@ -339,22 +340,15 @@ export default function Dashboard() {
   const filtered = useMemo(() => applyFilters(orders, filters), [orders, filters]);
 
   const goal = useMemo(
-    () => goals.find(g =>
-      g.year === filters.year && g.month === filters.month + 1 &&
-      g.scopeType === 'company' && g.scopeId === filters.company
-    ),
-    [goals, filters.year, filters.month, filters.company]
+    () => apiGoals.find(g => String(g.id_loja) === LOJA_ID[filters.company]),
+    [apiGoals, filters.company]
   );
   const stats = useMemo(() => computeStats(filtered, orders, filters, goal), [filtered, orders, filters, goal]);
 
   const perSeller = useMemo(() => {
     return sellerNames.map(seller => {
       const list = filtered.filter(o => o.seller === seller);
-      const sGoal = goals.find(g =>
-        g.year === filters.year && g.month === filters.month + 1 &&
-        g.scopeType === 'seller' && g.scopeId === seller
-      );
-      const s = computeStats(list, orders, filters, sGoal);
+      const s = computeStats(list, orders, filters);
       return { seller, ...s };
     });
   }, [filtered, orders, filters, goals, sellerNames]);
@@ -738,11 +732,7 @@ export default function Dashboard() {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             {perSeller.map(s => {
               const hasGoal = s.target > 0;
-              const sellerGoal = goals.find(g =>
-                g.year === filters.year && g.month === filters.month + 1 &&
-                g.scopeType === 'seller' && g.scopeId === s.seller
-              );
-              const floor = sellerGoal?.floor ?? 0;
+              const floor = 0;
               const aboveFloor = floor > 0 && s.revenue >= floor;
               const aboveTarget = hasGoal && s.revenue >= s.target;
               return (
@@ -817,19 +807,12 @@ export default function Dashboard() {
               <ResponsiveContainer width="100%" height={300}>
                 <BarChart data={perSeller.map(s => ({
                   name: s.seller,
-                  Alvo: s.target,
-                  Piso: goals.find(g =>
-                    g.year === filters.year && g.month === filters.month + 1 &&
-                    g.scopeType === 'seller' && g.scopeId === s.seller
-                  )?.floor ?? 0,
                   Vendas: s.revenue,
                   Lucro: s.profit,
                 }))}>
                   <XAxis dataKey="name" /><YAxis />
                   <Tooltip formatter={(v: number) => BRL(v)} />
                   <Legend />
-                  <Bar dataKey="Alvo" fill="hsl(35, 90%, 55%)" radius={[4, 4, 0, 0]} />
-                  <Bar dataKey="Piso" fill="hsl(0, 70%, 60%)" radius={[4, 4, 0, 0]} />
                   <Bar dataKey="Vendas" fill="hsl(192, 76%, 29%)" radius={[4, 4, 0, 0]} />
                   <Bar dataKey="Lucro" fill="hsl(140, 70%, 40%)" radius={[4, 4, 0, 0]} />
                 </BarChart>
@@ -841,7 +824,6 @@ export default function Dashboard() {
 
       <GoalsModal
         open={goalsOpen} onClose={() => setGoalsOpen(false)}
-        goals={goals} upsertGoal={upsertGoal} deleteGoal={deleteGoal}
         year={filters.year} month={filters.month}
       />
     </div>
