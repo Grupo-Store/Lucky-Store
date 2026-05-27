@@ -1,4 +1,5 @@
-import React, { createContext, useContext, useState, useCallback } from 'react';
+import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
+import { apiFetch } from '@/lib/api';
 import { PaymentMethod, Order } from './OrderStore';
 
 export type ExpenseKind = 'PREVISAO' | 'PAGO';
@@ -180,24 +181,84 @@ export function goalKey(year: number, month: number, scopeType: GoalScopeType, s
 
 const FinanceContext = createContext<FinanceContextType | null>(null);
 
-const sampleExpenses: Expense[] = [
-  {
-    id: 'e1', kind: 'PREVISAO', service: 'Aluguel', destination: 'Imobiliária X',
-    predictedValue: 4500, predictedDate: '2026-04-20', status: 'Não Pago',
-  },
-  {
-    id: 'e2', kind: 'PAGO', service: 'Energia Elétrica', destination: 'Enel',
-    paidValue: 820, paymentDate: '2026-04-12', paymentMethod: 'Boleto',
-  },
-];
+// ── API ↔ Expense adapters ────────────────────────────────────────────────────
+
+interface DespesaApiItem {
+  id: string; tipo: string; servico: string; destino: string;
+  valor_previsto: string | null; data_prevista: string | null; status: string | null;
+  valor_pago: string | null; data_pagamento: string | null; metodo_pagamento: string | null;
+  parcelas: number | null; plano_parcelas: { date: string; value: string }[] | null;
+  observacoes: string | null;
+}
+
+function fromApi(a: DespesaApiItem): Expense {
+  return {
+    id: a.id,
+    kind: a.tipo as ExpenseKind,
+    service: a.servico,
+    destination: a.destino,
+    predictedValue: a.valor_previsto != null ? Number(a.valor_previsto) : undefined,
+    predictedDate: a.data_prevista ?? undefined,
+    status: (a.status as ExpenseStatus) ?? undefined,
+    paidValue: a.valor_pago != null ? Number(a.valor_pago) : undefined,
+    paymentDate: a.data_pagamento ?? undefined,
+    paymentMethod: (a.metodo_pagamento as PaymentMethod) ?? undefined,
+    installments: a.parcelas ?? undefined,
+    installmentPlan: a.plano_parcelas
+      ? a.plano_parcelas.map(p => ({ date: p.date, value: Number(p.value) }))
+      : undefined,
+    observations: a.observacoes ?? undefined,
+  };
+}
+
+function toApiPayload(e: Expense) {
+  return {
+    tipo: e.kind,
+    servico: e.service,
+    destino: e.destination,
+    valor_previsto: e.predictedValue ?? null,
+    data_prevista: e.predictedDate ?? null,
+    status: e.status ?? null,
+    valor_pago: e.paidValue ?? null,
+    data_pagamento: e.paymentDate ?? null,
+    metodo_pagamento: e.paymentMethod ?? null,
+    parcelas: e.installments ?? null,
+    plano_parcelas: e.installmentPlan ?? null,
+    observacoes: e.observations ?? null,
+  };
+}
 
 export function FinanceProvider({ children }: { children: React.ReactNode }) {
-  const [expenses, setExpenses] = useState<Expense[]>(sampleExpenses);
+  const [expenses, setExpenses] = useState<Expense[]>([]);
   const [goals, setGoals] = useState<Goal[]>([]);
 
-  const addExpense = useCallback((e: Expense) => setExpenses(p => [...p, e]), []);
-  const updateExpense = useCallback((e: Expense) => setExpenses(p => p.map(x => x.id === e.id ? e : x)), []);
-  const deleteExpense = useCallback((id: string) => setExpenses(p => p.filter(x => x.id !== id)), []);
+  useEffect(() => {
+    apiFetch<DespesaApiItem[]>('/despesas')
+      .then(data => setExpenses(data.map(fromApi)))
+      .catch(() => { /* mantém lista vazia se API indisponível */ });
+  }, []);
+
+  const addExpense = useCallback((e: Expense) => {
+    setExpenses(p => [...p, e]);
+    apiFetch<DespesaApiItem>('/despesas', {
+      init: { method: 'POST', body: JSON.stringify(toApiPayload(e)) },
+    }).then(created => {
+      setExpenses(p => p.map(x => x.id === e.id ? fromApi(created) : x));
+    }).catch(() => { /* mantém entrada otimista */ });
+  }, []);
+
+  const updateExpense = useCallback((e: Expense) => {
+    setExpenses(p => p.map(x => x.id === e.id ? e : x));
+    apiFetch<DespesaApiItem>(`/despesas/${e.id}`, {
+      init: { method: 'PUT', body: JSON.stringify(toApiPayload(e)) },
+    }).catch(() => { /* atualização otimista já aplicada */ });
+  }, []);
+
+  const deleteExpense = useCallback((id: string) => {
+    setExpenses(p => p.filter(x => x.id !== id));
+    apiFetch(`/despesas/${id}`, { init: { method: 'DELETE' } })
+      .catch(() => { /* remoção otimista já aplicada */ });
+  }, []);
 
   const upsertGoal = useCallback((g: Goal) => {
     setGoals(p => {

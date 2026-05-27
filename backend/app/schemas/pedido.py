@@ -132,6 +132,11 @@ class PedidoUpdate(BaseModel):
     observacao: Optional[str] = None
     fornecedor_principal: Optional[str] = None
     nota_fiscal_fornecedor: Optional[str] = None
+    data_pagamento: Optional[date] = None
+    valor_multa: Optional[Decimal] = None
+    valor_juros: Optional[Decimal] = None
+    metodo_pagamento: Optional[str] = None
+    plano_parcelas: Optional[List[dict]] = None
 
 
 class StatusChangeRequest(BaseModel):
@@ -215,6 +220,11 @@ class PedidoListItemResponse(BaseModel):
     formas_pagamento: List[FormaPagamentoOut] = []
     fretes: List[FreteOut] = []
     produtos: List[ProdutoResponse] = []
+    data_pagamento: Optional[date] = None
+    valor_multa: Optional[Decimal] = None
+    valor_juros: Optional[Decimal] = None
+    metodo_pagamento: Optional[str] = None
+    plano_parcelas: Optional[List[dict]] = None
 
     class Config:
         from_attributes = True

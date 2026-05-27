@@ -90,6 +90,11 @@ def list_pedidos(
             formas_pagamento=[FormaPagamentoOut.model_validate(fp) for fp in (p.formas_pagamento or [])],
             fretes=[FreteOut.model_validate(f) for f in (p.fretes or [])],
             produtos=[ProdutoResponse.model_validate(prod) for prod in (p.produtos or [])],
+            data_pagamento=p.data_pagamento,
+            valor_multa=p.valor_multa,
+            valor_juros=p.valor_juros,
+            metodo_pagamento=p.metodo_pagamento,
+            plano_parcelas=p.plano_parcelas,
         )
         for p in items
     ]
