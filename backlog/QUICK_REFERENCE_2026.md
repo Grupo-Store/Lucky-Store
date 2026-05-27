@@ -13,20 +13,21 @@
 | **Platform** | B2B Order/Quotes/RMA Management |
 | **Users** | 100-500 (Brazil market) |
 | **Team** | 2 Backend + 2 Frontend |
-| **Tech Stack** | React 18 + FastAPI/Express + PostgreSQL |
+| **Tech Stack** | React 18 + FastAPI (Python) + PostgreSQL |
 
 ---
 
-## 🏗️ Tech Stack
+## 🏗️ Tech Stack ✅ DECIDIDO
 
 ```
 Frontend:        React 18 + TypeScript + Vite + Shadcn UI
-Backend:         [DECIDE THIS WEEK] FastAPI (Python) OR Express (Node.js)
-Database:        PostgreSQL 14+ with UUID primary keys
+Backend:         Python + FastAPI ✅
+Database:        PostgreSQL 14+ com UUID primary keys
 Authentication:  JWT + TOTP 2FA
-ORM:             SQLAlchemy (Python) OR Prisma (Node.js)
-Deployment:      Docker + GitHub Actions
-Hosting:         AWS / Azure / DigitalOcean / Railway / Render
+ORM:             SQLAlchemy 2.x + Alembic ✅
+Validação:       Pydantic v2 ✅
+Deploy:          Railway (produção) + PostgreSQL local (dev) ✅
+Frontend Deploy: Vercel
 ```
 
 ---
@@ -178,26 +179,24 @@ PATCH  /api/rma/:id                  → Update status
 
 ---
 
-## 🎯 Week 1 Critical Tasks (BLOCKER)
+## 🎯 Week 1 — Status (April 25, 2026)
 
-### Monday
-- [ ] Backend team: PostgreSQL installed locally
-- [ ] Run DATABASE_INIT.sql
-- [ ] Verify all 16 tables created
-- [ ] Run verification checklist
+### ✅ Concluído
+- [x] **DECISÃO:** Python FastAPI ← feita
+- [x] Projeto backend estruturado (`main.py`, `app/`, `alembic/`)
+- [x] Auth endpoints implementados (8 rotas)
+- [x] `.env` + `railway.toml` + `Procfile` criados
+- [x] Railway escolhido como plataforma de produção
 
-### Tuesday
-- [ ] **CRITICAL DECISION:** FastAPI or Express?
-- [ ] Initialize backend project
-- [ ] Test database connection
-
-### Wednesday-Friday
-- [ ] Generate all 16 ORM models
-- [ ] Start authentication service
-- [ ] Begin Orders API
+### ⬜ Pendente esta semana
+- [ ] PostgreSQL instalado localmente (todos os devs)
+- [ ] Rodar `DATABASE_INIT.sql`
+- [ ] `alembic upgrade head` (criar tabelas)
+- [ ] Gerar 15 modelos ORM restantes
+- [ ] Testar conexão e subir `uvicorn main:app --reload`
 - [ ] Setup frontend API client
 
-**If these aren't done by Friday → BLOCKER for Week 2**
+**Se não concluído até sexta → BLOCKER para Semana 2**
 
 ---
 
@@ -232,12 +231,13 @@ PATCH  /api/rma/:id                  → Update status
 
 | Pitfall | Solution |
 |---------|----------|
-| Soft delete queries showing deleted data | Add WHERE deleted_at IS NULL to all queries |
+| Soft delete queries showing deleted data | Add `WHERE deleted_at IS NULL` to all queries |
 | Lost status changes | Verify INSERT into status_history for every status update |
 | Audit logs incomplete | Verify all CREATE/UPDATE/DELETE trigger audit log insertion |
 | Token refresh failing | Check interceptor implementation in API client |
 | Test database setup taking too long | Use DATABASE_INIT.sql instead of manual creation |
-| Backend language decision delayed | **Vote immediately:** FastAPI (speed) or Express (ecosystem) |
+| Migrations não aplicadas | Rodar `alembic upgrade head` após criar/alterar modelos |
+| Variáveis de ambiente em produção | Configurar no painel Railway, não no `.env` do repositório |
 
 ---
 
@@ -325,13 +325,14 @@ ORDER BY changed_at DESC;
 
 ---
 
-## 🎯 Key Decisions to Make This Week
+## ✅ Decisões Tomadas
 
-| Decision | Options | Deadline |
-|----------|---------|----------|
-| Backend Language | FastAPI (Python) OR Express (Node.js) | Wednesday 4/24 |
-| Hosting Platform | AWS, Azure, DigitalOcean, Railway, Render | Friday 4/26 |
-| Database Hosting | Managed (RDS) OR Self-managed (Linode) | Friday 4/26 |
+| Decisão | Escolha | Data |
+|----------|---------|------|
+| Backend Language | **Python FastAPI** | April 25 |
+| Hosting Platform | **Railway** | April 25 |
+| Database (dev) | **PostgreSQL local** | April 25 |
+| Database (produção) | **Railway PostgreSQL** | April 25 |
 
 ---
 
@@ -391,6 +392,6 @@ ORDER BY changed_at DESC;
 
 ---
 
-**Version:** 1.0 | **Date:** April 22, 2026 | **Status:** ✅ Ready to Start
+**Version:** 1.1 | **Date:** April 25, 2026 | **Status:** 🚧 Week 1 em andamento — backend foundation concluída
 
 **"We're building something that will make order management, quotes, and RMA handling simple, auditable, and LGPD-compliant. Let's make it great!"** 🚀

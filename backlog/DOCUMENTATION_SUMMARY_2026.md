@@ -141,13 +141,14 @@ All documentation for Orderly Hub is now complete and ready for full-stack devel
 3. DATABASE_SETUP_GUIDE.md (Setup section)
 4. IMPLEMENTATION_GUIDE_2026.md (Your tech stack)
 
-**This Week:**
-- [ ] Set up PostgreSQL locally
+**Esta semana (April 25):**
+- [x] Decidir: **Python FastAPI** ← FEITO
+- [x] Estruturar projeto backend ← FEITO
+- [ ] Set up PostgreSQL locally (cada dev)
 - [ ] Run DATABASE_INIT.sql
 - [ ] Complete DATABASE_SETUP_GUIDE.md verification
 - [ ] Execute all 5 test scenarios
-- [ ] Decide: FastAPI or Express?
-- [ ] Start IMPLEMENTATION_GUIDE_2026.md
+- [ ] Gerar os 15 modelos ORM restantes
 
 **Key Commands:**
 ```bash
@@ -258,12 +259,13 @@ psql -U postgres -d orderly_hub -c "\dt"
 ## ✅ Pre-Development Checklist
 
 ### Backend Setup
-- [ ] PostgreSQL 14+ installed locally
-- [ ] DATABASE_INIT.sql ready to run
-- [ ] All 5 test scenarios understood
-- [ ] Backend framework chosen (Python or Node.js)
-- [ ] Development environment set up
-- [ ] ORM selected (SQLAlchemy or Prisma)
+- [ ] PostgreSQL 14+ instalado localmente (cada dev)
+- [ ] `DATABASE_INIT.sql` executado
+- [ ] `alembic upgrade head` rodado
+- [x] Backend framework: **Python FastAPI** ← DECIDIDO
+- [x] Projeto estruturado (`main.py`, `app/`, `alembic/`) ← DONE
+- [x] ORM: SQLAlchemy 2.x + Alembic ← CONFIGURADO
+- [x] Auth endpoints implementados ← DONE
 
 ### Frontend Setup
 - [ ] React Query installed
@@ -318,21 +320,17 @@ psql -U postgres -d orderly_hub -c "\dt"
 
 ---
 
-## 📱 Key Decisions This Week
+## ✅ Decisões Tomadas (April 25, 2026)
 
-1. **Backend Language:** Python FastAPI or Node.js Express?
-   - FastAPI: Faster development, 7-9 weeks MVP
-   - Express: Larger ecosystem, 8-10 weeks MVP
-   - **Decision deadline:** April 24 (Wednesday)
-
-2. **Hosting Platform:** AWS, Azure, DigitalOcean, Railway, Render?
-   - Impacts: Cost, setup time, scalability
-   - **Decision deadline:** April 26 (Friday)
-
-3. **Database Hosting:** Self-managed or managed service?
-   - Managed: AWS RDS, GCP Cloud SQL, Azure Database
-   - Self-managed: Linode, DigitalOcean
-   - **Decision deadline:** April 26 (Friday)
+| Decisão | Escolha |
+|---|---|
+| Backend Language | **Python FastAPI** |
+| Hosting Platform | **Railway** |
+| Database (dev) | **PostgreSQL local** |
+| Database (produção) | **Railway PostgreSQL** |
+| ORM | **SQLAlchemy 2.x + Alembic** |
+| Validação | **Pydantic v2** |
+| Frontend deploy | **Vercel** |
 
 ---
 
@@ -436,16 +434,16 @@ psql -U postgres -d orderly_hub -c "\dt"
 |------|---------|------|--------|
 | DATABASE_INIT.sql | 1.0 | April 22 | ✅ Stable |
 | DATABASE_SETUP_GUIDE.md | 1.0 | April 22 | ✅ Stable |
-| BACKLOG_2026.md | 1.0 | April 22 | ✅ Stable |
-| ARCHITECTURE_2026.md | 1.0 | April 22 | ✅ Stable |
-| DEVELOPMENT_ROADMAP_2026.md | 1.0 | April 22 | ✅ Stable |
-| IMPLEMENTATION_GUIDE_2026.md | 1.0 | April 22 | ✅ Stable |
-| QUICK_REFERENCE_2026.md | 1.0 | April 22 | ✅ Stable |
-| DOCUMENTATION_SUMMARY.md | 1.0 | April 22 | ✅ Stable |
+| BACKLOG_2026.md | 1.1 | April 25 | ✅ Atualizado |
+| ARCHITECTURE_2026.md | 2.1 | April 25 | ✅ Atualizado |
+| DEVELOPMENT_ROADMAP_2026.md | 1.1 | April 25 | ✅ Atualizado |
+| IMPLEMENTATION_GUIDE_2026.md | 1.1 | April 25 | ✅ Atualizado |
+| QUICK_REFERENCE_2026.md | 1.1 | April 25 | ✅ Atualizado |
+| DOCUMENTATION_SUMMARY_2026.md | 1.1 | April 25 | ✅ Atualizado |
 
-**Total Size:** 8000+ lines, 6000+ KB  
-**Last Updated:** April 22, 2026  
-**Status:** ✅ Complete & Ready for Development
+**Total Size:** 8000+ lines  
+**Last Updated:** April 25, 2026  
+**Status:** 🚧 Week 1 em andamento — backend foundation concluída, ORM models e APIs a implementar
 
 ---
 

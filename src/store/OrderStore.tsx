@@ -159,6 +159,7 @@ export interface Order {
   directBilling: boolean;
   supplier: string;
   invoice: string;
+  invoiceSupplier: string;
   paymentMethods: PaymentMethod[];
   installments: number;
   deliveryDate: string;
@@ -295,7 +296,7 @@ export function calcTotal(o: Partial<Order>): number {
 
 const baseOrder = (over: Partial<Order>): Order => ({
   id: '', os: '', createdAt: Date.now(), orderDate: '', customer: '', cnpj: '', company: '', seller: '',
-  ocAfPed: '', directBilling: false, supplier: '', invoice: '',
+  ocAfPed: '', directBilling: false, supplier: '', invoice: '', invoiceSupplier: '',
   paymentMethods: [], installments: 1, deliveryDate: '', status: 'To Buy',
   isRMA: false, cancelled: false, observations: '',
   initialProductCost: 0, finalProductCost: 0, boletoCost: 0, giftCost: 0,
@@ -391,13 +392,14 @@ export function OrderProvider({ children }: { children: React.ReactNode }) {
   }, [orders]);
 
   const nextRmaNumber = useCallback((parentOs: string) => {
-    const prefix = `${parentOs}-`;
+    const osNum = parentOs.replace(/^OS[-\s]?/i, '').replace(/^-+/, '');
+    const prefix = `RMA-${osNum}-`;
     const max = orders.reduce((m, o) => {
       if (!o.isRMA || !o.rmaNumber || !o.rmaNumber.startsWith(prefix)) return m;
       const n = parseInt(o.rmaNumber.slice(prefix.length), 10);
       return Number.isFinite(n) && n > m ? n : m;
     }, 0);
-    return `${parentOs}-${max + 1}`;
+    return `RMA-${osNum}-${max + 1}`;
   }, [orders]);
 
   const addOrder = useCallback((order: Order) => {

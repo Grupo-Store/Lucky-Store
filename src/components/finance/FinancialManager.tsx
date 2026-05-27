@@ -31,6 +31,8 @@ import {
   useFinance, expandExpense, expandOrderFinancial, CalendarEntry, Expense,
 } from '@/store/FinanceStore';
 import { useOrders, calcTotal, Order } from '@/store/OrderStore';
+import { useFinancialOrders } from '@/hooks/use-financial-orders';
+import { Skeleton } from '@/components/ui/skeleton';
 import { ExpenseModal } from './ExpenseModal';
 import { OrderModal } from '@/components/OrderModal';
 
@@ -60,7 +62,8 @@ const fmtDate = (iso: string) => format(new Date(iso + 'T12:00:00'), 'dd/MM/yyyy
 
 export function FinancialManager() {
   const { expenses, addExpense, updateExpense, deleteExpense } = useFinance();
-  const { orders, updateOrder, deleteOrder, nextOS } = useOrders();
+  const { updateOrder, deleteOrder, nextOS } = useOrders();
+  const { data: orders = [], isLoading: ordersLoading } = useFinancialOrders();
   const [view, setView] = useState<ViewMode>('all');
   const [layout, setLayout] = useState<Layout>('calendar');
   const [typeFilter, setTypeFilter] = useState<TypeFilter>('all');
@@ -334,6 +337,9 @@ export function FinancialManager() {
 
           {/* CALENDAR */}
           {layout === 'calendar' && (
+            ordersLoading ? (
+              <Skeleton className="h-[500px] w-full rounded-lg" />
+            ) : (
             <Card>
               <CardContent className="p-2">
                 <div className="grid grid-cols-7 gap-1 mb-1">
@@ -392,6 +398,7 @@ export function FinancialManager() {
                 </div>
               </CardContent>
             </Card>
+            )
           )}
 
           {/* TABLE */}
@@ -573,6 +580,9 @@ export function FinancialManager() {
                 <Card><CardContent className="pt-4"><p className="text-xs text-muted-foreground">Valor Total</p><p className="text-xl font-bold text-green-700">{BRL(freightAggregated.reduce((s, r) => s + r.total, 0))}</p></CardContent></Card>
               </div>
 
+              {ordersLoading ? (
+                <Skeleton className="h-40 w-full rounded-lg" />
+              ) : (
               <div className="overflow-x-auto rounded-lg border">
                 <Table>
                   <TableHeader>
@@ -597,6 +607,7 @@ export function FinancialManager() {
                   </TableBody>
                 </Table>
               </div>
+              )}
             </CardContent>
           </Card>
 

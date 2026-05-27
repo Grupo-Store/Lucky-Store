@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react';
+import { useDashboardKpis } from '@/hooks/use-dashboard-query';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -307,6 +308,7 @@ export default function Dashboard() {
   const { goals, upsertGoal, deleteGoal, expenses } = useFinance();
   const { quotes } = useQuotes();
   const { filters: globalFilters, setFilters: setGlobalFilters, mode, section } = useDashboardFilters();
+  const { data: apiKpis, isLoading: kpisLoading } = useDashboardKpis();
 
   // Local: company sub-filter
   const [company, setCompany] = useState<CompanyKey>('all');
@@ -542,6 +544,21 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-4">
+      {kpisLoading ? (
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 animate-pulse">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <div key={i} className="h-24 rounded-lg bg-muted" />
+          ))}
+        </div>
+      ) : apiKpis ? (
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <KpiCard label="Total de Pedidos" value={String(apiKpis.total_pedidos)} />
+          <KpiCard label="Pedidos Pendentes" value={String(apiKpis.pedidos_pendentes)} accent="text-orange-600" />
+          <KpiCard label="Faturamento do Mês" value={BRL(apiKpis.faturamento_mes)} accent="text-green-700" />
+          <KpiCard label="Ticket Médio" value={BRL(apiKpis.ticket_medio)} />
+        </div>
+      ) : null}
+
       {mode === 'company' && (
         <>
           {/* Sub-header: Date filter (left) + Centered company pill tabs + Goals btn (right) */}

@@ -22,6 +22,11 @@ import {
   calcFinalCost, calcProfit, calcFreightTotal,
 } from '@/store/OrderStore';
 import type { OrderPrefill } from '@/components/AddOrderChooser';
+import { useCreateOrder, useUpdateOrder, useUpdateOrderStatus, orderKeys } from '@/api/hooks/useOrders';
+import { useQueryClient } from '@tanstack/react-query';
+import { apiClient, getApiError } from '@/api/client';
+import type { CreatePedidoPayload, UpdatePedidoPayload, PedidoStatus } from '@/types/api';
+import { LOJA_IDS, VENDEDOR_IDS, FORMA_PAGAMENTO_MAP } from '@/api/storeConfig';
 
 const emptyOrder = (os: string): Partial<Order> => ({
   os, createdAt: Date.now(),
@@ -63,6 +68,12 @@ interface Props {
 export function OrderModal({ open, onClose, order, onSave, nextOS, prefill }: Props) {
   const [form, setForm] = useState<Partial<Order>>(() => emptyOrder(nextOS?.() || ''));
   const isEdit = !!order;
+
+  const qc = useQueryClient();
+  const { mutate: createOrder, isPending: isCreating } = useCreateOrder();
+  const { mutate: updateOrder, isPending: isUpdating } = useUpdateOrder(order?.id ?? '');
+  const { mutate: updateOrderStatus, isPending: isUpdatingStatus } = useUpdateOrderStatus(order?.id ?? '');
+  const isPending = isCreating || isUpdating || isUpdatingStatus;
 
   const [editingField, setEditingField] = useState<string | null>(null);
   const [editingValue, setEditingValue] = useState('');
@@ -186,6 +197,7 @@ export function OrderModal({ open, onClose, order, onSave, nextOS, prefill }: Pr
       directBilling: !!form.directBilling,
       supplier: form.supplier || '',
       invoice: form.invoice || '',
+      invoiceSupplier: form.invoiceSupplier || '',
       paymentMethods: form.paymentMethods || [],
       installments: form.installments || 1,
       deliveryDate: form.deliveryDate || '',
@@ -215,8 +227,151 @@ export function OrderModal({ open, onClose, order, onSave, nextOS, prefill }: Pr
       paymentInstallments: form.paymentInstallments || 1,
       paymentInstallmentPlan: form.paymentInstallmentPlan || [],
     };
-    onSave(o);
-    onClose();
+
+    const onApiError = (err: unknown) => toast.error(getApiError(err));
+
+    if (isEdit) {
+      const payload: UpdatePedidoPayload = {
+        data_pedido: o.orderDate,
+        data_entrega: o.deliveryDate,
+        valor_venda: String(o.salesValue),
+        observacao: o.observations || undefined,
+        numero_nf: o.invoice || undefined,
+        nota_fiscal_fornecedor: o.invoiceSupplier || undefined,
+        numero_oc: o.ocAfPed || undefined,
+        is_direct_billing: o.directBilling,
+        fornecedor_principal: o.supplier || undefined,
+      };
+      const statusChanged = order && o.status !== order.status;
+      const sellerId = VENDEDOR_IDS[(o.seller as string) ?? ''] ?? '';
+
+      // ── Item diff ───────────────────────────────────────────────────────────
+      const origItems = order?.items ?? [];
+      const toAdd = o.items.filter(i => !origItems.some(orig => orig.id === i.id));
+      const toDelete = origItems.filter(orig => !o.items.some(i => i.id === orig.id));
+      const toUpdateStatus = o.items.filter(i => {
+        const orig = origItems.find(orig => orig.id === i.id);
+        return orig && orig.status !== i.status;
+      });
+
+      // ── Frete diff ──────────────────────────────────────────────────────────
+      const origFretes = order?.freight ?? [];
+      const fretesToAdd = o.freight.filter(f => !origFretes.some(orig => orig.id === f.id));
+      const fretesToDelete = origFretes.filter(orig => !o.freight.some(f => f.id === orig.id));
+      const fretesToUpdate = o.freight.filter(f => {
+        const orig = origFretes.find(orig => orig.id === f.id);
+        return orig && (orig.value !== f.value || orig.deliveryPerson !== f.deliveryPerson || orig.deliveryDate !== f.deliveryDate);
+      });
+
+      const freteBody = (f: FreightCard) => ({
+        entregador: f.deliveryPerson || null,
+        valor: f.value || 0,
+        data_frete: f.deliveryDate || o.deliveryDate,
+      });
+
+      const syncItems = async (pedidoId: string) => {
+        await Promise.all([
+          ...toAdd.map(item => apiClient.post(`/pedidos/${pedidoId}/items`, {
+            id_vendedor: sellerId,
+            descricao: item.name || 'Item',
+            quantidade: item.quantity || 1,
+            valor_projetado: Math.max(0.01, item.projectedValue),
+            valor_compra: item.purchaseValue > 0 ? item.purchaseValue : undefined,
+            status: item.status,
+          })),
+          ...toDelete.map(item => apiClient.delete(`/pedidos/${pedidoId}/items/${item.id}`)),
+          ...toUpdateStatus.map(item =>
+            apiClient.patch(`/pedidos/${pedidoId}/items/${item.id}/status`, { new_status: item.status })
+          ),
+          ...fretesToAdd.map(f => apiClient.post(`/pedidos/${pedidoId}/fretes`, freteBody(f))),
+          ...fretesToDelete.map(f => apiClient.delete(`/pedidos/${pedidoId}/fretes/${f.id}`)),
+          ...fretesToUpdate.map(f => apiClient.put(`/pedidos/${pedidoId}/fretes/${f.id}`, freteBody(f))),
+        ]);
+      };
+      const finish = async () => {
+        const hasChanges = toAdd.length || toDelete.length || toUpdateStatus.length
+          || fretesToAdd.length || fretesToDelete.length || fretesToUpdate.length;
+        if (hasChanges) {
+          try { await syncItems(o.id); } catch (err) { toast.error(getApiError(err)); }
+        }
+        qc.invalidateQueries({ queryKey: orderKeys.lists() });
+        toast.success('Pedido atualizado com sucesso');
+        onSave(o);
+        onClose();
+      };
+      updateOrder(payload, {
+        onSuccess: () => {
+          if (statusChanged) {
+            updateOrderStatus({ new_status: o.status as PedidoStatus }, { onSuccess: () => { finish(); }, onError: onApiError });
+          } else {
+            finish();
+          }
+        },
+        onError: onApiError,
+      });
+    } else {
+      const payload: CreatePedidoPayload = {
+        id_loja: LOJA_IDS[o.company] ?? '',
+        id_vendedor: VENDEDOR_IDS[o.seller] ?? '',
+        nome_cliente: o.customer,
+        cpf_cnpj: o.cnpj || undefined,
+        data_pedido: o.orderDate,
+        data_entrega: o.deliveryDate,
+        status: o.status as PedidoStatus,
+        valor_venda: String(o.salesValue),
+        observacao: o.observations || undefined,
+        numero_nf: o.invoice || undefined,
+        nota_fiscal_fornecedor: o.invoiceSupplier || undefined,
+        numero_oc: o.ocAfPed || undefined,
+        is_direct_billing: o.directBilling,
+        fornecedor_principal: o.supplier || undefined,
+        formas_pagamento: o.paymentMethods.map(m => ({ forma: FORMA_PAGAMENTO_MAP[m] ?? m })),
+      };
+      createOrder(payload, {
+        onSuccess: async (data) => {
+          const newId = data.id;
+          const vendedorId = String(data.id_vendedor);
+          let savedItems = o.items;
+          if (o.items.length > 0) {
+            try {
+              const results = await Promise.all(
+                o.items.map(item =>
+                  apiClient.post(`/pedidos/${newId}/items`, {
+                    id_vendedor: vendedorId,
+                    descricao: item.name || 'Item',
+                    quantidade: item.quantity || 1,
+                    valor_projetado: Math.max(0.01, item.projectedValue),
+                    valor_compra: item.purchaseValue > 0 ? item.purchaseValue : undefined,
+                    status: item.status,
+                  }).then(r => r.data)
+                )
+              );
+              savedItems = results.map((r, i) => ({ ...o.items[i], id: r.id }));
+            } catch (err) {
+              toast.error(getApiError(err));
+            }
+          }
+          if (o.freight.length > 0) {
+            try {
+              await Promise.all(
+                o.freight.map(f => apiClient.post(`/pedidos/${newId}/fretes`, {
+                  entregador: f.deliveryPerson || null,
+                  valor: f.value || 0,
+                  data_frete: f.deliveryDate || o.deliveryDate,
+                }))
+              );
+            } catch (err) {
+              toast.error(getApiError(err));
+            }
+          }
+          qc.invalidateQueries({ queryKey: orderKeys.lists() });
+          toast.success('Pedido criado com sucesso');
+          onSave({ ...o, id: newId, items: savedItems });
+          onClose();
+        },
+        onError: onApiError,
+      });
+    }
   };
 
   /* ---------------- Currency input renderer ---------------- */
@@ -343,6 +498,11 @@ export function OrderModal({ open, onClose, order, onSave, nextOS, prefill }: Pr
             {/* Sales Value (moved from summary) */}
             {renderCurrencyInput('salesValue', 'Valor de Venda')}
 
+            <div>
+              <Label>Nota Fiscal</Label>
+              <Input className="bg-white border-border" value={form.invoice || ''} onChange={e => set('invoice', e.target.value)} onKeyDown={handleEnterBlur} placeholder="Número da NF" />
+            </div>
+
             {/* Direct billing toggle */}
             <div className="flex items-end">
               <label className="flex items-center gap-2 cursor-pointer pb-2">
@@ -357,8 +517,8 @@ export function OrderModal({ open, onClose, order, onSave, nextOS, prefill }: Pr
                   <Input className="bg-white border-border" value={form.supplier || ''} onChange={e => set('supplier', e.target.value)} onKeyDown={handleEnterBlur} />
                 </div>
                 <div>
-                  <Label>Nota Fiscal (NF)</Label>
-                  <Input className="bg-white border-border" value={form.invoice || ''} onChange={e => set('invoice', e.target.value)} onKeyDown={handleEnterBlur} />
+                  <Label>NF Fornecedor</Label>
+                  <Input className="bg-white border-border" value={form.invoiceSupplier || ''} onChange={e => set('invoiceSupplier', e.target.value)} onKeyDown={handleEnterBlur} placeholder="Número da NF do fornecedor" />
                 </div>
               </>
             )}
@@ -586,8 +746,8 @@ export function OrderModal({ open, onClose, order, onSave, nextOS, prefill }: Pr
             <Printer className="h-4 w-4 mr-1" /> Imprimir
           </Button>
           <Button variant="outline" onClick={onClose}>Cancelar</Button>
-          <Button onClick={handleSave} className="bg-secondary hover:bg-secondary/90">
-            {isEdit ? 'Salvar Alterações' : 'Criar Pedido'}
+          <Button onClick={handleSave} disabled={isPending} className="bg-secondary hover:bg-secondary/90">
+            {isPending ? 'Salvando...' : (isEdit ? 'Salvar Alterações' : 'Criar Pedido')}
           </Button>
         </div>
       </DialogContent>

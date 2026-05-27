@@ -4,6 +4,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { Skeleton } from '@/components/ui/skeleton';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -13,12 +15,17 @@ import { ArrowLeft, CalendarIcon, Search, ChevronRight, Plus, Trash2, Printer } 
 import { format, addDays } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
+import { toast } from 'sonner';
 import {
-  Order, RmaItem, RmaItemStatus, FreightCard,
+  Order, OrderItem, ItemStatus, RmaItem, RmaItemStatus, FreightCard,
   Company, Seller, SELLERS,
   RMA_ITEM_STATUSES, RMA_STATUS_LABELS, RMA_STATUS_COLORS,
   calcFreightTotal,
 } from '@/store/OrderStore';
+import { useCreateRma } from '@/api/hooks/useRma';
+import { getApiError } from '@/api/client';
+import type { CreateRmaPayload } from '@/types/api';
+import { useOrdersQuery, PedidoListItem } from '@/hooks/use-orders-query';
 
 function toBRL(v: number) { return v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }); }
 function parseBRL(s: string): number { return parseFloat(s.replace(/[R$\s.]/g, '').replace(',', '.')) || 0; }
@@ -32,12 +39,17 @@ function handleEnterBlur(e: KeyboardEvent<HTMLInputElement>) {
 
 type Step = 'pick-order' | 'pick-items' | 'form';
 
+interface RmaParent {
+  id: string;
+  os: string;
+  customer: string;
+  cnpj: string;
+}
+
 interface Props {
   open: boolean;
   onClose: () => void;
-  /** All orders — used to filter for "Delivered" candidates */
-  orders: Order[];
-  /** Existing RMA being edited — when set, the modal opens directly in 'form' step */
+  orders?: Order[];
   rma?: Order | null;
   onSave: (rma: Order) => void;
   nextRmaNumber: (parentOs: string) => string;
@@ -46,10 +58,38 @@ interface Props {
 export function RmaModal({ open, onClose, orders, rma, onSave, nextRmaNumber }: Props) {
   const isEdit = !!rma;
   const [step, setStep] = useState<Step>(isEdit ? 'form' : 'pick-order');
-  const [search, setSearch] = useState('');
-  const [parent, setParent] = useState<Order | null>(null);
+
+  const { mutate: createRma, isPending } = useCreateRma();
+
+  /* ---------- Step 1: delivered orders from API ---------- */
+  const [orderSearch, setOrderSearch] = useState('');
+  const [deliveredPage, setDeliveredPage] = useState(1);
+  const {
+    data: deliveredData,
+    isLoading: deliveredLoading,
+    isError: deliveredError,
+    refetch: deliveredRefetch,
+  } = useOrdersQuery(
+    { page: deliveredPage, limit: 20, status: 'Delivered', sort_by: 'data_entrega', sort_dir: 'desc' },
+    { enabled: open && !isEdit }
+  );
+
+  const filteredDelivered = useMemo(() => {
+    const items = deliveredData?.items ?? [];
+    const q = orderSearch.toLowerCase().trim();
+    if (!q) return items;
+    return items.filter(o =>
+      o.numero_os.toLowerCase().includes(q) ||
+      (o.nome_cliente ?? '').toLowerCase().includes(q)
+    );
+  }, [deliveredData, orderSearch]);
+
+  /* ---------- Step 2: item selection ---------- */
+  const [localParentItems, setLocalParentItems] = useState<OrderItem[]>([]);
   const [selectedItemIds, setSelectedItemIds] = useState<Set<string>>(new Set());
 
+  /* ---------- Form state ---------- */
+  const [parent, setParent] = useState<RmaParent | null>(null);
   const [rmaNumberDisplay, setRmaNumberDisplay] = useState('');
   const [registrationDate, setRegistrationDate] = useState(format(new Date(), 'yyyy-MM-dd'));
   const [deliveryDate, setDeliveryDate] = useState(format(addDays(new Date(), 14), 'yyyy-MM-dd'));
@@ -63,13 +103,15 @@ export function RmaModal({ open, onClose, orders, rma, onSave, nextRmaNumber }: 
   const [delDateOpen, setDelDateOpen] = useState(false);
   const [actualDelDateOpen, setActualDelDateOpen] = useState(false);
 
-  // Reset on open
   useEffect(() => {
     if (!open) return;
     if (rma) {
-      // EDIT mode
-      const parentOrder = orders.find(o => o.id === rma.rmaParentOrderId) || null;
-      setParent(parentOrder);
+      setParent({
+        id: rma.rmaParentOrderId || rma.id,
+        os: rma.rmaNumber || rma.os,
+        customer: rma.customer,
+        cnpj: rma.cnpj || '',
+      });
       setStep('form');
       setRmaNumberDisplay(rma.rmaNumber || rma.os);
       setRegistrationDate(rma.orderDate);
@@ -82,8 +124,10 @@ export function RmaModal({ open, onClose, orders, rma, onSave, nextRmaNumber }: 
       setObservations(rma.observations || '');
     } else {
       setStep('pick-order');
-      setSearch('');
+      setOrderSearch('');
+      setDeliveredPage(1);
       setParent(null);
+      setLocalParentItems([]);
       setSelectedItemIds(new Set());
       setRegistrationDate(format(new Date(), 'yyyy-MM-dd'));
       setDeliveryDate(format(addDays(new Date(), 14), 'yyyy-MM-dd'));
@@ -95,26 +139,24 @@ export function RmaModal({ open, onClose, orders, rma, onSave, nextRmaNumber }: 
       setObservations('');
       setRmaNumberDisplay('');
     }
-  }, [open, rma, orders]);
+  }, [open, rma]);
 
-  /* ---------- Step 1: order list ---------- */
-  const deliveredOrders = useMemo(() => {
-    const q = search.toLowerCase().trim();
-    return orders
-      .filter(o => o.status === 'Delivered' && !o.isRMA)
-      .filter(o => !q || (
-        o.os.toLowerCase().includes(q) ||
-        o.customer.toLowerCase().includes(q) ||
-        (o.cnpj || '').toLowerCase().includes(q)
-      ));
-  }, [orders, search]);
-
-  const choosePicked = (o: Order) => {
-    setParent(o);
+  const choosePicked = (o: PedidoListItem) => {
+    setParent({ id: o.id, os: o.numero_os, customer: o.nome_cliente ?? '', cnpj: '' });
+    setCompany((o.nome_loja ?? '') as Company);
+    setSeller((o.nome_vendedor ?? '') as Seller);
+    setRmaNumberDisplay(nextRmaNumber(o.numero_os));
+    const apiItems: OrderItem[] = (o.produtos ?? []).map(p => ({
+      id: p.id,
+      name: p.descricao,
+      quantity: p.quantidade,
+      status: p.status as ItemStatus,
+      projectedValue: parseFloat(String(p.valor_projetado)) || 0,
+      purchaseValue: parseFloat(String(p.valor_compra ?? '0')) || 0,
+    }));
+    setLocalParentItems(apiItems);
     setSelectedItemIds(new Set());
-    setCompany(o.company);
-    setSeller(o.seller);
-    setRmaNumberDisplay(nextRmaNumber(o.os));
+    setRmaItems([]);
     setStep('pick-items');
   };
 
@@ -126,32 +168,46 @@ export function RmaModal({ open, onClose, orders, rma, onSave, nextRmaNumber }: 
     });
   };
 
-  /* ---------- Step 2 → 3: build RmaItems ---------- */
   const goToForm = () => {
-    if (!parent) return;
-    const picked = parent.items.filter(i => selectedItemIds.has(i.id));
-    setRmaItems(picked.map<RmaItem>(i => ({
-      id: crypto.randomUUID(),
-      sourceItemId: i.id,
-      name: i.name,
-      quantity: i.quantity,
-      repairedBy: '',
-      status: 'Not Received',
-    })));
+    if (localParentItems.length > 0) {
+      const picked = localParentItems.filter(i => selectedItemIds.has(i.id));
+      setRmaItems(picked.map<RmaItem>(i => ({
+        id: crypto.randomUUID(),
+        sourceItemId: i.id,
+        name: i.name,
+        quantity: i.quantity,
+        repairedBy: '',
+        status: 'Not Received',
+      })));
+    }
     setStep('form');
   };
 
-  const updateRmaItem = (id: string, field: keyof RmaItem, value: any) => {
-    setRmaItems(prev => prev.map(i => i.id === id ? { ...i, [field]: value } : i));
+  /* ---------- Back navigation ---------- */
+  const goBack = () => {
+    if (step === 'form') setStep('pick-items');
+    else if (step === 'pick-items') setStep('pick-order');
   };
+
+  /* ---------- RMA items (form step) ---------- */
+  const addRmaItem = () => setRmaItems(prev => [...prev, {
+    id: crypto.randomUUID(),
+    sourceItemId: '',
+    name: '',
+    quantity: 1,
+    repairedBy: '',
+    status: 'Not Received' as RmaItemStatus,
+  }]);
+  const removeRmaItem = (id: string) => setRmaItems(prev => prev.filter(i => i.id !== id));
+  const updateRmaItem = (id: string, field: keyof RmaItem, value: any) =>
+    setRmaItems(prev => prev.map(i => i.id === id ? { ...i, [field]: value } : i));
 
   /* ---------- Freight ---------- */
   const addFreight = () => setFreight(prev => [...prev, {
     id: crypto.randomUUID(), deliveryPerson: '', value: 0, deliveryDate: undefined,
   }]);
-  const updateFreight = (id: string, field: keyof FreightCard, value: any) => {
+  const updateFreight = (id: string, field: keyof FreightCard, value: any) =>
     setFreight(prev => prev.map(f => f.id === id ? { ...f, [field]: value } : f));
-  };
   const removeFreight = (id: string) => setFreight(prev => prev.filter(f => f.id !== id));
   const freightTotal = useMemo(() => calcFreightTotal(freight), [freight]);
 
@@ -172,6 +228,7 @@ export function RmaModal({ open, onClose, orders, rma, onSave, nextRmaNumber }: 
       directBilling: false,
       supplier: '',
       invoice: '',
+      invoiceSupplier: '',
       paymentMethods: [],
       installments: 1,
       deliveryDate,
@@ -194,8 +251,27 @@ export function RmaModal({ open, onClose, orders, rma, onSave, nextRmaNumber }: 
       rmaItems,
       rmaFreight: freight,
     };
-    onSave(newOrder);
-    onClose();
+
+    if (isEdit) {
+      onSave(newOrder);
+      onClose();
+      return;
+    }
+
+    const payload: CreateRmaPayload = {
+      id_pedido_origem: parent.id,
+      prazo_entrega: deliveryDate || undefined,
+      itens: rmaItems.map(i => ({ descricao: i.name, quantidade: i.quantity })),
+    };
+
+    createRma(payload, {
+      onSuccess: () => {
+        toast.success('RMA criado com sucesso');
+        onSave(newOrder);
+        onClose();
+      },
+      onError: (err) => toast.error(getApiError(err)),
+    });
   };
 
   return (
@@ -204,8 +280,7 @@ export function RmaModal({ open, onClose, orders, rma, onSave, nextRmaNumber }: 
         <DialogHeader>
           <DialogTitle className="text-secondary text-xl flex items-center gap-2">
             {!isEdit && step !== 'pick-order' && (
-              <Button variant="ghost" size="icon" className="h-7 w-7"
-                onClick={() => setStep(step === 'form' ? 'pick-items' : 'pick-order')}>
+              <Button variant="ghost" size="icon" className="h-7 w-7" onClick={goBack}>
                 <ArrowLeft className="h-4 w-4" />
               </Button>
             )}
@@ -221,38 +296,54 @@ export function RmaModal({ open, onClose, orders, rma, onSave, nextRmaNumber }: 
             <div className="relative">
               <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
-                placeholder="Buscar OS, Cliente ou CNPJ..."
-                value={search}
-                onChange={e => setSearch(e.target.value)}
+                placeholder="Buscar OS ou Cliente..."
+                value={orderSearch}
+                onChange={e => setOrderSearch(e.target.value)}
                 onKeyDown={handleEnterBlur}
                 className="pl-9 bg-white"
                 autoFocus
               />
             </div>
+            {deliveredError && (
+              <Alert variant="destructive">
+                <AlertDescription className="flex items-center justify-between">
+                  <span>Falha ao carregar pedidos entregues.</span>
+                  <Button variant="outline" size="sm" onClick={() => deliveredRefetch()}>Tentar novamente</Button>
+                </AlertDescription>
+              </Alert>
+            )}
             <div className="overflow-x-auto rounded-lg border">
               <Table>
                 <TableHeader>
                   <TableRow className="bg-secondary/10">
                     <TableHead>OS</TableHead>
                     <TableHead>Cliente</TableHead>
-                    <TableHead>CPF/CNPJ</TableHead>
-                    <TableHead>Empresa</TableHead>
+                    <TableHead>Loja</TableHead>
+                    <TableHead>Vendedor</TableHead>
                     <TableHead>Data Entrega</TableHead>
                     <TableHead className="w-10"></TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {deliveredOrders.map(o => (
+                  {deliveredLoading ? (
+                    Array.from({ length: 5 }).map((_, i) => (
+                      <TableRow key={i}>
+                        {Array.from({ length: 6 }).map((_, j) => (
+                          <TableCell key={j}><Skeleton className="h-4 w-full" /></TableCell>
+                        ))}
+                      </TableRow>
+                    ))
+                  ) : filteredDelivered.map(o => (
                     <TableRow key={o.id} className="cursor-pointer hover:bg-muted/50" onClick={() => choosePicked(o)}>
-                      <TableCell className="font-medium">{o.os}</TableCell>
-                      <TableCell>{o.customer}</TableCell>
-                      <TableCell>{o.cnpj || '—'}</TableCell>
-                      <TableCell>{o.company || '—'}</TableCell>
-                      <TableCell>{fmtDate(o.deliveryDate)}</TableCell>
+                      <TableCell className="font-medium">{o.numero_os}</TableCell>
+                      <TableCell>{o.nome_cliente || '—'}</TableCell>
+                      <TableCell>{o.nome_loja || '—'}</TableCell>
+                      <TableCell>{o.nome_vendedor || '—'}</TableCell>
+                      <TableCell>{fmtDate(o.data_entrega)}</TableCell>
                       <TableCell><ChevronRight className="h-4 w-4 text-muted-foreground" /></TableCell>
                     </TableRow>
                   ))}
-                  {deliveredOrders.length === 0 && (
+                  {!deliveredLoading && filteredDelivered.length === 0 && (
                     <TableRow>
                       <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
                         Nenhum pedido entregue encontrado
@@ -262,6 +353,18 @@ export function RmaModal({ open, onClose, orders, rma, onSave, nextRmaNumber }: 
                 </TableBody>
               </Table>
             </div>
+            {(deliveredData?.pages ?? 1) > 1 && (
+              <div className="flex items-center justify-between text-sm text-muted-foreground pt-1">
+                <span>{deliveredData?.total ?? 0} pedidos entregues</span>
+                <div className="flex items-center gap-2">
+                  <Button variant="outline" size="sm" disabled={deliveredPage <= 1}
+                    onClick={() => setDeliveredPage(p => p - 1)}>Anterior</Button>
+                  <span>Página {deliveredPage} de {deliveredData?.pages ?? 1}</span>
+                  <Button variant="outline" size="sm" disabled={deliveredPage >= (deliveredData?.pages ?? 1)}
+                    onClick={() => setDeliveredPage(p => p + 1)}>Próxima</Button>
+                </div>
+              </div>
+            )}
           </>
         )}
 
@@ -269,42 +372,55 @@ export function RmaModal({ open, onClose, orders, rma, onSave, nextRmaNumber }: 
         {step === 'pick-items' && parent && (
           <>
             <p className="text-sm text-muted-foreground">
-              Cliente: <span className="font-medium text-foreground">{parent.customer}</span>
-              {' · '}CPF/CNPJ: <span className="font-medium text-foreground">{parent.cnpj || '—'}</span>
+              Cliente: <span className="font-medium text-foreground">{parent.customer || '—'}</span>
+              {parent.cnpj && <> · CPF/CNPJ: <span className="font-medium text-foreground">{parent.cnpj}</span></>}
             </p>
-            <div className="overflow-x-auto rounded-lg border">
-              <Table>
-                <TableHeader>
-                  <TableRow className="bg-secondary/10">
-                    <TableHead className="w-10"></TableHead>
-                    <TableHead>Produto</TableHead>
-                    <TableHead>Quantidade</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {parent.items.map(it => (
-                    <TableRow key={it.id} className="cursor-pointer hover:bg-muted/50" onClick={() => toggleItem(it.id)}>
-                      <TableCell><Checkbox checked={selectedItemIds.has(it.id)} onCheckedChange={() => toggleItem(it.id)} /></TableCell>
-                      <TableCell>{it.name}</TableCell>
-                      <TableCell>{it.quantity}</TableCell>
+            {localParentItems.length > 0 ? (
+              <div className="overflow-x-auto rounded-lg border">
+                <Table>
+                  <TableHeader>
+                    <TableRow className="bg-secondary/10">
+                      <TableHead className="w-10"></TableHead>
+                      <TableHead>Produto</TableHead>
+                      <TableHead>Quantidade</TableHead>
                     </TableRow>
-                  ))}
-                  {parent.items.length === 0 && (
-                    <TableRow><TableCell colSpan={3} className="text-center py-6 text-muted-foreground">Sem itens neste pedido</TableCell></TableRow>
-                  )}
-                </TableBody>
-              </Table>
-            </div>
+                  </TableHeader>
+                  <TableBody>
+                    {localParentItems.map(it => (
+                      <TableRow key={it.id} className="cursor-pointer hover:bg-muted/50" onClick={() => toggleItem(it.id)}>
+                        <TableCell>
+                          <Checkbox checked={selectedItemIds.has(it.id)} onCheckedChange={() => toggleItem(it.id)} />
+                        </TableCell>
+                        <TableCell>{it.name}</TableCell>
+                        <TableCell>{it.quantity}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            ) : (
+              <div className="rounded-lg border border-dashed p-6 text-center text-muted-foreground text-sm">
+                Nenhum produto encontrado para este pedido no sistema local.
+                <br />
+                Você poderá adicionar os itens manualmente na próxima etapa.
+              </div>
+            )}
             <div className="flex justify-end gap-2">
               <Button variant="outline" onClick={onClose}>Cancelar</Button>
-              <Button onClick={goToForm} disabled={selectedItemIds.size === 0} className="bg-secondary hover:bg-secondary/90">
-                Próximo ({selectedItemIds.size} {selectedItemIds.size === 1 ? 'item' : 'itens'})
+              <Button
+                onClick={goToForm}
+                disabled={localParentItems.length > 0 && selectedItemIds.size === 0}
+                className="bg-secondary hover:bg-secondary/90"
+              >
+                {localParentItems.length > 0
+                  ? `Próximo (${selectedItemIds.size} ${selectedItemIds.size === 1 ? 'item' : 'itens'})`
+                  : 'Continuar'}
               </Button>
             </div>
           </>
         )}
 
-        {/* ===== STEP 3: final form ===== */}
+        {/* ===== STEP 3: form ===== */}
         {step === 'form' && parent && (
           <>
             <section className="border rounded-lg p-4">
@@ -369,7 +485,7 @@ export function RmaModal({ open, onClose, orders, rma, onSave, nextRmaNumber }: 
                   </Popover>
                 </div>
                 <div>
-                  <Label>Data de Entrega</Label>
+                  <Label>Data de Entrega Real</Label>
                   <Popover open={actualDelDateOpen} onOpenChange={setActualDelDateOpen}>
                     <PopoverTrigger asChild>
                       <Button variant="outline" className="w-full justify-start text-left font-normal bg-white">
@@ -392,7 +508,12 @@ export function RmaModal({ open, onClose, orders, rma, onSave, nextRmaNumber }: 
             </section>
 
             <section className="border rounded-lg p-4">
-              <h3 className="text-sm font-bold text-secondary uppercase tracking-wide mb-3">Produtos do RMA</h3>
+              <div className="flex justify-between items-center mb-3">
+                <h3 className="text-sm font-bold text-secondary uppercase tracking-wide">Produtos do RMA</h3>
+                <Button size="sm" onClick={addRmaItem} className="bg-secondary hover:bg-secondary/90">
+                  <Plus className="h-4 w-4 mr-1" /> Adicionar Item
+                </Button>
+              </div>
               <div className="space-y-3">
                 {rmaItems.map(it => (
                   <div key={it.id} className="border rounded-md p-3 bg-muted/20 grid grid-cols-1 md:grid-cols-4 gap-3 items-end">
@@ -416,29 +537,38 @@ export function RmaModal({ open, onClose, orders, rma, onSave, nextRmaNumber }: 
                         placeholder="Fornecedor / técnico"
                       />
                     </div>
-                    <div>
-                      <Label>Status</Label>
-                      <Select value={it.status} onValueChange={v => updateRmaItem(it.id, 'status', v as RmaItemStatus)}>
-                        <SelectTrigger className={cn('border', RMA_STATUS_COLORS[it.status])}>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {RMA_ITEM_STATUSES.map(s => (
-                            <SelectItem key={s} value={s}>
-                              <span className={cn('px-2 py-0.5 rounded text-xs font-medium', RMA_STATUS_COLORS[s])}>
-                                {RMA_STATUS_LABELS[s]}
-                              </span>
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                    <div className="flex gap-2 items-end">
+                      <div className="flex-1">
+                        <Label>Status</Label>
+                        <Select value={it.status} onValueChange={v => updateRmaItem(it.id, 'status', v as RmaItemStatus)}>
+                          <SelectTrigger className={cn('border', RMA_STATUS_COLORS[it.status])}>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {RMA_ITEM_STATUSES.map(s => (
+                              <SelectItem key={s} value={s}>
+                                <span className={cn('px-2 py-0.5 rounded text-xs font-medium', RMA_STATUS_COLORS[s])}>
+                                  {RMA_STATUS_LABELS[s]}
+                                </span>
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <Button variant="ghost" size="icon" onClick={() => removeRmaItem(it.id)}>
+                        <Trash2 className="h-4 w-4 text-destructive" />
+                      </Button>
                     </div>
                   </div>
                 ))}
+                {rmaItems.length === 0 && (
+                  <p className="text-sm text-muted-foreground text-center py-4">
+                    Nenhum item adicionado. Clique em "Adicionar Item" para inserir produtos.
+                  </p>
+                )}
               </div>
             </section>
 
-            {/* Freight section */}
             <section className="border rounded-lg p-4">
               <div className="flex justify-between items-center mb-3">
                 <h3 className="text-sm font-bold text-secondary uppercase tracking-wide">Frete</h3>
@@ -461,7 +591,6 @@ export function RmaModal({ open, onClose, orders, rma, onSave, nextRmaNumber }: 
               </div>
             </section>
 
-            {/* Observations section */}
             <section className="border rounded-lg p-4">
               <h3 className="text-sm font-bold text-secondary uppercase tracking-wide mb-3">Observações</h3>
               <Textarea
@@ -477,8 +606,12 @@ export function RmaModal({ open, onClose, orders, rma, onSave, nextRmaNumber }: 
               <Button variant="outline" onClick={() => window.print()} className="gap-1.5">
                 <Printer className="h-4 w-4" /> Imprimir
               </Button>
-              <Button onClick={handleSave} className="bg-secondary hover:bg-secondary/90">
-                {isEdit ? 'Salvar Alterações' : 'Criar RMA'}
+              <Button
+                onClick={handleSave}
+                disabled={isPending || rmaItems.length === 0}
+                className="bg-secondary hover:bg-secondary/90"
+              >
+                {isPending ? 'Salvando...' : (isEdit ? 'Salvar Alterações' : 'Criar RMA')}
               </Button>
             </div>
           </>

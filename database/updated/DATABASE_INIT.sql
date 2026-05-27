@@ -23,10 +23,11 @@ CREATE TABLE users (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   email VARCHAR(255) UNIQUE NOT NULL,
   password_hash VARCHAR(255) NOT NULL,
-  full_name VARCHAR(255) NOT NULL,
+  name VARCHAR(255) NOT NULL,
   role VARCHAR(50) NOT NULL CHECK (role IN ('admin', 'manager', 'seller', 'viewer')),
   is_active BOOLEAN DEFAULT true,
-  two_factor_secret VARCHAR(255),
+  totp_secret VARCHAR(32),
+  totp_enabled BOOLEAN DEFAULT false,
   last_login_at TIMESTAMP,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -240,31 +241,6 @@ CREATE TABLE custo_pedido (
 CREATE INDEX idx_custo_pedido_created ON custo_pedido(created_at);
 
 -- ============================================
--- FRETE (FREIGHT/DELIVERY)
--- ============================================
-
-CREATE TABLE frete (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  id_pedido UUID REFERENCES pedidos(id) ON DELETE CASCADE,
-  id_rma UUID REFERENCES rmas(id) ON DELETE CASCADE,
-  
-  valor DECIMAL(12,2) NOT NULL,
-  entregador VARCHAR(255),
-  data_frete DATE NOT NULL,
-  
-  CONSTRAINT frete_one_or_other CHECK (
-    (id_pedido IS NOT NULL AND id_rma IS NULL) OR 
-    (id_pedido IS NULL AND id_rma IS NOT NULL)
-  ),
-  
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE INDEX idx_frete_pedido ON frete(id_pedido);
--- idx_frete_rma will be created after rmas table
-
--- ============================================
 -- RMA (RETURN MANAGEMENT)
 -- ============================================
 
@@ -296,7 +272,29 @@ CREATE INDEX idx_rmas_status ON rmas(status);
 CREATE INDEX idx_rmas_numero ON rmas(numero_rma) WHERE deleted_at IS NULL;
 CREATE INDEX idx_rmas_deleted ON rmas(deleted_at);
 
--- Now create the frete index that references rmas
+-- ============================================
+-- FRETE (FREIGHT/DELIVERY) — após rmas para FK funcionar
+-- ============================================
+
+CREATE TABLE frete (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  id_pedido UUID REFERENCES pedidos(id) ON DELETE CASCADE,
+  id_rma UUID REFERENCES rmas(id) ON DELETE CASCADE,
+
+  valor DECIMAL(12,2) NOT NULL,
+  entregador VARCHAR(255),
+  data_frete DATE NOT NULL,
+
+  CONSTRAINT frete_one_or_other CHECK (
+    (id_pedido IS NOT NULL AND id_rma IS NULL) OR
+    (id_pedido IS NULL AND id_rma IS NOT NULL)
+  ),
+
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX idx_frete_pedido ON frete(id_pedido);
 CREATE INDEX idx_frete_rma ON frete(id_rma);
 
 -- Items within an RMA
@@ -656,22 +654,20 @@ EXECUTE FUNCTION update_updated_at_column();
 -- Goals (Sales Targets by Month)
 CREATE TABLE goals (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  -- Key format: "YYYY-MM" for unique constraint (e.g., "2026-04")
+  -- Key format: "YYYY-MM" (e.g., "2026-04")
   key VARCHAR(7) NOT NULL UNIQUE,
-  
+
   year INTEGER NOT NULL,
   month INTEGER NOT NULL CHECK (month >= 1 AND month <= 12),
-  
+
   -- Target values
   target DECIMAL(12,2) NOT NULL DEFAULT 0,
   floor DECIMAL(12,2) DEFAULT 0,
-  
+
   -- Audit
   created_by UUID REFERENCES users(id),
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  
-  CONSTRAINT unique_year_month UNIQUE(year, month)
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE INDEX idx_goals_key ON goals(key);
@@ -752,7 +748,7 @@ CREATE INDEX idx_expense_installments_status ON expense_installments(status);
 -- ============================================
 
 -- Create default admin user (password: admin123 - CHANGE IN PRODUCTION!)
-INSERT INTO users (email, password_hash, full_name, role)
+INSERT INTO users (email, password_hash, name, role)
 VALUES ('admin@orderlyhub.com', '$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewY5YmMxSUqIzlCi', 'Admin User', 'admin')
 ON CONFLICT (email) DO NOTHING;
 
