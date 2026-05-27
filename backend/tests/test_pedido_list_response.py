@@ -29,6 +29,7 @@ def _make_produto_response(**overrides):
         descricao="Notebook",
         quantidade=1,
         valor_projetado=Decimal("3000.00"),
+        preco_custo=None,
         valor_compra=None,
         economia=None,
         sub_compras=None,

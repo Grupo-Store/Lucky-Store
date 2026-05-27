@@ -22,6 +22,7 @@ def _produto_response(pedido_id=None, status="Pending"):
         descricao="Produto teste",
         quantidade=2,
         valor_projetado=Decimal("100.00"),
+        preco_custo=None,
         valor_compra=None,
         economia=None,
         fornecedor=None,

@@ -12,6 +12,7 @@ class ProdutoCreate(BaseModel):
     descricao: str
     quantidade: int = Field(gt=0)
     valor_projetado: Decimal = Field(gt=0)
+    preco_custo: Optional[Decimal] = None
     valor_compra: Optional[Decimal] = None
     fornecedor: Optional[str] = None
     is_direct_supply: bool = False
@@ -25,6 +26,7 @@ class ProdutoCreate(BaseModel):
 
 
 class ProdutoUpdate(BaseModel):
+    preco_custo: Optional[Decimal] = None
     valor_compra: Optional[Decimal] = None
     fornecedor: Optional[str] = None
     data_compra: Optional[date] = None
@@ -62,6 +64,7 @@ class ProdutoResponse(BaseModel):
     descricao: str
     quantidade: int
     valor_projetado: Decimal
+    preco_custo: Optional[Decimal]
     valor_compra: Optional[Decimal]
     economia: Optional[Decimal]
     sub_compras: Optional[List[Any]] = None

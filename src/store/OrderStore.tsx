@@ -77,12 +77,13 @@ export interface FreightCard {
   deliveryPerson: string;
   value: number;
   deliveryDate?: string;
+  pago?: boolean;
 }
 export type PaymentMethod = 'Credit Card' | 'Debit Card' | 'Boleto' | 'Pix' | 'TED' | 'Cash';
 export type Company = '' | 'Lucky Store' | 'BTech' | 'AJJ';
-export type Seller = '' | 'Alcides' | 'Lucas' | 'Pedro';
+export type Seller = string;
 
-export const SELLERS: Exclude<Seller, ''>[] = ['Alcides', 'Lucas', 'Pedro'];
+export const SELLERS: string[] = ['Alcides', 'Lucas', 'Pedro'];
 export const PAYMENT_METHODS: PaymentMethod[] = ['Credit Card', 'Debit Card', 'Boleto', 'Pix', 'TED', 'Cash'];
 export const PAYMENT_METHOD_LABELS: Record<PaymentMethod, string> = {
   'Credit Card': 'Cartão de Crédito',
@@ -128,7 +129,9 @@ export interface DirectSupplyOrderItem {
   quantity: number;
   /** Unit quote value (stored as valor_projetado in DB) */
   projectedValue: number;
-  /** Unit closing/sale value (stored as valor_compra in DB for direct supply items) */
+  /** Unit purchase/cost value paid to supplier */
+  purchaseValue: number;
+  /** Unit sale value charged to customer (stored as valor_compra in DB for direct supply items) */
   closingValue: number;
   supplier: string;
   supplierPct: number;
@@ -288,12 +291,11 @@ export function isOpenOrder(status: OrderStatus) {
   return OPEN_STATUSES.includes(status);
 }
 
-/** Direct supply cost = Σ(supplier profit per item) + Σ(supplier freight per item) */
+/** Direct supply cost = Σ custo do fornecedor per item (purchase cost is tracked in finalProductCost) */
 export function calcDirectSupplyCost(items?: DirectSupplyOrderItem[]): number {
   return (items || []).reduce((s, i) => {
-    const lineDiff = (i.closingValue - i.projectedValue) * i.quantity;
-    const supplierProfit = lineDiff * (i.supplierPct || 0) / 100;
-    return s + supplierProfit + (i.supplierFreight || 0);
+    const custoFornecedor = ((i.closingValue - (i.purchaseValue || 0)) * i.quantity) * (i.supplierPct || 0) / 100 + (i.supplierFreight || 0);
+    return s + custoFornecedor;
   }, 0);
 }
 

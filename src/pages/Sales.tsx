@@ -211,7 +211,7 @@ const FORMA_TO_PAYMENT: Record<string, PaymentMethod> = Object.fromEntries(
   Object.entries(FORMA_PAGAMENTO_MAP).map(([k, v]) => [v, k as PaymentMethod])
 );
 
-function pedidoListToOrder(item: PedidoListItem): Order {
+export function pedidoListToOrder(item: PedidoListItem): Order {
   return {
     id: item.id,
     os: item.numero_os,
@@ -261,6 +261,7 @@ function pedidoListToOrder(item: PedidoListItem): Order {
       name: p.descricao,
       quantity: p.quantidade,
       projectedValue: parseFloat(String(p.valor_projetado)) || 0,
+      purchaseValue: parseFloat(String(p.preco_custo ?? '0')) || 0,
       closingValue: parseFloat(String(p.valor_compra ?? '0')) || 0,
       supplier: p.fornecedor ?? '',
       supplierPct: parseFloat(String(p.porcentagem_fornecedor ?? '0')) || 0,
@@ -272,6 +273,7 @@ function pedidoListToOrder(item: PedidoListItem): Order {
       deliveryPerson: f.entregador ?? '',
       value: parseFloat(String(f.valor)) || 0,
       deliveryDate: f.data_frete ?? undefined,
+      pago: f.pago ?? false,
     })),
     paymentDate: item.data_pagamento ?? '',
     penaltyValue: parseFloat(String(item.multa ?? '0')) || 0,

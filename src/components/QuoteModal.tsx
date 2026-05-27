@@ -14,7 +14,7 @@ import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
-import { Company, Seller, SELLERS } from '@/store/OrderStore';
+import { Company, Seller } from '@/store/OrderStore';
 import {
   Quote, QuoteItem, DirectSupplyQuoteItem, QuotePhases, QuotePhaseKey,
   QUOTE_PHASE_COLORS, QUOTE_PHASE_LABELS, emptyPhases,
@@ -24,6 +24,7 @@ import { QuoteStatusTimeline } from '@/components/StatusTimeline';
 import { apiClient, getApiError } from '@/api/client';
 import type { CreateCotacaoPayload, UpdateCotacaoPayload, UpdateCotacaoFasePayload } from '@/types/api';
 import { LOJA_IDS, VENDEDOR_IDS } from '@/api/storeConfig';
+import { useVendedores } from '@/hooks/useVendedores';
 
 function toBRL(v: number) { return v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }); }
 function parseBRL(s: string): number {
@@ -76,6 +77,11 @@ export function QuoteModal({ open, onClose, quote, onSave, onDelete, nextIndex }
   const [form, setForm] = useState<Quote>(() => emptyQuote(nextIndex()));
   const [datePopover, setDatePopover] = useState<string | null>(null);
   const isEdit = !!quote;
+
+  const { data: vendedoresData } = useVendedores();
+  const vendedores = vendedoresData?.items ?? [];
+  const vendorIdByName = (nome: string) =>
+    vendedores.find(v => v.nome === nome)?.id ?? VENDEDOR_IDS[nome] ?? '';
 
   const { mutate: createQuote, isPending: isCreating } = useCreateQuote();
   const { mutate: updateQuote, isPending: isUpdating } = useUpdateQuote(quote?.id ?? '');
@@ -138,12 +144,12 @@ export function QuoteModal({ open, onClose, quote, onSave, onDelete, nextIndex }
   const regularGrossProfit = totalRevenue - totalCost;
   const dsInternalProfit = dsItems.reduce((s, i) => {
     const lineDiff = ((i.closingValue || 0) - (i.quoteValue || 0)) * (i.quantity || 0);
-    const supplierProfit = lineDiff * (i.supplierPct || 0) / 100;
-    return s + (lineDiff - supplierProfit);
+    const custoFornecedor = lineDiff * (i.supplierPct || 0) / 100 + (i.supplierFreight || 0);
+    return s + (lineDiff - custoFornecedor);
   }, 0);
   const grossProfit = regularGrossProfit + dsInternalProfit;
-  const profitBTech = (allRevenue * ((100 - taxBTech) / 100)) - allCost;
-  const profitLucky = (allRevenue * ((100 - taxLucky) / 100)) - allCost;
+  const profitBTech = grossProfit * (1 - taxBTech / 100);
+  const profitLucky = grossProfit * (1 - taxLucky / 100);
 
   // Auto-sync closed phase value to sum of all Valor Final
   useEffect(() => {
@@ -226,7 +232,7 @@ export function QuoteModal({ open, onClose, quote, onSave, onDelete, nextIndex }
     } else {
       const payload: CreateCotacaoPayload = {
         id_loja: LOJA_IDS[q.company] ?? '',
-        id_vendedor: VENDEDOR_IDS[q.seller] ?? '',
+        id_vendedor: vendorIdByName(q.seller ?? ''),
         cliente: q.customer,
         data_cotacao: q.requestDate,
         cnpj_cliente: q.cnpj || undefined,
@@ -369,7 +375,7 @@ export function QuoteModal({ open, onClose, quote, onSave, onDelete, nextIndex }
               <Select value={form.seller || ''} onValueChange={v => set('seller', v as Seller)}>
                 <SelectTrigger className="bg-white border-border"><SelectValue placeholder="Selecionar" /></SelectTrigger>
                 <SelectContent>
-                  {SELLERS.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                  {vendedores.map(v => <SelectItem key={v.id} value={v.nome}>{v.nome}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>
@@ -400,8 +406,8 @@ export function QuoteModal({ open, onClose, quote, onSave, onDelete, nextIndex }
                 const lineCost = (item.quoteValue || 0) * (item.quantity || 0);
                 const lineFinal = (item.closingValue || 0) * (item.quantity || 0);
                 const lineDiff = lineFinal - lineCost;
-                const supplierProfit = lineDiff * (item.supplierPct || 0) / 100;
-                const internalProfit = lineDiff - supplierProfit;
+                const custoFornecedor = lineDiff * (item.supplierPct || 0) / 100 + (item.supplierFreight || 0);
+                const internalProfit = lineDiff - custoFornecedor;
                 return (
                   <div key={item.id} className="border rounded-md p-2 bg-white space-y-2">
                     <div className="grid gap-2 items-start" style={{ gridTemplateColumns: 'repeat(16, minmax(0, 1fr))' }}>
@@ -447,8 +453,8 @@ export function QuoteModal({ open, onClose, quote, onSave, onDelete, nextIndex }
                         <span className="text-[10px] text-muted-foreground">% Fornecedor</span>
                       </div>
                       <div>
-                        <Input readOnly className="bg-muted border-border font-semibold" value={toBRL(supplierProfit)} />
-                        <span className="text-[10px] text-muted-foreground">Lucro Fornecedor</span>
+                        <Input readOnly className="bg-muted border-border font-semibold" value={toBRL(custoFornecedor)} />
+                        <span className="text-[10px] text-muted-foreground">Custo Fornecedor</span>
                       </div>
                       <div>
                         <CurrencyInput value={item.supplierFreight || 0} onChange={n => updateDsItem(item.id, 'supplierFreight', n)} />

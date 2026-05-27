@@ -18,8 +18,9 @@ import { ItemStatusTimeline } from '@/components/StatusTimeline';
 import {
   Order, OrderItem, SubPurchase, ItemStatus, PaymentMethod,
   ITEM_STATUS_COLORS, PAYMENT_METHODS, PAYMENT_METHOD_LABELS,
-  SELLERS, calcItemFinalValue, calcItemLatestDelivery,
+  calcItemFinalValue, calcItemLatestDelivery,
 } from '@/store/OrderStore';
+import { useVendedores } from '@/hooks/useVendedores';
 
 const ITEM_STATUS_LABELS: Record<ItemStatus, string> = {
   'To Buy': 'A Comprar', 'Bought': 'Comprado', 'In Stock': 'Em Estoque',
@@ -59,6 +60,8 @@ interface Props {
 
 export function ProductModal({ open, onClose, order, item, onSave }: Props) {
   const qc = useQueryClient();
+  const { data: vendedoresData } = useVendedores();
+  const vendedores = vendedoresData?.items ?? [];
   const [subs, setSubs] = useState<SubPurchase[]>([]);
   const [saving, setSaving] = useState(false);
 
@@ -207,7 +210,7 @@ export function ProductModal({ open, onClose, order, item, onSave }: Props) {
                     <Select value={sp.buyer || ''} onValueChange={v => updateSub(sp.id, 'buyer', v)}>
                       <SelectTrigger className="bg-white border-border"><SelectValue placeholder="Selecionar" /></SelectTrigger>
                       <SelectContent>
-                        {SELLERS.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                        {vendedores.map(v => <SelectItem key={v.id} value={v.nome}>{v.nome}</SelectItem>)}
                       </SelectContent>
                     </Select>
                   </div>

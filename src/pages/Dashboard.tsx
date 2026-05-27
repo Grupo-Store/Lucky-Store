@@ -20,9 +20,10 @@ import {
 } from 'recharts';
 import { cn } from '@/lib/utils';
 import { useOrders, calcTotal, calcFinalCost, calcProfit, Order, SELLERS, calcFreightTotal } from '@/store/OrderStore';
-import { useFinance, expandExpense } from '@/store/FinanceStore';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useGoals, useUpsertGoal, useDeleteGoal, type ApiGoal, LOJA_ID, LOJA_NAME } from '@/api/hooks/useDashboard';
+import { useVendedores } from '@/hooks/useVendedores';
+import { useFinance, Goal, GoalScopeType, goalKey, expandExpense } from '@/store/FinanceStore';
 import { useQuotes } from '@/store/QuoteStore';
 import { useDashboardFilters } from '@/store/DashboardFilterStore';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -170,9 +171,23 @@ function GoalsModal({
   const { mutate: upsert, isPending: saving } = useUpsertGoal();
   const { mutate: removeGoal } = useDeleteGoal();
 
-  const companyOptions = Object.entries(LOJA_ID)
-    .filter(([, uuid]) => uuid)
-    .map(([name, uuid]) => ({ value: uuid, label: name }));
+  const { data: vendedoresData } = useVendedores();
+  const goalSellerNames = vendedoresData?.items.map(v => v.nome) ?? SELLERS;
+
+  const companyOptions: { value: string; label: string }[] = [
+    { value: 'all', label: 'Geral (todas as empresas)' },
+    { value: 'Lucky Store', label: 'Lucky Store' },
+    { value: 'BTech', label: 'BTech' },
+    { value: 'AJJ', label: 'AJJ' },
+  ];
+  const sellerOptions = goalSellerNames.map(s => ({ value: s, label: s }));
+  const scopeOptions = scopeType === 'company' ? companyOptions : sellerOptions;
+
+  const onScopeTypeChange = (v: GoalScopeType) => {
+    setScopeType(v);
+    setScopeId(v === 'company' ? 'all' : (goalSellerNames[0] ?? ''));
+  };
+
 
   const resetForm = () => {
     setTarget(0); setFloor(0); setEditingId(null);
@@ -294,7 +309,9 @@ function GoalsModal({
 
 export default function Dashboard() {
   const { orders } = useOrders();
-  const { expenses } = useFinance();
+  const { data: vendedoresData } = useVendedores();
+  const sellerNames = vendedoresData?.items.map(v => v.nome) ?? SELLERS;
+  const { goals, upsertGoal, deleteGoal, expenses } = useFinance();
   const { quotes } = useQuotes();
   const { filters: globalFilters, setFilters: setGlobalFilters, mode, section } = useDashboardFilters();
   const { data: apiKpis, isLoading: kpisLoading } = useDashboardKpis();
@@ -329,12 +346,12 @@ export default function Dashboard() {
   const stats = useMemo(() => computeStats(filtered, orders, filters, goal), [filtered, orders, filters, goal]);
 
   const perSeller = useMemo(() => {
-    return SELLERS.map(seller => {
+    return sellerNames.map(seller => {
       const list = filtered.filter(o => o.seller === seller);
       const s = computeStats(list, orders, filters);
       return { seller, ...s };
     });
-  }, [filtered, orders, filters]);
+  }, [filtered, orders, filters, goals, sellerNames]);
 
   const quotesCount = useMemo(() => {
     return quotes.filter(q => {
@@ -535,10 +552,10 @@ export default function Dashboard() {
         </div>
       ) : apiKpis ? (
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          <KpiCard label="Total de Pedidos" value={String(apiKpis.total_pedidos)} />
-          <KpiCard label="Pedidos Pendentes" value={String(apiKpis.pedidos_pendentes)} accent="text-orange-600" />
-          <KpiCard label="Faturamento do Mês" value={BRL(apiKpis.faturamento_mes ?? 0)} accent="text-green-700" />
-          <KpiCard label="Ticket Médio" value={BRL(apiKpis.ticket_medio ?? 0)} />
+          <KpiCard label="Total de Pedidos" value={String(apiKpis.num_pedidos ?? 0)} />
+          <KpiCard label="Cancelamentos" value={String(apiKpis.num_cancelamentos ?? 0)} accent="text-orange-600" />
+          <KpiCard label="Faturamento do Mês" value={BRL(apiKpis.receita ?? 0)} accent="text-green-700" />
+          <KpiCard label="Ticket Médio" value={BRL(apiKpis.ticket_venda ?? 0)} />
         </div>
       ) : null}
 
