@@ -19,7 +19,9 @@ import { KpiCard } from '@/components/dashboard/KpiCard';
 import { DashboardPieChart } from '@/components/dashboard/DashboardPieChart';
 import { DashboardTicketBar } from '@/components/dashboard/DashboardTicketBar';
 import { CompanyBreakdownTable } from '@/components/dashboard/CompanyBreakdownTable';
-import { SellerBreakdownTable } from '@/components/dashboard/SellerBreakdownTable';
+import { SellerCard } from '@/components/dashboard/SellerCard';
+import { SellerGoalChart } from '@/components/dashboard/SellerGoalChart';
+import { HistoricalChart } from '@/components/dashboard/HistoricalChart';
 import {
   useDashboardKpis,
   useDashboardProjections,
@@ -31,7 +33,7 @@ import {
 } from '@/hooks/use-dashboard-query';
 import type { DashboardQueryParams, ApiGoal } from '@/hooks/use-dashboard-query';
 import type { DashboardFilters } from '@/store/DashboardFilterStore';
-import { LOJA_IDS } from '@/api/storeConfig';
+import { LOJA_IDS, VENDEDOR_IDS } from '@/api/storeConfig';
 
 type CompanyKey = 'all' | 'Lucky Store' | 'BTech' | 'AJJ';
 const COMPANIES: CompanyKey[] = ['all', 'Lucky Store', 'BTech', 'AJJ'];
@@ -50,6 +52,8 @@ function toApiParams(filters: DashboardFilters, company: CompanyKey): DashboardQ
     id_loja:     company !== 'all' ? (LOJA_IDS[company] || undefined) : undefined,
   };
 }
+
+// ─── Goals Modal ──────────────────────────────────────────────────────────────
 
 function GoalsModal({ open, onClose, year, month }: {
   open: boolean; onClose: () => void; year: number; month: number;
@@ -189,6 +193,8 @@ function GoalsModal({ open, onClose, year, month }: {
   );
 }
 
+// ─── Dashboard ────────────────────────────────────────────────────────────────
+
 export default function Dashboard() {
   const { filters: globalFilters, setFilters: setGlobalFilters, mode, section } = useDashboardFilters();
 
@@ -213,159 +219,311 @@ export default function Dashboard() {
     }
   }, [kpisError, projError, byCompanyError, bySellerError]);
 
+  // Derived financial values
+  const ganhosFinanceiros = 0; // mocked — backend não suporta ainda
+  const gastosFixos       = kpis?.outros_custos ?? 0;
+  const lucroBruto        = kpis?.lucro ?? 0;
+  const lucroLiquido      = lucroBruto + ganhosFinanceiros - gastosFixos;
+
+  // Seller items: always show all known sellers (from VENDEDOR_IDS), even when the
+  // breakdown endpoint returns an empty array (no orders in period). Real data
+  // overwrites the zero-baseline when it exists.
+  const sellerItems = useMemo(() => {
+    const realItems = bySeller?.items ?? [];
+    const knownSellers = Object.entries(VENDEDOR_IDS).filter(([, id]) => id !== '');
+
+    // No sellers configured in env → just use whatever the API returns
+    if (knownSellers.length === 0) return realItems;
+
+    const realByName = new Map(realItems.map(i => [i.nome, i]));
+
+    return knownSellers.map(([nome, id_vendedor]) =>
+      realByName.get(nome) ?? {
+        id_vendedor,
+        nome,
+        receita: 0, custo: 0, lucro: 0, margem: 0,
+        num_pedidos: 0, num_cancelamentos: 0, valor_cancelamentos: 0,
+        ticket_venda: 0, ticket_custo: 0, ticket_lucro: 0,
+      }
+    );
+  }, [bySeller?.items]);
+
+  // ─── Filter row (shared between sections) ──────────────────────────────────
+  const filterRow = (
+    <div className="relative flex items-center justify-between gap-3 flex-wrap">
+      {/* Date picker */}
+      <div className="shrink-0">
+        <Popover open={dateOpen} onOpenChange={setDateOpen}>
+          <PopoverTrigger asChild>
+            <Button variant="outline" className="gap-2">
+              <CalendarIcon className="h-4 w-4" />
+              {globalFilters.rangeFrom && globalFilters.rangeTo
+                ? `${format(globalFilters.rangeFrom, 'dd/MM/yy')} – ${format(globalFilters.rangeTo, 'dd/MM/yy')}`
+                : `${MONTHS[globalFilters.month]}/${globalFilters.year}`}
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-auto p-0" align="start">
+            <div className="flex border-b">
+              <button
+                onClick={() => setDateTab('data')}
+                className={cn('flex-1 px-4 py-2 text-sm font-semibold transition',
+                  dateTab === 'data' ? 'bg-secondary text-secondary-foreground' : 'text-muted-foreground hover:bg-muted')}>
+                Data
+              </button>
+              <button
+                onClick={() => setDateTab('periodo')}
+                className={cn('flex-1 px-4 py-2 text-sm font-semibold transition',
+                  dateTab === 'periodo' ? 'bg-secondary text-secondary-foreground' : 'text-muted-foreground hover:bg-muted')}>
+                Período
+              </button>
+            </div>
+            {dateTab === 'data' ? (
+              <div className="p-4 space-y-3 w-[280px]">
+                <div>
+                  <Label className="text-xs">Mês</Label>
+                  <Select
+                    value={String(globalFilters.month)}
+                    onValueChange={v => setGlobalFilters(f => ({ ...f, month: +v, rangeFrom: undefined, rangeTo: undefined }))}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {MONTHS.map((m, i) => <SelectItem key={i} value={String(i)}>{m}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label className="text-xs">Ano</Label>
+                  <Input
+                    type="number"
+                    value={globalFilters.year}
+                    onChange={e => setGlobalFilters(f => ({ ...f, year: +e.target.value || f.year, rangeFrom: undefined, rangeTo: undefined }))}
+                  />
+                </div>
+                <Button className="w-full" size="sm" onClick={() => setDateOpen(false)}>Aplicar</Button>
+              </div>
+            ) : (
+              <div>
+                <Calendar
+                  mode="range"
+                  selected={{ from: globalFilters.rangeFrom, to: globalFilters.rangeTo }}
+                  onSelect={(r: any) => setGlobalFilters(f => ({ ...f, rangeFrom: r?.from, rangeTo: r?.to }))}
+                  locale={ptBR}
+                  numberOfMonths={2}
+                  className="p-3 pointer-events-auto"
+                />
+                <div className="p-2 border-t flex justify-between">
+                  <Button size="sm" variant="ghost" onClick={() => setGlobalFilters(f => ({ ...f, rangeFrom: undefined, rangeTo: undefined }))}>Limpar</Button>
+                  <Button size="sm" onClick={() => setDateOpen(false)}>Aplicar</Button>
+                </div>
+              </div>
+            )}
+          </PopoverContent>
+        </Popover>
+      </div>
+
+      {/* Company tabs */}
+      <div className="order-3 lg:order-2 lg:absolute lg:left-1/2 lg:-translate-x-1/2 mx-auto">
+        <div className="inline-flex items-center gap-1 rounded-full bg-muted p-1">
+          {COMPANIES.map(c => (
+            <button
+              key={c}
+              onClick={() => setCompany(c)}
+              className={cn(
+                'px-4 py-1.5 rounded-full text-xs font-bold tracking-wider uppercase transition-all',
+                company === c
+                  ? 'bg-secondary text-secondary-foreground shadow-sm'
+                  : 'text-muted-foreground hover:text-foreground'
+              )}
+            >
+              {c === 'all' ? 'Geral' : c}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Configurar Metas button */}
+      <div className="order-2 lg:order-3 shrink-0">
+        <Button onClick={() => setGoalsOpen(true)} className="gap-1.5">
+          <Target className="h-4 w-4" /> Configurar Metas
+        </Button>
+      </div>
+    </div>
+  );
+
+  // ─── Skeleton loader ────────────────────────────────────────────────────────
+  const kpiSkeleton = (count: number) => (
+    <div className={`grid grid-cols-2 md:grid-cols-${count} gap-3 animate-pulse`}>
+      {Array.from({ length: count }).map((_, i) => (
+        <div key={i} className="h-24 rounded-lg bg-muted" />
+      ))}
+    </div>
+  );
+
+  // ─── Render ─────────────────────────────────────────────────────────────────
+
   return (
     <div className="space-y-4">
+
+      {/* ── EMPRESA MODE ────────────────────────────────────────────────────── */}
       {mode === 'company' && (
         <>
-          <div className="relative flex items-center justify-between gap-3 flex-wrap">
-            <div className="shrink-0">
-              <Popover open={dateOpen} onOpenChange={setDateOpen}>
-                <PopoverTrigger asChild>
-                  <Button variant="outline" className="gap-2">
-                    <CalendarIcon className="h-4 w-4" />
-                    {globalFilters.rangeFrom && globalFilters.rangeTo
-                      ? `${format(globalFilters.rangeFrom, 'dd/MM/yy')} – ${format(globalFilters.rangeTo, 'dd/MM/yy')}`
-                      : `${MONTHS[globalFilters.month]}/${globalFilters.year}`}
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0" align="start">
-                  <div className="flex border-b">
-                    <button
-                      onClick={() => setDateTab('data')}
-                      className={cn('flex-1 px-4 py-2 text-sm font-semibold transition',
-                        dateTab === 'data' ? 'bg-secondary text-secondary-foreground' : 'text-muted-foreground hover:bg-muted')}>
-                      Data
-                    </button>
-                    <button
-                      onClick={() => setDateTab('periodo')}
-                      className={cn('flex-1 px-4 py-2 text-sm font-semibold transition',
-                        dateTab === 'periodo' ? 'bg-secondary text-secondary-foreground' : 'text-muted-foreground hover:bg-muted')}>
-                      Período
-                    </button>
-                  </div>
-                  {dateTab === 'data' ? (
-                    <div className="p-4 space-y-3 w-[280px]">
-                      <div>
-                        <Label className="text-xs">Mês</Label>
-                        <Select
-                          value={String(globalFilters.month)}
-                          onValueChange={v => setGlobalFilters(f => ({ ...f, month: +v, rangeFrom: undefined, rangeTo: undefined }))}>
-                          <SelectTrigger><SelectValue /></SelectTrigger>
-                          <SelectContent>
-                            {MONTHS.map((m, i) => <SelectItem key={i} value={String(i)}>{m}</SelectItem>)}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <div>
-                        <Label className="text-xs">Ano</Label>
-                        <Input
-                          type="number"
-                          value={globalFilters.year}
-                          onChange={e => setGlobalFilters(f => ({ ...f, year: +e.target.value || f.year, rangeFrom: undefined, rangeTo: undefined }))}
-                        />
-                      </div>
-                      <Button className="w-full" size="sm" onClick={() => setDateOpen(false)}>Aplicar</Button>
-                    </div>
-                  ) : (
-                    <div>
-                      <Calendar
-                        mode="range"
-                        selected={{ from: globalFilters.rangeFrom, to: globalFilters.rangeTo }}
-                        onSelect={(r: any) => setGlobalFilters(f => ({ ...f, rangeFrom: r?.from, rangeTo: r?.to }))}
-                        locale={ptBR}
-                        numberOfMonths={2}
-                        className="p-3 pointer-events-auto"
-                      />
-                      <div className="p-2 border-t flex justify-between">
-                        <Button size="sm" variant="ghost" onClick={() => setGlobalFilters(f => ({ ...f, rangeFrom: undefined, rangeTo: undefined }))}>Limpar</Button>
-                        <Button size="sm" onClick={() => setDateOpen(false)}>Aplicar</Button>
-                      </div>
-                    </div>
-                  )}
-                </PopoverContent>
-              </Popover>
-            </div>
-
-            <div className="order-3 lg:order-2 lg:absolute lg:left-1/2 lg:-translate-x-1/2 mx-auto">
-              <div className="inline-flex items-center gap-1 rounded-full bg-muted p-1">
-                {COMPANIES.map(c => (
-                  <button
-                    key={c}
-                    onClick={() => setCompany(c)}
-                    className={cn(
-                      'px-4 py-1.5 rounded-full text-xs font-bold tracking-wider uppercase transition-all',
-                      company === c
-                        ? 'bg-secondary text-secondary-foreground shadow-sm'
-                        : 'text-muted-foreground hover:text-foreground'
-                    )}
-                  >
-                    {c === 'all' ? 'Geral' : c}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div className="order-2 lg:order-3 shrink-0">
-              <Button onClick={() => setGoalsOpen(true)} className="gap-1.5">
-                <Target className="h-4 w-4" /> Configurar Metas
-              </Button>
-            </div>
-          </div>
-
-          {kpisLoading ? (
-            <div className="grid grid-cols-2 md:grid-cols-5 gap-3 animate-pulse">
-              {Array.from({ length: 5 }).map((_, i) => (
-                <div key={i} className="h-24 rounded-lg bg-muted" />
-              ))}
-            </div>
-          ) : (
-            <>
-              {section === 'geral' && (
-                <div className="space-y-4">
-                  <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-                    <KpiCard label="Faturamento" value={BRL(kpis?.receita ?? 0)} sub={`Hoje: ${BRL(kpis?.receita_hoje ?? 0)}`} accent="text-green-700" />
-                    <KpiCard label="Lucro" value={BRL(kpis?.lucro ?? 0)} accent={(kpis?.lucro ?? 0) >= 0 ? 'text-green-700' : 'text-red-600'} />
-                    <KpiCard label="Margem" value={PCT(kpis?.margem ?? 0)} />
-                    <KpiCard label="Pedidos" value={String(kpis?.num_pedidos ?? 0)} />
-                    <KpiCard label="Cancelamentos" value={String(kpis?.num_cancelamentos ?? 0)} sub={`Perda: ${BRL(kpis?.valor_cancelamentos ?? 0)}`} accent="text-red-600" />
-                  </div>
-                  <CompanyBreakdownTable items={byCompany?.items ?? []} loading={byCompanyLoading} />
-                  <DashboardPieChart impostoCompra={kpis?.imposto_compra ?? 0} impostoVenda={kpis?.imposto_venda ?? 0} outrosCustos={kpis?.outros_custos ?? 0} />
-                </div>
-              )}
-
-              {section === 'vendas' && (
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                  <KpiCard label="Pedidos" value={String(kpis?.num_pedidos ?? 0)} />
-                  <KpiCard label="Margem" value={PCT(kpis?.margem ?? 0)} />
-                  <KpiCard label="Cancelamentos" value={String(kpis?.num_cancelamentos ?? 0)} sub={`Perda: ${BRL(kpis?.valor_cancelamentos ?? 0)}`} accent="text-red-600" />
-                </div>
-              )}
-
-              {section === 'ticket' && (
-                <div className="space-y-4">
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                    <KpiCard label="Ticket Custo"  value={BRL(kpis?.ticket_custo ?? 0)} accent="text-red-600" />
-                    <KpiCard label="Ticket Venda"  value={BRL(kpis?.ticket_venda ?? 0)} accent="text-green-700" />
-                    <KpiCard label="Ticket Lucro"  value={BRL(kpis?.ticket_lucro ?? 0)} accent={(kpis?.ticket_lucro ?? 0) >= 0 ? 'text-green-700' : 'text-red-600'} />
-                  </div>
-                  <DashboardTicketBar ticketCusto={kpis?.ticket_custo ?? 0} ticketVenda={kpis?.ticket_venda ?? 0} ticketLucro={kpis?.ticket_lucro ?? 0} />
-                </div>
-              )}
-
-              {section === 'meta' && (
+          {/* GERAL: 4 top KPIs appear ABOVE the filter row (per prototype) */}
+          {section === 'geral' && (
+            kpisLoading
+              ? kpiSkeleton(4)
+              : (
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                  <KpiCard label="% Meta" value={proj?.pct_meta != null ? PCT(proj.pct_meta) : '—'} accent={(proj?.pct_meta ?? 0) >= 1 ? 'text-green-700' : undefined} />
-                  <KpiCard label="Projeção" value={BRL(proj?.projecao_mes ?? 0)} sub={`Média/dia: ${BRL(proj?.media_diaria ?? 0)}`} />
-                  <KpiCard label="Gap para Meta" value={proj?.gap_target != null ? BRL(proj.gap_target) : '—'} accent="text-orange-600" />
-                  <KpiCard label="Meta Diária Dinâmica" value={proj?.meta_diaria_dinamica != null ? BRL(proj.meta_diaria_dinamica) : '—'} sub={`${proj?.dias_uteis_restantes ?? 0} dia(s) úteis restantes`} accent="text-blue-700" />
+                  <KpiCard
+                    label="Total de Pedidos"
+                    value={String(kpis?.num_pedidos ?? 0)}
+                    accent="text-secondary"
+                  />
+                  <KpiCard
+                    label="Cancelamentos"
+                    value={String(kpis?.num_cancelamentos ?? 0)}
+                    accent="text-orange-500"
+                  />
+                  <KpiCard
+                    label="Faturamento do Mês"
+                    value={BRL(kpis?.receita ?? 0)}
+                    accent="text-green-700"
+                  />
+                  <KpiCard
+                    label="Ticket Médio"
+                    value={BRL(kpis?.ticket_venda ?? 0)}
+                    accent="text-secondary"
+                  />
                 </div>
-              )}
-            </>
+              )
           )}
+
+          {/* Filter row — always visible */}
+          {filterRow}
+
+          {/* Section-specific content */}
+          {kpisLoading
+            ? kpiSkeleton(section === 'geral' ? 6 : 3)
+            : (
+              <>
+                {/* ── GERAL ── */}
+                {section === 'geral' && (
+                  <div className="space-y-4">
+                    {/* 6 financial cards */}
+                    <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
+                      <KpiCard
+                        label="Custo Total"
+                        value={BRL(kpis?.custo ?? 0)}
+                        accent="text-red-600"
+                      />
+                      <KpiCard
+                        label="Faturamento Total"
+                        value={BRL(kpis?.receita ?? 0)}
+                        sub={`Hoje: ${BRL(kpis?.receita_hoje ?? 0)}`}
+                        accent="text-green-700"
+                      />
+                      <KpiCard
+                        label="Lucro Bruto"
+                        value={BRL(lucroBruto)}
+                        sub="Fat. – Custo"
+                        accent={lucroBruto >= 0 ? 'text-green-700' : 'text-red-600'}
+                      />
+                      <KpiCard
+                        label="Ganhos Financeiros"
+                        value={BRL(ganhosFinanceiros)}
+                        sub="Multas + Juros"
+                        accent="text-blue-700"
+                      />
+                      <KpiCard
+                        label="Gastos Fixos"
+                        value={BRL(gastosFixos)}
+                        sub="Despesas registradas"
+                        accent="text-orange-500"
+                      />
+                      <KpiCard
+                        label="Lucro Líquido"
+                        value={BRL(lucroLiquido)}
+                        sub="Bruto + Ganhos – Fixos"
+                        accent={lucroLiquido >= 0 ? 'text-secondary' : 'text-red-600'}
+                      />
+                    </div>
+
+                    {/* Company breakdown table */}
+                    <CompanyBreakdownTable items={byCompany?.items ?? []} loading={byCompanyLoading} />
+
+                    {/* Pie chart */}
+                    <DashboardPieChart
+                      impostoCompra={kpis?.imposto_compra ?? 0}
+                      impostoVenda={kpis?.imposto_venda ?? 0}
+                      outrosCustos={kpis?.outros_custos ?? 0}
+                    />
+
+                    {/* Historical chart (mocked — sem endpoint de histórico diário) */}
+                    <HistoricalChart year={globalFilters.year} month={globalFilters.month} />
+                  </div>
+                )}
+
+                {/* ── VENDAS ── */}
+                {section === 'vendas' && (
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                    <KpiCard label="Pedidos" value={String(kpis?.num_pedidos ?? 0)} />
+                    <KpiCard label="Margem" value={PCT(kpis?.margem ?? 0)} />
+                    <KpiCard
+                      label="Cancelamentos"
+                      value={String(kpis?.num_cancelamentos ?? 0)}
+                      sub={`Perda: ${BRL(kpis?.valor_cancelamentos ?? 0)}`}
+                      accent="text-red-600"
+                    />
+                  </div>
+                )}
+
+                {/* ── TICKET ── */}
+                {section === 'ticket' && (
+                  <div className="space-y-4">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                      <KpiCard label="Ticket Custo"  value={BRL(kpis?.ticket_custo ?? 0)} accent="text-red-600" />
+                      <KpiCard label="Ticket Venda"  value={BRL(kpis?.ticket_venda ?? 0)} accent="text-green-700" />
+                      <KpiCard label="Ticket Lucro"  value={BRL(kpis?.ticket_lucro ?? 0)} accent={(kpis?.ticket_lucro ?? 0) >= 0 ? 'text-green-700' : 'text-red-600'} />
+                    </div>
+                    <DashboardTicketBar
+                      ticketCusto={kpis?.ticket_custo ?? 0}
+                      ticketVenda={kpis?.ticket_venda ?? 0}
+                      ticketLucro={kpis?.ticket_lucro ?? 0}
+                    />
+                  </div>
+                )}
+
+                {/* ── META ── */}
+                {section === 'meta' && (
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                    <KpiCard
+                      label="% Meta"
+                      value={proj?.pct_meta != null ? PCT(proj.pct_meta) : '—'}
+                      accent={(proj?.pct_meta ?? 0) >= 1 ? 'text-green-700' : undefined}
+                    />
+                    <KpiCard
+                      label="Projeção"
+                      value={BRL(proj?.projecao_mes ?? 0)}
+                      sub={`Média/dia: ${BRL(proj?.media_diaria ?? 0)}`}
+                    />
+                    <KpiCard
+                      label="Gap para Meta"
+                      value={proj?.gap_target != null ? BRL(proj.gap_target) : '—'}
+                      accent="text-orange-600"
+                    />
+                    <KpiCard
+                      label="Meta Diária Dinâmica"
+                      value={proj?.meta_diaria_dinamica != null ? BRL(proj.meta_diaria_dinamica) : '—'}
+                      sub={`${proj?.dias_uteis_restantes ?? 0} dia(s) úteis restantes`}
+                      accent="text-blue-700"
+                    />
+                  </div>
+                )}
+              </>
+            )
+          }
         </>
       )}
 
+      {/* ── VENDEDOR MODE ───────────────────────────────────────────────────── */}
       {mode === 'seller' && (
         <div className="space-y-4">
           <div className="flex justify-end">
@@ -373,8 +531,34 @@ export default function Dashboard() {
               <Target className="h-4 w-4" /> Configurar Metas
             </Button>
           </div>
+
           <h3 className="text-lg font-semibold text-secondary">Performance por Vendedor</h3>
-          <SellerBreakdownTable items={bySeller?.items ?? []} loading={bySellerLoading} />
+
+          {bySellerLoading ? (
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 animate-pulse">
+              {Array.from({ length: 3 }).map((_, i) => (
+                <div key={i} className="h-72 rounded-lg bg-muted" />
+              ))}
+            </div>
+          ) : sellerItems.length === 0 ? (
+            <p className="text-sm text-muted-foreground">Nenhum dado para o período selecionado.</p>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+              {sellerItems.map(item => (
+                <SellerCard
+                  key={item.id_vendedor || item.nome}
+                  item={item}
+                  metaDiaria={null}   // metas por vendedor não implementadas no backend
+                  gapMeta={null}
+                  projecaoMes={0}
+                  hasGoal={false}
+                />
+              ))}
+            </div>
+          )}
+
+          {/* Vendas vs Meta por Vendedor */}
+          <SellerGoalChart items={sellerItems} />
         </div>
       )}
 
