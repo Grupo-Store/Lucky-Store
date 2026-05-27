@@ -316,6 +316,9 @@ export function FinancialManager() {
 
           {/* CALENDAR */}
           {layout === 'calendar' && (
+            ordersLoading ? (
+              <Skeleton className="h-[500px] w-full rounded-lg" />
+            ) : (
             <Card>
               <CardContent className="p-2">
                 <div className="grid grid-cols-7 gap-1 mb-1">
@@ -374,6 +377,7 @@ export function FinancialManager() {
                 </div>
               </CardContent>
             </Card>
+            )
           )}
 
           {/* TABLE */}
@@ -565,6 +569,9 @@ export function FinancialManager() {
                 )}
               </div>
 
+              {ordersLoading ? (
+                <Skeleton className="h-40 w-full rounded-lg" />
+              ) : (
               <div className="overflow-x-auto rounded-lg border">
                 <Table>
                   <TableHeader>
@@ -603,6 +610,7 @@ export function FinancialManager() {
                   </TableBody>
                 </Table>
               </div>
+              )}
             </CardContent>
           </Card>
 
