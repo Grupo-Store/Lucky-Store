@@ -96,7 +96,7 @@ function makeRma() {
         id_produto_origem: null,
         descricao: 'Notebook com defeito',
         quantidade: 1,
-        status: 'In Repair',
+        status: 'Repaired Received',
         consertado_por: 'Técnico João',
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
@@ -216,6 +216,14 @@ async function mockAllApis(page: Page) {
     }
     return route.continue();
   });
+
+  await page.route('**/api/vendedores**', route =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ items: [{ id: VENDOR_ID, nome: 'Vendedor E2E', email: null, id_loja: STORE_ID }] }),
+    })
+  );
 }
 
 async function login(page: Page) {

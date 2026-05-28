@@ -127,6 +127,18 @@ async function mockFretesApis(page: Page) {
   await page.route('**/api/calendar/**', route =>
     route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ entries: [] }) })
   );
+
+  await page.route('**/api/vendedores**', route =>
+    route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ items: [] }) })
+  );
+
+  await page.route('**/api/rma**', route =>
+    route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ items: [], total: 0, page: 1, limit: 20, pages: 1 }) })
+  );
+
+  await page.route('**/api/quotes**', route =>
+    route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ items: [], total: 0, page: 1, limit: 20, pages: 1 }) })
+  );
 }
 
 // ─── Login helper ─────────────────────────────────────────────────────────────
@@ -146,6 +158,7 @@ async function login(page: Page) {
 
   await page.getByRole('button', { name: /verificar|confirm/i }).click();
   await page.waitForLoadState('networkidle');
+  await page.getByRole('button', { name: /Adicionar Pedido/i }).waitFor({ state: 'visible', timeout: 15_000 });
 }
 
 // ─── Tests ────────────────────────────────────────────────────────────────────
