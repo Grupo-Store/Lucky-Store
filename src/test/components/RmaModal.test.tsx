@@ -22,6 +22,55 @@ vi.mock('@/api/client', () => ({
   getApiError: (e: unknown) => String(e),
 }));
 
+vi.mock('@/hooks/useVendedores', () => ({
+  useVendedores: () => ({ data: { items: [] }, isLoading: false }),
+}));
+
+const deliveredApiItem = {
+  id: 'parent-order-backend-id',
+  numero_os: '1003',
+  data_pedido: '2026-01-01',
+  data_entrega: '2026-02-01',
+  status: 'Delivered',
+  is_rma: false,
+  is_cancelled: false,
+  is_direct_billing: false,
+  valor_venda: 1500,
+  parcelas: 1,
+  nome_cliente: 'InfoShop Corp',
+  cnpj_cliente: '45.678.912/0001-55',
+  nome_loja: 'Lucky Store',
+  nome_vendedor: 'Alcides',
+  numero_oc: 'PED-7710',
+  numero_nf: 'NF-003',
+  nota_fiscal_fornecedor: null,
+  observacao: null,
+  fornecedor_principal: null,
+  formas_pagamento: [],
+  fretes: [],
+  produtos: [
+    { id: 'item-1', descricao: 'Impressora HP LaserJet', quantidade: 1, status: 'In Stock', valor_projetado: 1500, valor_compra: 800 },
+  ],
+  custo: null,
+  data_pagamento: null,
+  multa: null,
+  juros: null,
+  forma_pagamento_efetiva: null,
+  num_parcelas_efetivas: null,
+  plano_parcelas: null,
+};
+
+const mockUseOrdersQuery = vi.fn(() => ({
+  data: { items: [deliveredApiItem], total: 1, page: 1, limit: 20, pages: 1 },
+  isLoading: false,
+  isError: false,
+  refetch: vi.fn(),
+}));
+
+vi.mock('@/hooks/use-orders-query', () => ({
+  useOrdersQuery: (...args: any[]) => mockUseOrdersQuery(...args),
+}));
+
 // ─── Fixtures ────────────────────────────────────────────────────────────────
 
 const deliveredOrder: Order = {
@@ -94,17 +143,25 @@ describe('RmaModal — step 1: order picker', () => {
   });
 
   it('shows empty state when no delivered orders exist', () => {
-    const nonDeliveredOrder = { ...deliveredOrder, status: 'Bought' as const };
+    const original = mockUseOrdersQuery.getMockImplementation();
+    mockUseOrdersQuery.mockImplementation(() => ({
+      data: { items: [], total: 0, page: 1, limit: 20, pages: 0 },
+      isLoading: false,
+      isError: false,
+      refetch: vi.fn(),
+    }));
     render(
       <RmaModal
         open
-        orders={[nonDeliveredOrder]}
+        orders={[]}
         onClose={vi.fn()}
         onSave={vi.fn()}
         nextRmaNumber={nextRmaNumber}
       />
     );
     expect(screen.getByText(/Nenhum pedido entregue encontrado/i)).toBeInTheDocument();
+    if (original) mockUseOrdersQuery.mockImplementation(original);
+    else mockUseOrdersQuery.mockReset();
   });
 
   it('advances to step 2 when an order row is clicked', async () => {

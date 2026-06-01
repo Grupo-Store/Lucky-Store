@@ -10,6 +10,7 @@ from app.models.pedido import Pedido, CustoPedido
 from app.models.loja import Loja
 from app.models.vendedor import Vendedor
 from app.models.dashboard_goal import DashboardGoal
+from app.models.meta_vendedor import MetaVendedor
 from app.schemas.dashboard import (
     DashboardKpisResponse,
     BreakdownByCompanyResponse,
@@ -19,6 +20,11 @@ from app.schemas.dashboard import (
     GoalCreate,
     GoalResponse,
     GoalsListResponse,
+    VendorGoalCreate,
+    VendorGoalResponse,
+    VendorGoalsListResponse,
+    DailySeriesItem,
+    DailySeriesResponse,
     ProjectionsResponse,
 )
 from app.utils.errors import NotFoundException
@@ -98,21 +104,21 @@ def _aggregate(
     q = (
         db.query(
             func.coalesce(func.sum(
-                case((Pedido.is_cancelled.is_(False), Pedido.valor_venda), else_=0)
+                case((Pedido.is_cancelled.isnot(True), Pedido.valor_venda), else_=0)
             ), 0).label("receita"),
             func.coalesce(func.sum(
-                case((Pedido.is_cancelled.is_(False), CustoPedido.custo_produto_final), else_=0)
+                case((Pedido.is_cancelled.isnot(True), CustoPedido.custo_produto_final), else_=0)
             ), 0).label("custo_produto"),
             func.coalesce(func.sum(
-                case((Pedido.is_cancelled.is_(False), CustoPedido.custo_servico), else_=0)
+                case((Pedido.is_cancelled.isnot(True), CustoPedido.custo_servico), else_=0)
             ), 0).label("custo_servico"),
             func.coalesce(func.sum(
-                case((Pedido.is_cancelled.is_(False), CustoPedido.imposto_compra), else_=0)
+                case((Pedido.is_cancelled.isnot(True), CustoPedido.imposto_compra), else_=0)
             ), 0).label("imposto_compra"),
             func.coalesce(func.sum(
-                case((Pedido.is_cancelled.is_(False), CustoPedido.imposto_venda), else_=0)
+                case((Pedido.is_cancelled.isnot(True), CustoPedido.imposto_venda), else_=0)
             ), 0).label("imposto_venda"),
-            func.count(case((Pedido.is_cancelled.is_(False), 1))).label("num_pedidos"),
+            func.count(case((Pedido.is_cancelled.isnot(True), 1))).label("num_pedidos"),
             func.count(case((Pedido.is_cancelled.is_(True), 1))).label("num_cancelamentos"),
             func.coalesce(func.sum(
                 case((Pedido.is_cancelled.is_(True), Pedido.valor_venda), else_=0)
@@ -121,7 +127,7 @@ def _aggregate(
         .outerjoin(CustoPedido, CustoPedido.id_pedido == Pedido.id)
         .filter(
             Pedido.deleted_at.is_(None),
-            Pedido.is_rma.is_(False),
+            Pedido.is_rma.isnot(True),
             Pedido.data_pedido >= inicio,
             Pedido.data_pedido <= fim,
         )
@@ -161,8 +167,8 @@ def get_kpis(
         db.query(func.coalesce(func.sum(Pedido.valor_venda), 0))
         .filter(
             Pedido.deleted_at.is_(None),
-            Pedido.is_rma.is_(False),
-            Pedido.is_cancelled.is_(False),
+            Pedido.is_rma.isnot(True),
+            Pedido.is_cancelled.isnot(True),
             Pedido.data_pedido == today,
         )
     )
@@ -206,25 +212,29 @@ def get_breakdown_by_company(
         db.query(
             Loja.nome.label("nome"),
             func.coalesce(func.sum(
-                case((Pedido.is_cancelled.is_(False), Pedido.valor_venda), else_=0)
+                case((Pedido.is_cancelled.isnot(True), Pedido.valor_venda), else_=0)
             ), 0).label("receita"),
             func.coalesce(func.sum(
-                case((Pedido.is_cancelled.is_(False),
+                case((Pedido.is_cancelled.isnot(True),
                       CustoPedido.custo_produto_final + CustoPedido.custo_servico), else_=0)
             ), 0).label("custo"),
-            func.count(case((Pedido.is_cancelled.is_(False), 1))).label("num_pedidos"),
+            func.count(case((Pedido.is_cancelled.isnot(True), 1))).label("num_pedidos"),
+            func.count(case((Pedido.is_cancelled.is_(True), 1))).label("num_cancelamentos"),
+            func.coalesce(func.sum(
+                case((Pedido.is_cancelled.is_(True), Pedido.valor_venda), else_=0)
+            ), 0).label("valor_cancelamentos"),
         )
         .join(Loja, Loja.id == Pedido.id_loja)
         .outerjoin(CustoPedido, CustoPedido.id_pedido == Pedido.id)
         .filter(
             Pedido.deleted_at.is_(None),
-            Pedido.is_rma.is_(False),
+            Pedido.is_rma.isnot(True),
             Pedido.data_pedido >= inicio,
             Pedido.data_pedido <= fim,
         )
         .group_by(Loja.id, Loja.nome)
         .order_by(func.sum(
-            case((Pedido.is_cancelled.is_(False), Pedido.valor_venda), else_=0)
+            case((Pedido.is_cancelled.isnot(True), Pedido.valor_venda), else_=0)
         ).desc())
     )
     if id_loja:
@@ -236,13 +246,19 @@ def get_breakdown_by_company(
         custo = Decimal(str(row.custo or 0))
         lucro = receita - custo
         margem = (lucro / receita).quantize(Decimal("0.0001")) if receita > 0 else Decimal("0")
+        num_pedidos = row.num_pedidos or 0
         items.append(BreakdownItem(
             nome=row.nome,
             receita=receita,
             custo=custo,
             lucro=lucro,
             margem=margem,
-            num_pedidos=row.num_pedidos or 0,
+            num_pedidos=num_pedidos,
+            num_cancelamentos=row.num_cancelamentos or 0,
+            valor_cancelamentos=Decimal(str(row.valor_cancelamentos or 0)),
+            ticket_venda=(receita / num_pedidos).quantize(Decimal("0.01")) if num_pedidos else Decimal("0"),
+            ticket_custo=(custo / num_pedidos).quantize(Decimal("0.01")) if num_pedidos else Decimal("0"),
+            ticket_lucro=(lucro / num_pedidos).quantize(Decimal("0.01")) if num_pedidos else Decimal("0"),
         ))
     return BreakdownByCompanyResponse(items=items)
 
@@ -262,25 +278,29 @@ def get_breakdown_by_seller(
             Vendedor.id.label("id_vendedor"),
             Vendedor.nome.label("nome"),
             func.coalesce(func.sum(
-                case((Pedido.is_cancelled.is_(False), Pedido.valor_venda), else_=0)
+                case((Pedido.is_cancelled.isnot(True), Pedido.valor_venda), else_=0)
             ), 0).label("receita"),
             func.coalesce(func.sum(
-                case((Pedido.is_cancelled.is_(False),
+                case((Pedido.is_cancelled.isnot(True),
                       CustoPedido.custo_produto_final + CustoPedido.custo_servico), else_=0)
             ), 0).label("custo"),
-            func.count(case((Pedido.is_cancelled.is_(False), 1))).label("num_pedidos"),
+            func.count(case((Pedido.is_cancelled.isnot(True), 1))).label("num_pedidos"),
+            func.count(case((Pedido.is_cancelled.is_(True), 1))).label("num_cancelamentos"),
+            func.coalesce(func.sum(
+                case((Pedido.is_cancelled.is_(True), Pedido.valor_venda), else_=0)
+            ), 0).label("valor_cancelamentos"),
         )
         .join(Vendedor, Vendedor.id == Pedido.id_vendedor)
         .outerjoin(CustoPedido, CustoPedido.id_pedido == Pedido.id)
         .filter(
             Pedido.deleted_at.is_(None),
-            Pedido.is_rma.is_(False),
+            Pedido.is_rma.isnot(True),
             Pedido.data_pedido >= inicio,
             Pedido.data_pedido <= fim,
         )
         .group_by(Vendedor.id, Vendedor.nome)
         .order_by(func.sum(
-            case((Pedido.is_cancelled.is_(False), Pedido.valor_venda), else_=0)
+            case((Pedido.is_cancelled.isnot(True), Pedido.valor_venda), else_=0)
         ).desc())
     )
     if id_loja:
@@ -292,6 +312,7 @@ def get_breakdown_by_seller(
         custo = Decimal(str(row.custo or 0))
         lucro = receita - custo
         margem = (lucro / receita).quantize(Decimal("0.0001")) if receita > 0 else Decimal("0")
+        num_pedidos = row.num_pedidos or 0
         items.append(BreakdownBySellerItem(
             id_vendedor=row.id_vendedor,
             nome=row.nome,
@@ -299,7 +320,12 @@ def get_breakdown_by_seller(
             custo=custo,
             lucro=lucro,
             margem=margem,
-            num_pedidos=row.num_pedidos or 0,
+            num_pedidos=num_pedidos,
+            num_cancelamentos=row.num_cancelamentos or 0,
+            valor_cancelamentos=Decimal(str(row.valor_cancelamentos or 0)),
+            ticket_venda=(receita / num_pedidos).quantize(Decimal("0.01")) if num_pedidos else Decimal("0"),
+            ticket_custo=(custo / num_pedidos).quantize(Decimal("0.01")) if num_pedidos else Decimal("0"),
+            ticket_lucro=(lucro / num_pedidos).quantize(Decimal("0.01")) if num_pedidos else Decimal("0"),
         ))
     return BreakdownBySellerResponse(items=items)
 
@@ -373,6 +399,147 @@ def delete_goal(db: Session, goal_id: UUID) -> None:
     db.commit()
 
 
+# ─── Vendor Goals ─────────────────────────────────────────────────────────────
+
+def _vendor_goal_to_response(meta: MetaVendedor, nome_vendedor: Optional[str] = None) -> VendorGoalResponse:
+    return VendorGoalResponse(
+        id=meta.id,
+        ano=meta.ano_mes.year,
+        mes=meta.ano_mes.month,
+        id_vendedor=meta.id_vendedor,
+        nome_vendedor=nome_vendedor,
+        target=meta.alvo_individual or Decimal(0),
+        floor=meta.piso,
+    )
+
+
+def list_vendor_goals(
+    db: Session,
+    ano: Optional[int] = None,
+    mes: Optional[int] = None,
+    id_vendedor: Optional[UUID] = None,
+) -> VendorGoalsListResponse:
+    q = db.query(MetaVendedor, Vendedor.nome).join(Vendedor, Vendedor.id == MetaVendedor.id_vendedor)
+    if ano and mes:
+        q = q.filter(MetaVendedor.ano_mes == date(ano, mes, 1))
+    elif ano:
+        q = q.filter(func.extract('year', MetaVendedor.ano_mes) == ano)
+    elif mes:
+        q = q.filter(func.extract('month', MetaVendedor.ano_mes) == mes)
+    if id_vendedor:
+        q = q.filter(MetaVendedor.id_vendedor == id_vendedor)
+    q = q.order_by(MetaVendedor.ano_mes.desc())
+    return VendorGoalsListResponse(items=[_vendor_goal_to_response(m, nome) for m, nome in q.all()])
+
+
+def upsert_vendor_goal(db: Session, data: VendorGoalCreate) -> VendorGoalResponse:
+    ano_mes = date(data.ano, data.mes, 1)
+    existing = db.query(MetaVendedor).filter(
+        MetaVendedor.id_vendedor == data.id_vendedor,
+        MetaVendedor.ano_mes == ano_mes,
+    ).first()
+
+    if existing:
+        existing.alvo_individual = data.target
+        existing.piso = data.floor
+        db.commit()
+        db.refresh(existing)
+        meta = existing
+    else:
+        meta = MetaVendedor(
+            id_vendedor=data.id_vendedor,
+            ano_mes=ano_mes,
+            alvo_individual=data.target,
+            piso=data.floor,
+        )
+        db.add(meta)
+        db.commit()
+        db.refresh(meta)
+
+    vendedor = db.query(Vendedor).filter(Vendedor.id == meta.id_vendedor).first()
+    return _vendor_goal_to_response(meta, vendedor.nome if vendedor else None)
+
+
+def delete_vendor_goal(db: Session, goal_id: UUID) -> None:
+    meta = db.query(MetaVendedor).filter(MetaVendedor.id == goal_id).first()
+    if not meta:
+        raise NotFoundException(f"Meta de vendedor {goal_id} não encontrada")
+    db.delete(meta)
+    db.commit()
+
+
+# ─── Daily Series ─────────────────────────────────────────────────────────────
+
+def get_daily_series(
+    db: Session,
+    mes: Optional[int] = None,
+    ano: Optional[int] = None,
+    data_inicio: Optional[date] = None,
+    data_fim: Optional[date] = None,
+    id_loja: Optional[UUID] = None,
+) -> DailySeriesResponse:
+    inicio, fim = _resolve_period(mes, ano, data_inicio, data_fim)
+
+    def _query_daily(start: date, end: date):
+        q = (
+            db.query(
+                Pedido.data_pedido.label("data"),
+                func.coalesce(func.sum(
+                    case((Pedido.is_cancelled.isnot(True), Pedido.valor_venda), else_=0)
+                ), 0).label("receita"),
+                func.coalesce(func.sum(
+                    case((Pedido.is_cancelled.isnot(True),
+                          CustoPedido.custo_produto_final + CustoPedido.custo_servico), else_=0)
+                ), 0).label("custo"),
+            )
+            .outerjoin(CustoPedido, CustoPedido.id_pedido == Pedido.id)
+            .filter(
+                Pedido.deleted_at.is_(None),
+                Pedido.is_rma.isnot(True),
+                Pedido.data_pedido >= start,
+                Pedido.data_pedido <= end,
+            )
+            .group_by(Pedido.data_pedido)
+            .order_by(Pedido.data_pedido)
+        )
+        if id_loja:
+            q = q.filter(Pedido.id_loja == id_loja)
+        return {row.data: row for row in q.all()}
+
+    current_rows = _query_daily(inicio, fim)
+
+    # Previous year: same calendar window, clamp day to avoid Feb-29 errors
+    def _prev_year_date(d: date) -> date:
+        try:
+            return date(d.year - 1, d.month, d.day)
+        except ValueError:
+            return date(d.year - 1, d.month, 28)
+
+    prev_inicio = _prev_year_date(inicio)
+    prev_fim = _prev_year_date(fim)
+    prev_rows = _query_daily(prev_inicio, prev_fim)
+    prev_by_md: dict[tuple[int, int], Decimal] = {
+        (d.month, d.day): Decimal(str(row.receita or 0))
+        for d, row in prev_rows.items()
+    }
+
+    items = []
+    current = inicio
+    while current <= fim:
+        row = current_rows.get(current)
+        receita = Decimal(str(row.receita or 0)) if row else Decimal(0)
+        custo = Decimal(str(row.custo or 0)) if row else Decimal(0)
+        items.append(DailySeriesItem(
+            data=current.isoformat(),
+            faturamento=receita,
+            lucro=receita - custo,
+            ano_anterior=prev_by_md.get((current.month, current.day), Decimal(0)),
+        ))
+        current += timedelta(days=1)
+
+    return DailySeriesResponse(items=items)
+
+
 # ─── Projections ──────────────────────────────────────────────────────────────
 
 def get_projections(
@@ -398,8 +565,8 @@ def get_projections(
     kpis = get_kpis(db, mes, ano, data_inicio, data_fim, id_loja)
     receita = kpis.receita
 
-    media_diaria = (receita / dias_decorridos).quantize(Decimal("0.01")) if dias_decorridos > 0 else Decimal("0")
-    projecao_mes = (media_diaria * (dias_decorridos + dias_restantes)).quantize(Decimal("0.01"))
+    media_diaria = round(receita / dias_decorridos, 2) if dias_decorridos > 0 else 0.0
+    projecao_mes = round(media_diaria * (dias_decorridos + dias_restantes), 2)
 
     # Meta do período
     goal = None
@@ -412,16 +579,16 @@ def get_projections(
             q = q.filter(DashboardGoal.id_loja == goal_loja)
         goal = q.first()
 
-    meta_target = Decimal(str(goal.target)) if goal else None
-    meta_floor = Decimal(str(goal.floor)) if goal and goal.floor else None
+    meta_target = float(goal.target) if goal else None
+    meta_floor  = float(goal.floor)  if goal and goal.floor else None
 
-    gap_target = max(meta_target - receita, Decimal("0")) if meta_target else None
-    gap_floor = max(meta_floor - receita, Decimal("0")) if meta_floor else None
-    pct_meta = (receita / meta_target).quantize(Decimal("0.0001")) if meta_target and meta_target > 0 else None
+    gap_target = max(meta_target - receita, 0.0) if meta_target is not None else None
+    gap_floor  = max(meta_floor  - receita, 0.0) if meta_floor  is not None else None
+    pct_meta   = round(receita / meta_target, 4)  if meta_target else None
 
     meta_diaria_dinamica = None
     if gap_floor is not None and dias_restantes > 0:
-        meta_diaria_dinamica = (gap_floor / dias_restantes).quantize(Decimal("0.01"))
+        meta_diaria_dinamica = round(gap_floor / dias_restantes, 2)
 
     return ProjectionsResponse(
         periodo_inicio=inicio,
