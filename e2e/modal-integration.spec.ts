@@ -156,6 +156,22 @@ async function mockApis(page: Page) {
     }
     return route.continue();
   });
+
+  await page.route('**/api/vendedores**', route =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        items: [
+          { id: VENDOR_ID, nome: 'Test User', id_loja: STORE_ID },
+        ],
+        total: 1,
+        page: 1,
+        limit: 50,
+        pages: 1,
+      }),
+    })
+  );
 }
 
 // ─── Auth helper ──────────────────────────────────────────────────────────────

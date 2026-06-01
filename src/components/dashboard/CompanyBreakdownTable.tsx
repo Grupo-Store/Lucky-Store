@@ -12,6 +12,12 @@ const BRL = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', curren
 const PCT = (v: number) => `${(v * 100).toFixed(1)}%`
 const COLS = 11
 
+const COMPANY_DOT: Record<string, string> = {
+  'Lucky Store': 'bg-green-500',
+  'BTech':       'bg-blue-500',
+  'AJJ':         'bg-amber-500',
+}
+
 export function CompanyBreakdownTable({ items, loading }: CompanyBreakdownTableProps) {
   return (
     <div className="overflow-x-auto">
@@ -24,7 +30,7 @@ export function CompanyBreakdownTable({ items, loading }: CompanyBreakdownTableP
             <TableHead>Lucro</TableHead>
             <TableHead>Margem</TableHead>
             <TableHead>Pedidos</TableHead>
-            <TableHead>Cancelamentos</TableHead>
+            <TableHead>Canc.</TableHead>
             <TableHead>Perda (Canc.)</TableHead>
             <TableHead>Ticket Venda</TableHead>
             <TableHead>Ticket Custo</TableHead>
@@ -51,13 +57,28 @@ export function CompanyBreakdownTable({ items, loading }: CompanyBreakdownTableP
           ) : (
             items.map((item, i) => (
               <TableRow key={i}>
-                <TableCell className="font-medium">{item.nome}</TableCell>
+                <TableCell className="font-medium">
+                  <div className="flex items-center gap-2">
+                    <span className={cn('w-2 h-2 rounded-full shrink-0', COMPANY_DOT[item.nome] ?? 'bg-muted-foreground')} />
+                    {item.nome}
+                  </div>
+                </TableCell>
                 <TableCell>{BRL(item.receita)}</TableCell>
                 <TableCell>{BRL(item.custo)}</TableCell>
                 <TableCell className={cn(item.lucro >= 0 ? 'text-green-700' : 'text-red-600')}>
                   {BRL(item.lucro)}
                 </TableCell>
-                <TableCell>{PCT(item.margem)}</TableCell>
+                <TableCell>
+                  <div className="flex items-center gap-2 min-w-[80px]">
+                    <div className="flex-1 h-1.5 bg-muted rounded-full overflow-hidden">
+                      <div
+                        className="h-full bg-green-500 rounded-full"
+                        style={{ width: `${Math.min(item.margem * 100, 100)}%` }}
+                      />
+                    </div>
+                    <span className="text-xs tabular-nums">{PCT(item.margem)}</span>
+                  </div>
+                </TableCell>
                 <TableCell>{item.num_pedidos}</TableCell>
                 <TableCell className={cn(item.num_cancelamentos > 0 && 'text-red-600')}>
                   {item.num_cancelamentos}

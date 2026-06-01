@@ -31,6 +31,10 @@ vi.mock('@/api/client', () => ({
   getApiError: (e: unknown) => String(e),
 }));
 
+vi.mock('@/hooks/useVendedores', () => ({
+  useVendedores: () => ({ data: { items: [] }, isLoading: false }),
+}));
+
 // ─── Fixtures ────────────────────────────────────────────────────────────────
 
 const existingQuote: Quote = {

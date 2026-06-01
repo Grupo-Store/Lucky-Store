@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { renderHook, waitFor } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { useOrdersQuery } from '@/hooks/use-orders-query'
+import { apiClient } from '@/api/client'
 import type { ReactNode } from 'react'
 
 function makeWrapper() {
@@ -28,9 +29,7 @@ describe('useOrdersQuery', () => {
 
   it('returns data after successful fetch', async () => {
     const payload = { items: [], total: 0, page: 1, limit: 20, pages: 0 }
-    vi.spyOn(global, 'fetch').mockResolvedValue(
-      new Response(JSON.stringify(payload), { status: 200 })
-    )
+    vi.spyOn(apiClient, 'request').mockResolvedValue({ data: payload })
     const { result } = renderHook(
       () => useOrdersQuery({ page: 1, limit: 20, sort_by: 'data_pedido', sort_dir: 'desc' }),
       { wrapper: makeWrapper() }

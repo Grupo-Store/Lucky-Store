@@ -164,7 +164,7 @@ describe('AddOrderChooser — pick-quote step API call', () => {
     fireEvent.click(screen.getByText(/Cadastrar a partir de cotação/i));
 
     await waitFor(() => {
-      expect(screen.getByText(/Nenhuma cotação encontrada/i)).toBeInTheDocument();
+      expect(screen.getByText(/Nenhuma cotação fechada ou caída encontrada/i)).toBeInTheDocument();
     });
   });
 

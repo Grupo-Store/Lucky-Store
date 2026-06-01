@@ -1,4 +1,4 @@
-const BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000/api'
+import { apiClient } from '@/api/client'
 
 export class ApiError extends Error {
   constructor(public readonly status: number, message: string) {
@@ -14,38 +14,33 @@ export async function apiFetch<T>(
     init?: RequestInit
   }
 ): Promise<T> {
-  let url = `${BASE_URL}${path}`
+  const method = options?.init?.method?.toUpperCase() || 'GET'
 
-  if (options?.params) {
-    const qs = Object.entries(options.params)
-      .filter(([, v]) => v !== undefined && v !== null && v !== '')
-      .map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(String(v))}`)
-      .join('&')
-    if (qs) url += `?${qs}`
-  }
+  const params = options?.params
+    ? Object.fromEntries(
+        Object.entries(options.params).filter(([, v]) => v != null && v !== '')
+      )
+    : undefined
 
-  const token = localStorage.getItem('access_token')
-
-  const response = await fetch(url, {
-    ...options?.init,
-    headers: {
-      'Content-Type': 'application/json',
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      ...options?.init?.headers,
-    },
-  })
-
-  if (!response.ok) {
-    let message = 'Request failed'
+  let data: unknown = undefined
+  if (options?.init?.body) {
     try {
-      const body = await response.json()
-      if (typeof body.detail === 'string') message = body.detail
+      data = JSON.parse(options.init.body as string)
     } catch {
-      // ignore parse error — use default message
+      data = options.init.body
     }
-    throw new ApiError(response.status, message)
   }
 
-  const text = await response.text()
-  return (text ? JSON.parse(text) : undefined) as T
+  try {
+    const response = await apiClient.request<T>({ url: path, method, params, data })
+    return response.data
+  } catch (err: any) {
+    if (err?.response) {
+      const status: number = err.response.status
+      const detail = err.response.data?.detail
+      const message = typeof detail === 'string' ? detail : 'Request failed'
+      throw new ApiError(status, message)
+    }
+    throw err
+  }
 }

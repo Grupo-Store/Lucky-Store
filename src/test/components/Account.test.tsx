@@ -16,6 +16,22 @@ vi.mock('sonner', () => ({
   toast: { success: vi.fn(), error: vi.fn() },
 }));
 
+vi.mock('@/store/AuthStore', () => ({
+  useAuth: () => ({
+    stage: 'authed',
+    isLoggedIn: true,
+    email: 'test@example.com',
+    isPending: false,
+    isResending: false,
+    login: vi.fn(),
+    verifyCode: vi.fn(),
+    resendCode: vi.fn(),
+    resetToLogin: vi.fn(),
+    logout: vi.fn(),
+  }),
+  AuthProvider: ({ children }: { children: unknown }) => children,
+}));
+
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 const mockGet = (apiClient as any).get as ReturnType<typeof vi.fn>;

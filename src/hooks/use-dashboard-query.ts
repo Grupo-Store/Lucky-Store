@@ -126,7 +126,10 @@ export function useUpsertGoal() {
       apiFetch<ApiGoal>('/dashboard/goals', {
         init: { method: 'POST', body: JSON.stringify(data) },
       }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['dashboard', 'goals'] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['dashboard', 'goals'] })
+      qc.invalidateQueries({ queryKey: ['dashboard', 'projections'] })
+    },
   })
 }
 
@@ -135,6 +138,82 @@ export function useDeleteGoal() {
   return useMutation({
     mutationFn: (id: string) =>
       apiFetch<void>(`/dashboard/goals/${id}`, { init: { method: 'DELETE' } }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['dashboard', 'goals'] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['dashboard', 'goals'] })
+      qc.invalidateQueries({ queryKey: ['dashboard', 'projections'] })
+    },
+  })
+}
+
+// ─── Vendor Goals ─────────────────────────────────────────────────────────────
+
+export interface ApiVendorGoal {
+  id: string
+  ano: number
+  mes: number
+  id_vendedor: string
+  nome_vendedor: string | null
+  target: number
+  floor: number | null
+}
+
+export function useVendorGoals(params?: { ano?: number; mes?: number }) {
+  return useQuery<{ items: ApiVendorGoal[] }>({
+    queryKey: ['dashboard', 'vendor-goals', params ?? {}],
+    queryFn: () => apiFetch('/dashboard/vendor-goals', { params }),
+    staleTime: 60_000,
+  })
+}
+
+export function useUpsertVendorGoal() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (data: { ano: number; mes: number; id_vendedor: string; target: number; floor: number | null }) =>
+      apiFetch<ApiVendorGoal>('/dashboard/vendor-goals', {
+        init: { method: 'POST', body: JSON.stringify(data) },
+      }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['dashboard', 'vendor-goals'] }),
+  })
+}
+
+export function useDeleteVendorGoal() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (id: string) =>
+      apiFetch<void>(`/dashboard/vendor-goals/${id}`, { init: { method: 'DELETE' } }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['dashboard', 'vendor-goals'] }),
+  })
+}
+
+// ─── Daily Series ─────────────────────────────────────────────────────────────
+
+export interface DailySeriesItem {
+  data: string
+  faturamento: number
+  lucro: number
+  ano_anterior: number
+}
+
+export function useDailyHistorical(params: DashboardQueryParams) {
+  return useQuery<{ items: DailySeriesItem[] }>({
+    queryKey: ['dashboard', 'daily-series', params],
+    queryFn: () => apiFetch('/dashboard/daily-series', { params: { ...params } }),
+    staleTime: 60_000,
+  })
+}
+
+// ─── Vendedores ───────────────────────────────────────────────────────────────
+
+export interface VendedorItem {
+  id: string
+  nome: string
+  id_loja: string
+}
+
+export function useVendedores() {
+  return useQuery<{ items: VendedorItem[] }>({
+    queryKey: ['vendedores'],
+    queryFn: () => apiFetch('/vendedores'),
+    staleTime: 5 * 60_000,
   })
 }

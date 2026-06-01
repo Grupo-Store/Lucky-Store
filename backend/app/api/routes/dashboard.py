@@ -14,6 +14,10 @@ from app.schemas.dashboard import (
     GoalCreate,
     GoalResponse,
     GoalsListResponse,
+    VendorGoalCreate,
+    VendorGoalResponse,
+    VendorGoalsListResponse,
+    DailySeriesResponse,
     ProjectionsResponse,
 )
 from app.services import dashboard as svc
@@ -58,6 +62,15 @@ def breakdown_by_seller(
     return svc.get_breakdown_by_seller(db, **f)
 
 
+@router.get("/daily-series", response_model=DailySeriesResponse)
+def get_daily_series(
+    f: dict = Depends(_filters),
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_user),
+):
+    return svc.get_daily_series(db, **f)
+
+
 @router.get("/projections", response_model=ProjectionsResponse)
 def get_projections(
     f: dict = Depends(_filters),
@@ -96,3 +109,34 @@ def delete_goal(
     _: User = Depends(get_current_user),
 ):
     svc.delete_goal(db, goal_id)
+
+
+# ─── Vendor Goals ─────────────────────────────────────────────────────────────
+
+@router.get("/vendor-goals", response_model=VendorGoalsListResponse)
+def list_vendor_goals(
+    ano: Optional[int] = Query(None, ge=2020, le=2100),
+    mes: Optional[int] = Query(None, ge=1, le=12),
+    id_vendedor: Optional[UUID] = Query(None),
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_user),
+):
+    return svc.list_vendor_goals(db, ano=ano, mes=mes, id_vendedor=id_vendedor)
+
+
+@router.post("/vendor-goals", response_model=VendorGoalResponse, status_code=status.HTTP_200_OK)
+def upsert_vendor_goal(
+    payload: VendorGoalCreate,
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_user),
+):
+    return svc.upsert_vendor_goal(db, payload)
+
+
+@router.delete("/vendor-goals/{goal_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_vendor_goal(
+    goal_id: UUID,
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_user),
+):
+    svc.delete_vendor_goal(db, goal_id)

@@ -11,6 +11,10 @@ vi.mock('@/hooks/use-dashboard-query', () => ({
   useDashboardGoals: vi.fn(() => ({ data: { items: [] }, isLoading: false })),
   useUpsertGoal: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
   useDeleteGoal: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
+  useVendorGoals: vi.fn(() => ({ data: { items: [] }, isLoading: false })),
+  useVendedores: vi.fn(() => ({ data: { items: [] } })),
+  useUpsertVendorGoal: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
+  useDeleteVendorGoal: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
 }));
 
 vi.mock('@/store/DashboardFilterStore', () => ({
@@ -41,8 +45,21 @@ vi.mock('@/components/dashboard/DashboardTicketBar', () => ({
   DashboardTicketBar: () => <div data-testid="ticket-bar" />,
 }));
 
+vi.mock('@/components/dashboard/HistoricalChart', () => ({
+  HistoricalChart: () => <div data-testid="historical-chart" />,
+}));
+
+vi.mock('@/components/dashboard/SellerCard', () => ({
+  SellerCard: () => <div data-testid="seller-card" />,
+}));
+
+vi.mock('@/components/dashboard/SellerGoalChart', () => ({
+  SellerGoalChart: () => <div data-testid="seller-goal-chart" />,
+}));
+
 vi.mock('@/api/storeConfig', () => ({
   LOJA_IDS: { 'Lucky Store': 'ls1', BTech: 'bt1', AJJ: 'ajj1' },
+  VENDEDOR_IDS: {},
 }));
 
 import {
@@ -126,7 +143,7 @@ describe('Dashboard', () => {
     expect(screen.queryAllByTestId('kpi-card').length).toBeGreaterThan(0);
   });
 
-  it('renders CompanyBreakdownTable in geral section (mode=company)', () => {
+  it('renders HistoricalChart in geral section (mode=company)', () => {
     setupDefaultMocks();
     vi.mocked(useDashboardKpis).mockReturnValue({ data: mockKpis, isLoading: false, isError: false } as any);
     vi.mocked(useDashboardFilters).mockReturnValue({
@@ -137,10 +154,10 @@ describe('Dashboard', () => {
 
     renderDashboard();
 
-    expect(screen.getByTestId('company-table')).toBeInTheDocument();
+    expect(screen.getByTestId('historical-chart')).toBeInTheDocument();
   });
 
-  it('renders SellerBreakdownTable in seller mode', () => {
+  it('renders SellerGoalChart in seller mode', () => {
     setupDefaultMocks();
     vi.mocked(useDashboardKpis).mockReturnValue({ data: mockKpis, isLoading: false, isError: false } as any);
     vi.mocked(useDashboardFilters).mockReturnValue({
@@ -151,7 +168,7 @@ describe('Dashboard', () => {
 
     renderDashboard();
 
-    expect(screen.getByTestId('seller-table')).toBeInTheDocument();
+    expect(screen.getByTestId('seller-goal-chart')).toBeInTheDocument();
   });
 
   it('calls toast.error when kpisError is true', async () => {

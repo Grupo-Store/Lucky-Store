@@ -10,6 +10,7 @@ export const VENDEDOR_IDS: Record<string, string> = {
   'Pedro': import.meta.env.VITE_VENDEDOR_PEDRO_ID ?? '',
 };
 
+
 // Fallback enquanto não há lookup de cliente por nome
 export const DEFAULT_CLIENTE_ID: string =
   import.meta.env.VITE_DEFAULT_CLIENTE_ID ?? '';
