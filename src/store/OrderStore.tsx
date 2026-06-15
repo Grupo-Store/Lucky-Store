@@ -106,6 +106,8 @@ export interface SubPurchase {
   paymentMethod: PaymentMethod | '';
   /** Number of installments — only meaningful when paymentMethod === 'Credit Card' */
   installments?: number;
+  /** Card used for this purchase (free text — identifies which card) */
+  card?: string;
   status: ItemStatus;
 }
 
@@ -188,7 +190,10 @@ export interface Order {
   interestValue?: number;
   paymentMethod?: PaymentMethod | '';
   paymentInstallments?: number;
+  /** Multa/juros installment plan (Financeiro / Pagamento section). */
   paymentInstallmentPlan?: PaymentInstallment[];
+  /** Order-value installment plan (Informações Gerais — cartão de crédito). */
+  orderInstallmentPlan?: PaymentInstallment[];
   /** RMA-specific fields. Only present when isRMA = true. */
   rmaNumber?: string;
   rmaParentOrderId?: string;

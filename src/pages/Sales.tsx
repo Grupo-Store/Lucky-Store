@@ -281,23 +281,25 @@ export function pedidoListToOrder(item: PedidoListItem): Order {
     paymentMethod: (Object.entries(FORMA_PAGAMENTO_MAP).find(([, v]) => v === item.forma_pagamento_efetiva)?.[0] ?? '') as PaymentMethod | '',
     paymentInstallments: item.num_parcelas_efetivas ?? 1,
     paymentInstallmentPlan: (item.plano_parcelas ?? []) as PaymentInstallment[],
+    orderInstallmentPlan: (item.plano_parcelas_pedido ?? []) as PaymentInstallment[],
   };
 }
 
 /* ============================================================
  * Search bar (memoized)
  * ============================================================ */
-const SearchBar = memo(({ value, onChange, placeholder }: {
-  value: string; onChange: (v: string) => void; placeholder: string;
+const SearchBar = memo(({ value, onChange, placeholder, className }: {
+  value: string; onChange: (v: string) => void; placeholder: string; className?: string;
 }) => (
-  <div className="relative">
+  <div className={cn('relative', className)}>
     <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
     <Input
       placeholder={placeholder}
       value={value}
       onChange={e => onChange(e.target.value)}
       onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
-      className="pl-9 w-72 bg-white"
+      className="pl-9 w-full focus-visible:ring-[#EAF0FF] focus-visible:border-[#2F6BFF]"
+      style={{ background: '#FBFCFE', borderColor: '#E2E8F1', borderRadius: 10 }}
     />
   </div>
 ));
@@ -541,7 +543,7 @@ export default function Sales() {
     const active = filters.sort_by === field;
     const Icon = active && filters.sort_dir === 'desc' ? ArrowDown : ArrowUp;
     return (
-      <Button variant="ghost" size="icon" className={cn('h-6 w-6', active && 'text-secondary')} onClick={() => toggleSort(field)}>
+      <Button variant="ghost" size="icon" className={cn('h-6 w-6', active && 'text-[#2F6BFF]')} onClick={() => toggleSort(field)}>
         <Icon className="h-3.5 w-3.5" />
       </Button>
     );
@@ -553,69 +555,98 @@ export default function Sales() {
     <TooltipProvider>
       <div>
         <Tabs value={tab} onValueChange={setTab}>
-          <TabsList className="bg-card mb-4">
-            <TabsTrigger value="quotes" className="data-[state=active]:bg-secondary data-[state=active]:text-secondary-foreground">Cotações</TabsTrigger>
-            <TabsTrigger value="orders" className="data-[state=active]:bg-secondary data-[state=active]:text-secondary-foreground">Pedidos</TabsTrigger>
-            <TabsTrigger value="products" className="data-[state=active]:bg-secondary data-[state=active]:text-secondary-foreground">Produtos</TabsTrigger>
+          <TabsList
+            className="mb-4 h-auto p-1"
+            style={{ background: '#EDF1F7', border: '1px solid #E2E8F1', borderRadius: 12 }}
+          >
+            {(['quotes', 'orders', 'products'] as const).map((v, i) => (
+              <TabsTrigger
+                key={v}
+                value={v}
+                className="data-[state=active]:bg-white data-[state=active]:text-[#1E4FD8] data-[state=active]:shadow-[0_1px_4px_rgba(13,33,66,.12)] text-[#5B6B82]"
+                style={{ borderRadius: 9, fontSize: 13, fontWeight: 500, padding: '6px 18px' }}
+              >
+                {['Cotações', 'Pedidos', 'Produtos'][i]}
+              </TabsTrigger>
+            ))}
           </TabsList>
 
           {/* ============== QUOTES TAB ============== */}
           <TabsContent value="quotes">
+            {/* Page heading */}
+            <div style={{ marginBottom: 20 }}>
+              <h1 style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 700, fontSize: 23, color: '#16273F', margin: 0 }}>
+                Cotações
+              </h1>
+              <p style={{ color: '#5B6B82', fontSize: 14, marginTop: 4, marginBottom: 0 }}>
+                Acompanhe as cotações em andamento — Total:{' '}
+                <strong style={{ color: '#16273F' }}>
+                  {formatBRL(filteredQuotes.reduce((s, qt) => s + getCotacaoDisplayValue(qt), 0))}
+                </strong>
+              </p>
+            </div>
             <Card>
               <CardContent className="p-4">
-                <div className="flex flex-wrap justify-between items-center gap-3 mb-4">
-                  <h2 className="text-2xl font-bold text-secondary">
-                    Total - {formatBRL(filteredQuotes.reduce((s, qt) => s + getCotacaoDisplayValue(qt), 0))}
-                  </h2>
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <SearchBar value={quoteSearch} onChange={setQuoteSearch} placeholder="Cliente, Req, Empresa, Vendedor..." />
-                    <Select value={quoteStatusFilter} onValueChange={setQuoteStatusFilter}>
-                      <SelectTrigger className="w-44 bg-white"><SelectValue placeholder="Status" /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">Todos os Status</SelectItem>
-                        {(Object.keys(QUOTE_PHASE_LABELS) as QuotePhaseKey[]).map(k => (
-                          <SelectItem key={k} value={k}>
-                            <span className={cn('px-2 py-0.5 rounded text-xs font-medium', QUOTE_PHASE_COLORS[k])}>{QUOTE_PHASE_LABELS[k]}</span>
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <DateFilter
-                      field={quoteDateField}
-                      onFieldChange={v => {
-                        setQuoteDateField(v as any);
-                        setQuoteRange({});
+                {/* Toolbar — single row */}
+                <div
+                  style={{
+                    background: '#fff', border: '1px solid #E2E8F1', borderRadius: 16,
+                    padding: '12px 16px', marginBottom: 16,
+                    display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap',
+                  }}
+                >
+                  <SearchBar value={quoteSearch} onChange={setQuoteSearch} placeholder="Cliente, Req, Empresa, Vendedor..." className="flex-1 min-w-[160px]" />
+                  <Select value={quoteStatusFilter} onValueChange={setQuoteStatusFilter}>
+                    <SelectTrigger style={{ width: 168, background: '#FBFCFE', borderColor: '#E2E8F1', borderRadius: 10, flexShrink: 0 }}>
+                      <SelectValue placeholder="Todos os Status" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Todos os Status</SelectItem>
+                      {(Object.keys(QUOTE_PHASE_LABELS) as QuotePhaseKey[]).map(k => (
+                        <SelectItem key={k} value={k}>
+                          <span className={cn('px-2 py-0.5 rounded text-xs font-medium', QUOTE_PHASE_COLORS[k])}>{QUOTE_PHASE_LABELS[k]}</span>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <DateFilter
+                    field={quoteDateField}
+                    onFieldChange={v => {
+                      setQuoteDateField(v as any);
+                      setQuoteRange({});
+                      setQuoteApiFilters(f => ({ ...f, data_inicio: undefined, data_fim: undefined, page: 1 }));
+                    }}
+                    fieldOptions={[
+                      { value: 'requestDate', label: 'Data Requisição' },
+                      { value: 'phaseDate',   label: 'Data Validade' },
+                    ]}
+                    range={quoteRange}
+                    onRangeChange={range => {
+                      setQuoteRange(range);
+                      if (quoteDateField === 'requestDate') {
+                        setQuoteApiFilters(f => ({
+                          ...f,
+                          data_inicio: range.from ? format(range.from, 'yyyy-MM-dd') : undefined,
+                          data_fim: range.to ? format(range.to, 'yyyy-MM-dd') : (range.from ? format(range.from, 'yyyy-MM-dd') : undefined),
+                          page: 1,
+                        }));
+                      }
+                    }}
+                  />
+                  {(quoteSearch || quoteStatusFilter !== 'all' || quoteRange.from) && (
+                    <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0"
+                      onClick={() => {
+                        setQuoteSearch(''); setQuoteStatusFilter('all'); setQuoteRange({});
                         setQuoteApiFilters(f => ({ ...f, data_inicio: undefined, data_fim: undefined, page: 1 }));
-                      }}
-                      fieldOptions={[
-                        { value: 'requestDate', label: 'Data Requisição' },
-                        { value: 'phaseDate',   label: 'Data Validade' },
-                      ]}
-                      range={quoteRange}
-                      onRangeChange={range => {
-                        setQuoteRange(range);
-                        if (quoteDateField === 'requestDate') {
-                          setQuoteApiFilters(f => ({
-                            ...f,
-                            data_inicio: range.from ? format(range.from, 'yyyy-MM-dd') : undefined,
-                            data_fim: range.to ? format(range.to, 'yyyy-MM-dd') : (range.from ? format(range.from, 'yyyy-MM-dd') : undefined),
-                            page: 1,
-                          }));
-                        }
-                      }}
-                    />
-                    {(quoteSearch || quoteStatusFilter !== 'all' || quoteRange.from) && (
-                      <Button variant="ghost" size="icon" className="h-8 w-8"
-                        onClick={() => {
-                          setQuoteSearch('');
-                          setQuoteStatusFilter('all');
-                          setQuoteRange({});
-                          setQuoteApiFilters(f => ({ ...f, data_inicio: undefined, data_fim: undefined, page: 1 }));
-                        }}>
-                        <X className="h-4 w-4" />
-                      </Button>
-                    )}
-                    <Button onClick={() => { setEditQuote(null); setQuoteModalOpen(true); }} className="bg-secondary hover:bg-secondary/90">
+                      }}>
+                      <X className="h-4 w-4" />
+                    </Button>
+                  )}
+                  <div style={{ marginLeft: 'auto', flexShrink: 0 }}>
+                    <Button
+                      onClick={() => { setEditQuote(null); setQuoteModalOpen(true); }}
+                      style={{ background: 'linear-gradient(135deg, #2F6BFF 0%, #1E4FD8 100%)', boxShadow: '0 10px 22px -10px rgba(47,107,255,.6)', borderRadius: 10, border: 'none', color: '#fff' }}
+                    >
                       <Plus className="h-4 w-4 mr-1" /> Nova Cotação
                     </Button>
                   </div>
@@ -631,15 +662,10 @@ export default function Sales() {
                 <div className="overflow-x-auto rounded-lg border">
                   <Table>
                     <TableHeader>
-                      <TableRow className="bg-secondary/10">
-                        <TableHead>Cliente</TableHead>
-                        <TableHead>Data Requisição</TableHead>
-                        <TableHead>Nº Requisição</TableHead>
-                        <TableHead>Empresa</TableHead>
-                        <TableHead>Vendedor</TableHead>
-                        <TableHead>Status</TableHead>
-                        <TableHead>Itens</TableHead>
-                        <TableHead className="text-right">Valor</TableHead>
+                      <TableRow style={{ background: '#F8FAFD', borderBottom: '1px solid #EEF2F8' }}>
+                        {['Cliente', 'Data Req.', 'Nº Req.', 'Empresa', 'Vendedor', 'Status', 'Itens', 'Valor'].map((h, i) => (
+                          <TableHead key={h} className={i === 7 ? 'text-right' : ''} style={{ fontSize: 11.5, fontWeight: 600, letterSpacing: '0.1em', textTransform: 'uppercase', color: '#5B6B82', padding: '12px 18px' }}>{h}</TableHead>
+                        ))}
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -654,22 +680,23 @@ export default function Sales() {
                       ) : filteredQuotes.map(qt => {
                         const highest = getCotacaoPhase(qt);
                         return (
-                          <TableRow key={qt.id} className="cursor-pointer hover:bg-muted/50"
+                          <TableRow key={qt.id} className="cursor-pointer hover:bg-[#F8FAFE]"
+                            style={{ borderBottom: '1px solid #EEF2F8' }}
                             onClick={() => { setEditQuote(cotacaoToQuote(qt)); setQuoteModalOpen(true); }}>
-                            <TableCell className="font-medium">{qt.b2b_company?.trim() || qt.cliente}</TableCell>
-                            <TableCell>{fmtDate(qt.data_cotacao)}</TableCell>
-                            <TableCell>{qt.numero_requisicao || '—'}</TableCell>
-                            <TableCell>{LOJA_BY_ID[qt.id_loja] || '—'}</TableCell>
-                            <TableCell>{VENDEDOR_BY_ID[qt.id_vendedor] || '—'}</TableCell>
-                            <TableCell>
+                            <TableCell className="font-medium" style={{ padding: '15px 18px' }}>{qt.b2b_company?.trim() || qt.cliente}</TableCell>
+                            <TableCell style={{ padding: '15px 18px' }}>{fmtDate(qt.data_cotacao)}</TableCell>
+                            <TableCell style={{ padding: '15px 18px' }}>{qt.numero_requisicao || '—'}</TableCell>
+                            <TableCell style={{ padding: '15px 18px' }}>{LOJA_BY_ID[qt.id_loja] || '—'}</TableCell>
+                            <TableCell style={{ padding: '15px 18px' }}>{VENDEDOR_BY_ID[qt.id_vendedor] || '—'}</TableCell>
+                            <TableCell style={{ padding: '15px 18px' }}>
                               {highest ? (
                                 <span className={cn('px-2 py-0.5 rounded text-xs font-semibold border', QUOTE_PHASE_COLORS[highest])}>
                                   {QUOTE_PHASE_LABELS[highest]}
                                 </span>
                               ) : <span className="text-muted-foreground text-xs">—</span>}
                             </TableCell>
-                            <TableCell>{qt.itens?.length ?? 0}</TableCell>
-                            <TableCell className="text-right font-semibold">
+                            <TableCell style={{ padding: '15px 18px' }}>{qt.itens?.length ?? 0}</TableCell>
+                            <TableCell className="text-right font-semibold" style={{ padding: '15px 18px', fontVariantNumeric: 'tabular-nums' }}>
                               {qt.valor_total ? formatBRL(parseFloat(qt.valor_total)) : '—'}
                             </TableCell>
                           </TableRow>
@@ -694,11 +721,27 @@ export default function Sales() {
 
           {/* ============== ORDERS TAB ============== */}
           <TabsContent value="orders">
+            {/* Page heading */}
+            <div style={{ marginBottom: 20 }}>
+              <h1 style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 700, fontSize: 23, color: '#16273F', margin: 0 }}>
+                Pedidos
+              </h1>
+              <p style={{ color: '#5B6B82', fontSize: 14, marginTop: 4, marginBottom: 0 }}>
+                Acompanhe e gerencie os pedidos das lojas do grupo.
+              </p>
+            </div>
             <Card>
               <CardContent className="p-4">
-                {/* Filter bar */}
-                <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
-                  <div className="flex items-center gap-1 bg-muted rounded-full p-1">
+                {/* ── Filter bar — single row ── */}
+                <div
+                  style={{
+                    background: '#fff', border: '1px solid #E2E8F1', borderRadius: 16,
+                    padding: '12px 16px', marginBottom: 16,
+                    display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap',
+                  }}
+                >
+                  {/* View pills */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 3, background: '#EDF1F7', borderRadius: 99, padding: 4, flexShrink: 0 }}>
                     {([
                       { v: 'all', l: 'Todos os Pedidos' },
                       { v: 'open', l: 'Apenas Abertos' },
@@ -707,104 +750,30 @@ export default function Sales() {
                       <button
                         key={opt.v}
                         onClick={() => { setOrderView(opt.v); setFilters(f => ({ ...f, status: undefined, page: 1 })); }}
-                        className={cn(
-                          'px-4 py-1.5 rounded-full text-sm font-medium transition-all',
-                          orderView === opt.v ? 'bg-secondary text-secondary-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
-                        )}
+                        style={{
+                          padding: '6px 16px', borderRadius: 99, fontSize: 13, fontWeight: 500,
+                          border: 'none', cursor: 'pointer', transition: 'all .15s', whiteSpace: 'nowrap',
+                          background: orderView === opt.v ? '#0B1626' : 'transparent',
+                          color: orderView === opt.v ? '#fff' : '#5B6B82',
+                        }}
                       >{opt.l}</button>
                     ))}
                   </div>
-                  <div className="flex items-center gap-2 flex-wrap">
-                    {orderView === 'rma' ? (
-                      <>
-                        <SearchBar value={rmaSearch} onChange={setRmaSearch} placeholder="Nº RMA, Pedido origem..." />
-                        <Select
-                          value={rmaApiFilters.status ?? 'all'}
-                          onValueChange={v => setRmaApiFilters(f => ({ ...f, status: v === 'all' ? undefined : v as RmaStatus, page: 1 }))}
-                        >
-                          <SelectTrigger className="w-44 bg-white"><SelectValue placeholder="Status" /></SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="all">Todos os Status</SelectItem>
-                            {RMA_STATUS_OPTIONS.map(opt => (
-                              <SelectItem key={opt.value} value={opt.value}>
-                                <span className={cn('px-2 py-0.5 rounded text-xs font-medium', opt.color)}>{opt.label}</span>
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        <DateFilter
-                          field="data_registro"
-                          onFieldChange={() => {}}
-                          fieldOptions={[{ value: 'data_registro', label: 'Data de Registro' }]}
-                          range={rmaDateRange}
-                          onRangeChange={range => {
-                            setRmaDateRange(range);
-                            setRmaApiFilters(f => ({
-                              ...f,
-                              data_inicio: range.from ? format(range.from, 'yyyy-MM-dd') : undefined,
-                              data_fim: range.to ? format(range.to, 'yyyy-MM-dd') : (range.from ? format(range.from, 'yyyy-MM-dd') : undefined),
-                              page: 1,
-                            }));
-                          }}
-                        />
-                        {(rmaSearch || rmaApiFilters.status || rmaDateRange.from) && (
-                          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => {
-                            setRmaSearch('');
-                            setRmaDateRange({});
-                            setRmaApiFilters(f => ({ ...f, status: undefined, data_inicio: undefined, data_fim: undefined, page: 1 }));
-                          }}>
-                            <X className="h-4 w-4" />
-                          </Button>
-                        )}
-                      </>
-                    ) : (
-                      <>
-                        <SearchBar value={orderSearch} onChange={setOrderSearch} placeholder="OS, Cliente, CPF/CNPJ, Empresa, Vendedor..." />
-                        <Button
-                          variant={orderAlertsOnly ? 'default' : 'outline'}
-                          onClick={() => setOrderAlertsOnly(v => !v)}
-                          className={cn('gap-1.5', orderAlertsOnly ? 'bg-[hsl(var(--st-invoiced-pending))] text-white hover:bg-[hsl(var(--st-invoiced-pending))]/90' : 'bg-white')}
-                        >
-                          <AlertTriangle className="h-4 w-4" /> Alertas
-                        </Button>
-                        <DateFilter
-                          field={orderDateField}
-                          onFieldChange={v => {
-                            setOrderDateField(v as any);
-                            setOrderRange({});
-                            setFilters(f => ({ ...f, data_inicio: undefined, data_fim: undefined, page: 1 }));
-                          }}
-                          fieldOptions={[{ value: 'orderDate', label: 'Data do Pedido' }, { value: 'deliveryDate', label: 'Data de Entrega' }]}
-                          range={orderRange}
-                          onRangeChange={range => {
-                            setOrderRange(range);
-                            if (orderDateField === 'orderDate') {
-                              setFilters(f => ({
-                                ...f,
-                                data_inicio: range.from ? format(range.from, 'yyyy-MM-dd') : undefined,
-                                data_fim: range.to ? format(range.to, 'yyyy-MM-dd') : (range.from ? format(range.from, 'yyyy-MM-dd') : undefined),
-                                page: 1,
-                              }));
-                            }
-                          }}
-                        />
-                        {(orderSearch || orderRange.from || orderAlertsOnly || filters.status) && (
-                          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => {
-                            setOrderSearch(''); setOrderRange({}); setOrderAlertsOnly(false);
-                            setFilters(f => ({ ...f, status: undefined, data_inicio: undefined, data_fim: undefined, page: 1 }));
-                          }}>
-                            <X className="h-4 w-4" />
-                          </Button>
-                        )}
-                      </>
-                    )}
-                  </div>
-                </div>
 
-                <div className="flex justify-between items-center mb-4">
-                  {orderView !== 'rma' && (
+                  {/* Search — flexible */}
+                  <SearchBar
+                    value={orderView === 'rma' ? rmaSearch : orderSearch}
+                    onChange={orderView === 'rma' ? setRmaSearch : setOrderSearch}
+                    placeholder={orderView === 'rma' ? 'Nº RMA, Pedido origem...' : 'OS, cliente, CPF/CNPJ, empresa, vendedor...'}
+                    className="flex-1 min-w-[160px]"
+                  />
+
+                  {/* Status select */}
+                  {orderView !== 'rma' ? (
                     <Select value={filters.status ?? 'all'} onValueChange={v => setFilters(f => ({ ...f, status: v === 'all' ? undefined : v, page: 1 }))}>
-                      <SelectTrigger className="w-64 bg-white"><SelectValue placeholder="Filtrar por Status" /></SelectTrigger>
+                      <SelectTrigger style={{ width: 168, background: '#FBFCFE', borderColor: '#E2E8F1', borderRadius: 10, flexShrink: 0 }}>
+                        <SelectValue placeholder="Todos os Status" />
+                      </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="all">Todos os Status</SelectItem>
                         {ALL_STATUSES.map(s => (
@@ -814,18 +783,119 @@ export default function Sales() {
                         ))}
                       </SelectContent>
                     </Select>
+                  ) : (
+                    <Select
+                      value={rmaApiFilters.status ?? 'all'}
+                      onValueChange={v => setRmaApiFilters(f => ({ ...f, status: v === 'all' ? undefined : v as RmaStatus, page: 1 }))}
+                    >
+                      <SelectTrigger style={{ width: 168, background: '#FBFCFE', borderColor: '#E2E8F1', borderRadius: 10, flexShrink: 0 }}>
+                        <SelectValue placeholder="Todos os Status" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">Todos os Status</SelectItem>
+                        {RMA_STATUS_OPTIONS.map(opt => (
+                          <SelectItem key={opt.value} value={opt.value}>
+                            <span className={cn('px-2 py-0.5 rounded text-xs font-medium', opt.color)}>{opt.label}</span>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   )}
-                  <div className={cn('flex items-center gap-2', orderView === 'rma' && 'ml-auto')}>
-                    <Button onClick={() => { setEditRma(null); setRmaModalOpen(true); }} variant="outline" className="border-secondary text-secondary hover:bg-secondary/10">
+
+                  {/* Alertas (orders only) */}
+                  {orderView !== 'rma' && (
+                    <Button
+                      variant={orderAlertsOnly ? 'default' : 'outline'}
+                      onClick={() => setOrderAlertsOnly(v => !v)}
+                      className={cn('gap-1.5 shrink-0', orderAlertsOnly ? 'bg-[hsl(var(--st-invoiced-pending))] text-white hover:bg-[hsl(var(--st-invoiced-pending))]/90' : '')}
+                      style={!orderAlertsOnly ? { background: '#fff', borderColor: '#E2E8F1', borderRadius: 10 } : { borderRadius: 10 }}
+                    >
+                      <AlertTriangle className="h-4 w-4" /> Alertas
+                    </Button>
+                  )}
+
+                  {/* Período / DateFilter */}
+                  {orderView === 'rma' ? (
+                    <DateFilter
+                      field="data_registro"
+                      onFieldChange={() => {}}
+                      fieldOptions={[{ value: 'data_registro', label: 'Data de Registro' }]}
+                      range={rmaDateRange}
+                      onRangeChange={range => {
+                        setRmaDateRange(range);
+                        setRmaApiFilters(f => ({
+                          ...f,
+                          data_inicio: range.from ? format(range.from, 'yyyy-MM-dd') : undefined,
+                          data_fim: range.to ? format(range.to, 'yyyy-MM-dd') : (range.from ? format(range.from, 'yyyy-MM-dd') : undefined),
+                          page: 1,
+                        }));
+                      }}
+                    />
+                  ) : (
+                    <DateFilter
+                      field={orderDateField}
+                      onFieldChange={v => {
+                        setOrderDateField(v as any);
+                        setOrderRange({});
+                        setFilters(f => ({ ...f, data_inicio: undefined, data_fim: undefined, page: 1 }));
+                      }}
+                      fieldOptions={[{ value: 'orderDate', label: 'Data do Pedido' }, { value: 'deliveryDate', label: 'Data de Entrega' }]}
+                      range={orderRange}
+                      onRangeChange={range => {
+                        setOrderRange(range);
+                        if (orderDateField === 'orderDate') {
+                          setFilters(f => ({
+                            ...f,
+                            data_inicio: range.from ? format(range.from, 'yyyy-MM-dd') : undefined,
+                            data_fim: range.to ? format(range.to, 'yyyy-MM-dd') : (range.from ? format(range.from, 'yyyy-MM-dd') : undefined),
+                            page: 1,
+                          }));
+                        }
+                      }}
+                    />
+                  )}
+
+                  {/* Clear */}
+                  {(orderView === 'rma'
+                    ? (rmaSearch || rmaApiFilters.status || rmaDateRange.from)
+                    : (orderSearch || orderRange.from || orderAlertsOnly || filters.status)
+                  ) && (
+                    <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={() => {
+                      if (orderView === 'rma') {
+                        setRmaSearch(''); setRmaDateRange({});
+                        setRmaApiFilters(f => ({ ...f, status: undefined, data_inicio: undefined, data_fim: undefined, page: 1 }));
+                      } else {
+                        setOrderSearch(''); setOrderRange({}); setOrderAlertsOnly(false);
+                        setFilters(f => ({ ...f, status: undefined, data_inicio: undefined, data_fim: undefined, page: 1 }));
+                      }
+                    }}>
+                      <X className="h-4 w-4" />
+                    </Button>
+                  )}
+
+                  {/* Action buttons — pushed to right */}
+                  <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+                    <Button
+                      onClick={() => { setEditRma(null); setRmaModalOpen(true); }}
+                      variant="outline"
+                      style={{ borderColor: '#E2E8F1', color: '#16273F', borderRadius: 10 }}
+                    >
                       <Plus className="h-4 w-4 mr-1" /> Adicionar RMA
                     </Button>
                     {orderView !== 'rma' && (
-                      <Button onClick={() => { setEditOrder(null); setOrderPrefill(null); setChooserOpen(true); }} className="bg-secondary hover:bg-secondary/90">
+                      <Button
+                        onClick={() => { setEditOrder(null); setOrderPrefill(null); setChooserOpen(true); }}
+                        style={{
+                          background: 'linear-gradient(135deg, #2F6BFF 0%, #1E4FD8 100%)',
+                          boxShadow: '0 10px 22px -10px rgba(47,107,255,.6)',
+                          borderRadius: 10, border: 'none', color: '#fff',
+                        }}
+                      >
                         <Plus className="h-4 w-4 mr-1" /> Adicionar Pedido
                       </Button>
                     )}
                   </div>
-                </div>
+                </div>{/* end toolbar card */}
 
                 {orderView === 'rma' ? (
                   <>
@@ -905,17 +975,21 @@ export default function Sales() {
                         </AlertDescription>
                       </Alert>
                     )}
-                    <div className="overflow-x-auto rounded-lg border">
-                      <Table>
+                    <div className="overflow-x-auto rounded-lg border" style={{ minWidth: 0 }}>
+                      <Table style={{ minWidth: 720 }}>
                         <TableHeader>
-                          <TableRow className="bg-secondary/10">
-                            <TableHead><div className="flex items-center gap-1">OS <SortArrow field="numero_os" /></div></TableHead>
-                            <TableHead>Cliente</TableHead>
-                            <TableHead>Loja</TableHead>
-                            <TableHead>Vendedor</TableHead>
-                            <TableHead><div className="flex items-center gap-1">Data de Entrega <SortArrow field="data_entrega" /></div></TableHead>
-                            <TableHead>Status</TableHead>
-                            <TableHead className="text-right">Valor</TableHead>
+                          <TableRow style={{ background: '#F8FAFD', borderBottom: '1px solid #EEF2F8' }}>
+                            {(['OS', 'Cliente', 'Loja', 'Vendedor', 'Entrega', 'Status', 'Valor'] as const).map((label, i) => (
+                              <TableHead
+                                key={label}
+                                className={i === 6 ? 'text-right' : ''}
+                                style={{ fontSize: 11.5, fontWeight: 600, letterSpacing: '0.1em', textTransform: 'uppercase', color: '#5B6B82', padding: '12px 18px' }}
+                              >
+                                {i === 0 ? <div className="flex items-center gap-1">{label} <SortArrow field="numero_os" /></div>
+                                  : i === 4 ? <div className="flex items-center gap-1">{label} <SortArrow field="data_entrega" /></div>
+                                  : label}
+                              </TableHead>
+                            ))}
                           </TableRow>
                         </TableHeader>
                         <TableBody>
@@ -930,13 +1004,15 @@ export default function Sales() {
                           ) : displayedOrders.map(item => {
                             const warn = WARN_STATUSES.includes(item.status as OrderStatus) &&
                               differenceInCalendarDays(new Date(item.data_entrega + 'T12:00:00'), new Date()) <= 3;
+                            const lojaDot: Record<string, string> = { 'Lucky Store': '#2F6BFF', 'BTech': '#19A974', 'AJJ': '#9B6BFF' };
                             return (
                               <TableRow
                                 key={item.id}
-                                className="cursor-pointer hover:bg-muted/50"
+                                className="cursor-pointer hover:bg-[#F8FAFE]"
+                                style={{ borderBottom: '1px solid #EEF2F8' }}
                                 onClick={() => { setEditOrder(pedidoListToOrder(item)); setModalOpen(true); }}
                               >
-                                <TableCell className="font-medium">
+                                <TableCell style={{ padding: '15px 18px' }}>
                                   <div className="flex items-center gap-1.5">
                                     {warn && (
                                       <Tooltip>
@@ -946,15 +1022,26 @@ export default function Sales() {
                                         <TooltipContent>Entrega em ≤ 3 dias</TooltipContent>
                                       </Tooltip>
                                     )}
-                                    {item.numero_os}
+                                    <span style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600 }}>
+                                      {item.numero_os}
+                                    </span>
                                     {item.is_rma && <span className="ml-1 text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground font-semibold">RMA</span>}
                                   </div>
                                 </TableCell>
-                                <TableCell>{item.nome_cliente || '—'}</TableCell>
-                                <TableCell>{item.nome_loja || '—'}</TableCell>
-                                <TableCell>{item.nome_vendedor || '—'}</TableCell>
-                                <TableCell>{fmtDate(item.data_entrega)}</TableCell>
-                                <TableCell onClick={e => e.stopPropagation()}>
+                                <TableCell style={{ padding: '15px 18px' }}>{item.nome_cliente || '—'}</TableCell>
+                                <TableCell style={{ padding: '15px 18px' }}>
+                                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                                    <span style={{
+                                      width: 8, height: 8, borderRadius: '50%', flexShrink: 0,
+                                      background: lojaDot[item.nome_loja ?? ''] ?? '#9CA3AF',
+                                      display: 'inline-block',
+                                    }} />
+                                    {item.nome_loja || '—'}
+                                  </span>
+                                </TableCell>
+                                <TableCell style={{ padding: '15px 18px' }}>{item.nome_vendedor || '—'}</TableCell>
+                                <TableCell style={{ padding: '15px 18px' }}>{fmtDate(item.data_entrega)}</TableCell>
+                                <TableCell style={{ padding: '15px 18px' }} onClick={e => e.stopPropagation()}>
                                   <Select
                                     value={item.status}
                                     onValueChange={v =>
@@ -962,9 +1049,9 @@ export default function Sales() {
                                     }
                                   >
                                     <SelectTrigger className={cn(
-                                      'w-44 h-7 text-xs font-semibold border py-0',
+                                      'h-7 text-xs font-semibold border py-0',
                                       ORDER_STATUS_COLORS[item.status as OrderStatus] ?? 'bg-muted',
-                                    )}>
+                                    )} style={{ width: 'auto', minWidth: 140, borderRadius: 8, paddingLeft: 10, paddingRight: 6 }}>
                                       <SelectValue />
                                     </SelectTrigger>
                                     <SelectContent>
@@ -978,7 +1065,7 @@ export default function Sales() {
                                     </SelectContent>
                                   </Select>
                                 </TableCell>
-                                <TableCell className="text-right font-semibold">
+                                <TableCell className="text-right font-semibold" style={{ padding: '15px 18px', fontVariantNumeric: 'tabular-nums' }}>
                                   {item.is_rma || item.valor_venda == null
                                     ? <span className="text-muted-foreground">—</span>
                                     : formatBRL(item.valor_venda)}
@@ -1001,86 +1088,106 @@ export default function Sales() {
 
           {/* ============== PRODUCTS TAB ============== */}
           <TabsContent value="products">
+            {/* Page heading */}
+            <div style={{ marginBottom: 20 }}>
+              <h1 style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 700, fontSize: 23, color: '#16273F', margin: 0 }}>
+                Produtos
+              </h1>
+              <p style={{ color: '#5B6B82', fontSize: 14, marginTop: 4, marginBottom: 0 }}>
+                Gerencie os produtos e itens dos pedidos em andamento.
+              </p>
+            </div>
             <Card>
               <CardContent className="p-4">
-                <div className="flex flex-wrap justify-between items-center gap-3 mb-4">
-                  <div className="flex items-center gap-3 flex-wrap">
-                    <h2 className="text-lg font-semibold text-secondary">Produtos</h2>
-                    <div className="flex items-center gap-1 bg-muted rounded-full p-1">
-                      {([
-                        { v: 'all', l: 'Todos os Produtos' },
-                        { v: 'open', l: 'Pedidos em Aberto' },
-                      ] as const).map(opt => (
-                        <button
-                          key={opt.v}
-                          onClick={() => setProdView(opt.v)}
-                          className={cn(
-                            'px-3 py-1 rounded-full text-xs font-medium transition-all',
-                            prodView === opt.v ? 'bg-secondary text-secondary-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
-                          )}
-                        >{opt.l}</button>
+                {/* Toolbar — single row */}
+                <div
+                  style={{
+                    background: '#fff', border: '1px solid #E2E8F1', borderRadius: 16,
+                    padding: '12px 16px', marginBottom: 16,
+                    display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap',
+                  }}
+                >
+                  {/* View pills */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 3, background: '#EDF1F7', borderRadius: 99, padding: 4, flexShrink: 0 }}>
+                    {([
+                      { v: 'all', l: 'Todos os Produtos' },
+                      { v: 'open', l: 'Pedidos em Aberto' },
+                    ] as const).map(opt => (
+                      <button
+                        key={opt.v}
+                        onClick={() => setProdView(opt.v)}
+                        style={{
+                          padding: '6px 16px', borderRadius: 99, fontSize: 13, fontWeight: 500,
+                          border: 'none', cursor: 'pointer', transition: 'all .15s', whiteSpace: 'nowrap',
+                          background: prodView === opt.v ? '#0B1626' : 'transparent',
+                          color: prodView === opt.v ? '#fff' : '#5B6B82',
+                        }}
+                      >{opt.l}</button>
+                    ))}
+                  </div>
+
+                  <SearchBar value={prodSearch} onChange={setProdSearch} placeholder="OS, Cliente, Empresa, Vendedor, Produto..." className="flex-1 min-w-[160px]" />
+
+                  <Select value={prodStatusFilter} onValueChange={setProdStatusFilter}>
+                    <SelectTrigger style={{ width: 168, background: '#FBFCFE', borderColor: '#E2E8F1', borderRadius: 10, flexShrink: 0 }}>
+                      <SelectValue placeholder="Todos os Status" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Todos os Status</SelectItem>
+                      {(['To Buy', 'Bought', 'In Stock'] as ItemStatus[]).map(s => (
+                        <SelectItem key={s} value={s}>
+                          <span className={cn('px-2 py-0.5 rounded text-xs font-medium', ITEM_STATUS_COLORS[s])}>{ITEM_STATUS_LABELS[s]}</span>
+                        </SelectItem>
                       ))}
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <SearchBar value={prodSearch} onChange={setProdSearch} placeholder="OS, Cliente, Empresa, Vendedor, Produto..." />
-                    <Button
-                      variant={prodAlertsOnly ? 'default' : 'outline'}
-                      onClick={() => setProdAlertsOnly(v => !v)}
-                      className={cn('gap-1.5', prodAlertsOnly ? 'bg-[hsl(var(--st-delayed))] text-white hover:bg-[hsl(var(--st-delayed))]/90' : 'bg-white')}
-                    >
-                      <AlertTriangle className="h-4 w-4" /> Alertas
+                    </SelectContent>
+                  </Select>
+
+                  <Button
+                    variant={prodAlertsOnly ? 'default' : 'outline'}
+                    onClick={() => setProdAlertsOnly(v => !v)}
+                    className={cn('gap-1.5 shrink-0', prodAlertsOnly ? 'bg-[hsl(var(--st-delayed))] text-white hover:bg-[hsl(var(--st-delayed))]/90' : '')}
+                    style={!prodAlertsOnly ? { background: '#fff', borderColor: '#E2E8F1', borderRadius: 10 } : { borderRadius: 10 }}
+                  >
+                    <AlertTriangle className="h-4 w-4" /> Alertas
+                  </Button>
+
+                  <DateFilter
+                    field={prodDateField}
+                    onFieldChange={v => setProdDateField(v as any)}
+                    fieldOptions={[{ value: 'order', label: 'Entrega Pedido' }, { value: 'product', label: 'Entrega Produto' }]}
+                    range={prodRange}
+                    onRangeChange={setProdRange}
+                  />
+
+                  {(prodSearch || prodRange.from || prodAlertsOnly || prodStatusFilter !== 'all') && (
+                    <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={() => { setProdSearch(''); setProdRange({}); setProdAlertsOnly(false); setProdStatusFilter('all'); }}>
+                      <X className="h-4 w-4" />
                     </Button>
-                    <Select value={prodStatusFilter} onValueChange={setProdStatusFilter}>
-                      <SelectTrigger className="w-44 bg-white"><SelectValue placeholder="Status" /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">Todos os Status</SelectItem>
-                        {(['To Buy', 'Bought', 'In Stock'] as ItemStatus[]).map(s => (
-                          <SelectItem key={s} value={s}>
-                            <span className={cn('px-2 py-0.5 rounded text-xs font-medium', ITEM_STATUS_COLORS[s])}>{ITEM_STATUS_LABELS[s]}</span>
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <DateFilter
-                      field={prodDateField}
-                      onFieldChange={v => setProdDateField(v as any)}
-                      fieldOptions={[{ value: 'order', label: 'Entrega Pedido' }, { value: 'product', label: 'Entrega Produto' }]}
-                      range={prodRange}
-                      onRangeChange={setProdRange}
-                    />
-                    {(prodSearch || prodRange.from || prodAlertsOnly || prodStatusFilter !== 'all') && (
-                      <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => { setProdSearch(''); setProdRange({}); setProdAlertsOnly(false); setProdStatusFilter('all'); }}>
-                        <X className="h-4 w-4" />
-                      </Button>
-                    )}
-                  </div>
+                  )}
                 </div>
                 <div className="overflow-x-auto rounded-lg border">
                   <Table>
                     <TableHeader>
-                      <TableRow className="bg-secondary/10">
-                        <TableHead>OS Pai</TableHead>
-                        <TableHead>Produto</TableHead>
-                        <TableHead>Cliente</TableHead>
-                        <TableHead>Quantidade</TableHead>
-                        <TableHead>Status</TableHead>
-                        <TableHead>Entrega Pedido</TableHead>
-                        <TableHead>Entrega Produto</TableHead>
+                      <TableRow style={{ background: '#F8FAFD', borderBottom: '1px solid #EEF2F8' }}>
+                        {['OS Pai', 'Produto', 'Cliente', 'Qtd.', 'Status', 'Entrega Pedido', 'Entrega Produto'].map(h => (
+                          <TableHead key={h} style={{ fontSize: 11.5, fontWeight: 600, letterSpacing: '0.1em', textTransform: 'uppercase', color: '#5B6B82', padding: '12px 18px' }}>{h}</TableHead>
+                        ))}
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {pagedProducts.map(p => {
                         const productLate = p.productDeliveryDate && p.productDeliveryDate > p.orderDeliveryDate;
                         return (
-                          <TableRow key={`${p.orderId}-${p.id}`} className="cursor-pointer hover:bg-muted/50" onClick={() => openProductModal(p.orderId, p.id)}>
-                            <TableCell className="font-medium">{p.os}</TableCell>
-                            <TableCell>{p.name}</TableCell>
-                            <TableCell>{p.customer}</TableCell>
-                            <TableCell>{p.quantity}</TableCell>
-                            <TableCell onClick={e => e.stopPropagation()}>
+                          <TableRow key={`${p.orderId}-${p.id}`} className="cursor-pointer hover:bg-[#F8FAFE]" style={{ borderBottom: '1px solid #EEF2F8' }} onClick={() => openProductModal(p.orderId, p.id)}>
+                            <TableCell style={{ padding: '15px 18px' }}>
+                              <span style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600 }}>{p.os}</span>
+                            </TableCell>
+                            <TableCell style={{ padding: '15px 18px' }}>{p.name}</TableCell>
+                            <TableCell style={{ padding: '15px 18px' }}>{p.customer}</TableCell>
+                            <TableCell style={{ padding: '15px 18px' }}>{p.quantity}</TableCell>
+                            <TableCell style={{ padding: '15px 18px' }} onClick={e => e.stopPropagation()}>
                               <Select value={p.status} onValueChange={v => updateItemStatusApi({ pedidoId: p.orderId, itemId: p.id, newStatus: v })}>
-                                <SelectTrigger className={cn('w-40 text-xs font-semibold border', ITEM_STATUS_COLORS[p.status])}>
+                                <SelectTrigger className={cn('h-7 text-xs font-semibold border', ITEM_STATUS_COLORS[p.status])} style={{ width: 'auto', minWidth: 120, borderRadius: 8, paddingLeft: 10, paddingRight: 6 }}>
                                   <SelectValue />
                                 </SelectTrigger>
                                 <SelectContent>
@@ -1092,8 +1199,8 @@ export default function Sales() {
                                 </SelectContent>
                               </Select>
                             </TableCell>
-                            <TableCell>{fmtDate(p.orderDeliveryDate)}</TableCell>
-                            <TableCell>
+                            <TableCell style={{ padding: '15px 18px' }}>{fmtDate(p.orderDeliveryDate)}</TableCell>
+                            <TableCell style={{ padding: '15px 18px' }}>
                               <div className="flex items-center gap-1.5">
                                 {productLate && (
                                   <Tooltip>

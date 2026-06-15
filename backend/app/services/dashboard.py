@@ -3,10 +3,12 @@ from decimal import Decimal
 from typing import Optional
 from uuid import UUID
 
-from sqlalchemy import func, case
+from sqlalchemy import func, case, or_, and_
 from sqlalchemy.orm import Session
 
-from app.models.pedido import Pedido, CustoPedido
+from app.models.pedido import Pedido, CustoPedido, Frete
+from app.models.produto import Produto
+from app.models.despesa import Despesa
 from app.models.loja import Loja
 from app.models.vendedor import Vendedor
 from app.models.dashboard_goal import DashboardGoal
@@ -26,6 +28,8 @@ from app.schemas.dashboard import (
     DailySeriesItem,
     DailySeriesResponse,
     ProjectionsResponse,
+    CardSpendItem,
+    CardSpendResponse,
 )
 from app.utils.errors import NotFoundException
 
@@ -158,7 +162,41 @@ def get_kpis(
     custo = custo_produto + custo_servico
     lucro = receita - custo
     margem = (lucro / receita).quantize(Decimal("0.0001")) if receita > 0 else Decimal("0")
-    outros_custos = max(custo - imposto_compra - imposto_venda, Decimal("0"))
+    gastos_fixos_q = (
+        db.query(func.coalesce(func.sum(
+            case(
+                (Despesa.tipo == "PAGO", Despesa.valor_pago),
+                else_=Despesa.valor_previsto,
+            )
+        ), 0))
+        .filter(
+            Despesa.deleted_at.is_(None),
+            or_(
+                and_(Despesa.tipo == "PAGO",
+                     Despesa.data_pagamento >= inicio,
+                     Despesa.data_pagamento <= fim),
+                and_(Despesa.tipo == "PREVISAO",
+                     Despesa.data_prevista >= inicio,
+                     Despesa.data_prevista <= fim),
+            ),
+        )
+    )
+    outros_custos = Decimal(str(gastos_fixos_q.scalar() or 0))
+
+    frete_q = (
+        db.query(func.coalesce(func.sum(Frete.valor), 0))
+        .filter(
+            Frete.data_frete >= inicio,
+            Frete.data_frete <= fim,
+        )
+    )
+    if id_loja:
+        frete_q = (
+            frete_q.join(Pedido, Pedido.id == Frete.id_pedido)
+            .filter(Pedido.id_loja == id_loja)
+        )
+    custo_frete = Decimal(str(frete_q.scalar() or 0))
+
     num_pedidos = row.num_pedidos or 0
 
     # Receita de hoje
@@ -193,6 +231,7 @@ def get_kpis(
         imposto_compra=imposto_compra,
         imposto_venda=imposto_venda,
         outros_custos=outros_custos,
+        custo_frete=custo_frete,
     )
 
 
@@ -491,6 +530,10 @@ def get_daily_series(
                     case((Pedido.is_cancelled.isnot(True),
                           CustoPedido.custo_produto_final + CustoPedido.custo_servico), else_=0)
                 ), 0).label("custo"),
+                func.coalesce(func.sum(
+                    case((Pedido.is_cancelled.isnot(True),
+                          func.coalesce(Pedido.multa, 0) + func.coalesce(Pedido.juros, 0)), else_=0)
+                ), 0).label("ganhos"),
             )
             .outerjoin(CustoPedido, CustoPedido.id_pedido == Pedido.id)
             .filter(
@@ -507,6 +550,49 @@ def get_daily_series(
         return {row.data: row for row in q.all()}
 
     current_rows = _query_daily(inicio, fim)
+
+    # Gastos fixos (despesas) por dia: PAGO → data_pagamento, PREVISAO → data_prevista
+    despesas = (
+        db.query(Despesa)
+        .filter(
+            Despesa.deleted_at.is_(None),
+            or_(
+                and_(Despesa.tipo == "PAGO",
+                     Despesa.data_pagamento >= inicio, Despesa.data_pagamento <= fim),
+                and_(Despesa.tipo == "PREVISAO",
+                     Despesa.data_prevista >= inicio, Despesa.data_prevista <= fim),
+            ),
+        )
+        .all()
+    )
+    gastos_by_day: dict[date, Decimal] = {}
+    for d in despesas:
+        if d.tipo == "PAGO":
+            dia, val = d.data_pagamento, d.valor_pago
+        else:
+            dia, val = d.data_prevista, d.valor_previsto
+        if dia is None:
+            continue
+        gastos_by_day[dia] = gastos_by_day.get(dia, Decimal(0)) + Decimal(str(val or 0))
+
+    # Fretes pelo dia em que foram cadastrados (created_at), opcionalmente restrito por loja
+    frete_dia = func.date(Frete.created_at)
+    frete_q = (
+        db.query(
+            frete_dia.label("dia"),
+            func.coalesce(func.sum(Frete.valor), 0).label("total"),
+        )
+        .filter(frete_dia >= inicio, frete_dia <= fim)
+        .group_by(frete_dia)
+    )
+    if id_loja:
+        frete_q = (
+            frete_q.join(Pedido, Pedido.id == Frete.id_pedido)
+            .filter(Pedido.id_loja == id_loja)
+        )
+    fretes_by_day: dict[date, Decimal] = {
+        row.dia: Decimal(str(row.total or 0)) for row in frete_q.all()
+    }
 
     # Previous year: same calendar window, clamp day to avoid Feb-29 errors
     def _prev_year_date(d: date) -> date:
@@ -529,11 +615,18 @@ def get_daily_series(
         row = current_rows.get(current)
         receita = Decimal(str(row.receita or 0)) if row else Decimal(0)
         custo = Decimal(str(row.custo or 0)) if row else Decimal(0)
+        ganhos = Decimal(str(row.ganhos or 0)) if row else Decimal(0)
+        gastos_fixos = gastos_by_day.get(current, Decimal(0))
+        fretes = fretes_by_day.get(current, Decimal(0))
         items.append(DailySeriesItem(
             data=current.isoformat(),
             faturamento=receita,
             lucro=receita - custo,
             ano_anterior=prev_by_md.get((current.month, current.day), Decimal(0)),
+            custo=custo,
+            gastos_fixos=gastos_fixos,
+            ganhos_financeiros=ganhos,
+            fretes=fretes,
         ))
         current += timedelta(days=1)
 
@@ -604,3 +697,54 @@ def get_projections(
         meta_diaria_dinamica=meta_diaria_dinamica,
         pct_meta=pct_meta,
     )
+
+
+# ─── Card spend ───────────────────────────────────────────────────────────────
+
+def get_card_spend(
+    db: Session,
+    mes: Optional[int] = None,
+    ano: Optional[int] = None,
+    data_inicio: Optional[date] = None,
+    data_fim: Optional[date] = None,
+    id_loja: Optional[UUID] = None,
+) -> CardSpendResponse:
+    """Soma o valor gasto (purchaseValue das sub-compras) agrupado por cartão.
+
+    Agrega TODOS os cartões cadastrados (sem filtro de período), opcionalmente
+    restrito por loja.
+    """
+    q = (
+        db.query(Produto.sub_compras)
+        .join(Pedido, Pedido.id == Produto.id_pedido)
+        .filter(
+            Pedido.deleted_at.is_(None),
+            Pedido.is_rma.isnot(True),
+            Pedido.is_cancelled.isnot(True),
+            Produto.sub_compras.isnot(None),
+        )
+    )
+    if id_loja:
+        q = q.filter(Pedido.id_loja == id_loja)
+
+    totals: dict[str, float] = {}
+    for (sub_compras,) in q.all():
+        if not sub_compras:
+            continue
+        for sc in sub_compras:
+            if not isinstance(sc, dict):
+                continue
+            card = (sc.get("card") or "").strip()
+            if not card:
+                continue
+            try:
+                valor = float(sc.get("purchaseValue") or 0)
+            except (TypeError, ValueError):
+                valor = 0.0
+            totals[card] = totals.get(card, 0.0) + valor
+
+    items = [
+        CardSpendItem(card=card, total=round(total, 2))
+        for card, total in sorted(totals.items(), key=lambda kv: kv[1], reverse=True)
+    ]
+    return CardSpendResponse(items=items)

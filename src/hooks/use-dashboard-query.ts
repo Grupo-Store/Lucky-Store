@@ -26,6 +26,7 @@ export interface DashboardKpis {
   imposto_compra: number
   imposto_venda: number
   outros_custos: number
+  custo_frete: number
 }
 
 export interface DashboardProjections {
@@ -94,6 +95,20 @@ export function useDashboardBreakdownBySeller(params: DashboardQueryParams) {
   return useQuery<{ items: SellerBreakdownItem[] }>({
     queryKey: ['dashboard', 'breakdown-seller', params],
     queryFn: () => apiFetch('/dashboard/breakdown-by-seller', { params: { ...params } }),
+    staleTime: 60_000,
+    refetchOnWindowFocus: true,
+  })
+}
+
+export interface CardSpendItem {
+  card: string
+  total: number
+}
+
+export function useDashboardCardSpend(params: DashboardQueryParams) {
+  return useQuery<{ items: CardSpendItem[] }>({
+    queryKey: ['dashboard', 'card-spend', params],
+    queryFn: () => apiFetch('/dashboard/card-spend', { params: { ...params } }),
     staleTime: 60_000,
     refetchOnWindowFocus: true,
   })
@@ -192,6 +207,10 @@ export interface DailySeriesItem {
   faturamento: number
   lucro: number
   ano_anterior: number
+  custo: number
+  gastos_fixos: number
+  ganhos_financeiros: number
+  fretes: number
 }
 
 export function useDailyHistorical(params: DashboardQueryParams) {

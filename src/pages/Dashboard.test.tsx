@@ -8,6 +8,7 @@ vi.mock('@/hooks/use-dashboard-query', () => ({
   useDashboardProjections: vi.fn(),
   useDashboardBreakdownByCompany: vi.fn(),
   useDashboardBreakdownBySeller: vi.fn(),
+  useDashboardCardSpend: vi.fn(() => ({ data: { items: [] }, isLoading: false })),
   useDashboardGoals: vi.fn(() => ({ data: { items: [] }, isLoading: false })),
   useUpsertGoal: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
   useDeleteGoal: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
@@ -47,6 +48,10 @@ vi.mock('@/components/dashboard/DashboardTicketBar', () => ({
 
 vi.mock('@/components/dashboard/HistoricalChart', () => ({
   HistoricalChart: () => <div data-testid="historical-chart" />,
+}));
+
+vi.mock('@/components/dashboard/CardSpendChart', () => ({
+  CardSpendChart: () => <div data-testid="card-spend-chart" />,
 }));
 
 vi.mock('@/components/dashboard/SellerCard', () => ({

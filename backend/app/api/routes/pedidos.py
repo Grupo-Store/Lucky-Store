@@ -100,6 +100,7 @@ def list_pedidos(
             forma_pagamento_efetiva=p.forma_pagamento_efetiva,
             num_parcelas_efetivas=p.num_parcelas_efetivas,
             plano_parcelas=p.plano_parcelas,
+            plano_parcelas_pedido=p.plano_parcelas_pedido,
         )
         for p in items
     ]

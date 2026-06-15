@@ -1,5 +1,7 @@
-import React, { createContext, useContext, useState, useCallback } from 'react';
-import { PaymentMethod, Order } from './OrderStore';
+import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
+import { apiFetch } from '@/lib/api';
+import { PaymentMethod, Order, PaymentInstallment } from './OrderStore';
 
 export type ExpenseKind = 'PREVISAO' | 'PAGO';
 export type ExpenseStatus = 'Não Pago' | 'Pago';
@@ -39,10 +41,10 @@ export interface CalendarEntry {
   id: string;
   date: string;
   value: number;
-  type: 'MULTA' | 'JUROS' | 'PREVISAO' | 'PAGO' | 'ORDER';
+  type: 'MULTA' | 'JUROS' | 'PREVISAO' | 'PAGO' | 'ORDER' | 'FRETE';
   title: string;
   refId: string;
-  refKind: 'expense' | 'order' | 'order-penalty' | 'order-interest';
+  refKind: 'expense' | 'order' | 'order-penalty' | 'order-interest' | 'order-frete';
   /** Optional sub-index for installments */
   subIndex?: number;
 }
@@ -92,60 +94,102 @@ export function expandExpense(e: Expense): CalendarEntry[] {
   }];
 }
 
+/** Pedido parcelado no cartão pela seção Informações Gerais (valor do pedido). */
+export function isCreditOrder(o: Order): boolean {
+  return (o.paymentMethods || []).includes('Credit Card');
+}
+
 /**
  * Derive Multa (penalty) and Juros (interest) calendar entries from an Order's
- * Pagamento section. Penalty -> single Blue card on paymentDate.
- * Interest paid via Credit -> per-installment Green cards proportional to plan.
- * Interest paid otherwise -> single Green card on paymentDate.
+ * Pagamento section (Financeiro).
+ * - Forma de pagamento efetiva = Cartão de Crédito, com plano de parcelas de
+ *   multa/juros → multa e juros divididos proporcionalmente ao peso de cada
+ *   parcela, lançados na data de cada parcela.
+ * - Caso contrário → uma única entrada de multa e/ou juros na data de pagamento.
  */
 export function expandOrderFinancial(o: Order): CalendarEntry[] {
   const out: CalendarEntry[] = [];
   const payDate = o.paymentDate || o.deliveryDate;
+  const multa = o.penaltyValue || 0;
+  const juros = o.interestValue || 0;
+  const plan = o.paymentInstallmentPlan || [];   // Set B — parcelas de multa/juros
+  const creditWithPlan = o.paymentMethod === 'Credit Card' && plan.some(p => p.date);
 
-  if ((o.penaltyValue || 0) > 0 && payDate) {
-    out.push({
-      id: `op-${o.id}`,
-      date: payDate,
-      value: o.penaltyValue || 0,
-      type: 'MULTA',
-      title: `OS ${o.os}`,
-      refId: o.id,
-      refKind: 'order-penalty',
-    });
-  }
+  if (creditWithPlan) {
+    const totalPlanValue = plan.reduce((s, p) => s + (p.value || 0), 0);
+    const dated = plan.filter(p => p.date);
+    const share = (total: number, p: PaymentInstallment) =>
+      totalPlanValue > 0 ? (p.value || 0) / totalPlanValue * total : total / dated.length;
 
-  const interest = o.interestValue || 0;
-  if (interest > 0) {
-    if (o.paymentMethod === 'Credit Card' && o.paymentInstallmentPlan && o.paymentInstallmentPlan.length > 0) {
-      const totalPlanValue = o.paymentInstallmentPlan.reduce((s, p) => s + (p.value || 0), 0) || 1;
-      o.paymentInstallmentPlan.filter(p => p.date).forEach((p, i) => {
-        // distribute interest proportionally to installment value
-        const share = (p.value / totalPlanValue) * interest;
+    dated.forEach((p, i) => {
+      if (multa > 0) {
+        out.push({
+          id: `op-${o.id}-i${i}`,
+          date: p.date,
+          value: +share(multa, p).toFixed(2),
+          type: 'MULTA',
+          title: `OS ${o.os} (${i + 1}ª)`,
+          refId: o.id,
+          refKind: 'order-penalty',
+          subIndex: i,
+        });
+      }
+      if (juros > 0) {
         out.push({
           id: `oi-${o.id}-i${i}`,
           date: p.date,
-          value: +share.toFixed(2),
+          value: +share(juros, p).toFixed(2),
           type: 'JUROS',
           title: `OS ${o.os} (${i + 1}ª)`,
           refId: o.id,
           refKind: 'order-interest',
           subIndex: i,
         });
-      });
-    } else if (payDate) {
-      out.push({
-        id: `oi-${o.id}`,
-        date: payDate,
-        value: interest,
-        type: 'JUROS',
-        title: `OS ${o.os}`,
-        refId: o.id,
-        refKind: 'order-interest',
-      });
-    }
+      }
+    });
+    return out;
+  }
+
+  // Não-crédito (ou sem plano): entradas únicas na data de pagamento.
+  if (multa > 0 && payDate) {
+    out.push({
+      id: `op-${o.id}`,
+      date: payDate,
+      value: multa,
+      type: 'MULTA',
+      title: `OS ${o.os}`,
+      refId: o.id,
+      refKind: 'order-penalty',
+    });
+  }
+  if (juros > 0 && payDate) {
+    out.push({
+      id: `oi-${o.id}`,
+      date: payDate,
+      value: juros,
+      type: 'JUROS',
+      title: `OS ${o.os}`,
+      refId: o.id,
+      refKind: 'order-interest',
+    });
   }
 
   return out;
+}
+
+/** Derive FRETE calendar entries from an Order's freight cards. */
+export function expandOrderFretes(o: Order): CalendarEntry[] {
+  return (o.freight || [])
+    .filter(f => !!f.deliveryDate)
+    .map(f => ({
+      id: `of-${f.id}`,
+      date: f.deliveryDate!,
+      value: f.value,
+      type: 'FRETE' as const,
+      title: f.deliveryPerson ? `Frete — ${f.deliveryPerson}` : 'Frete',
+      refId: o.id,
+      refKind: 'order-frete' as const,
+    }));
 }
 
 interface FinanceContextType {
@@ -180,24 +224,93 @@ export function goalKey(year: number, month: number, scopeType: GoalScopeType, s
 
 const FinanceContext = createContext<FinanceContextType | null>(null);
 
-const sampleExpenses: Expense[] = [
-  {
-    id: 'e1', kind: 'PREVISAO', service: 'Aluguel', destination: 'Imobiliária X',
-    predictedValue: 4500, predictedDate: '2026-04-20', status: 'Não Pago',
-  },
-  {
-    id: 'e2', kind: 'PAGO', service: 'Energia Elétrica', destination: 'Enel',
-    paidValue: 820, paymentDate: '2026-04-12', paymentMethod: 'Boleto',
-  },
-];
+// ── API ↔ Expense adapters ────────────────────────────────────────────────────
+
+interface DespesaApiItem {
+  id: string; tipo: string; servico: string; destino: string;
+  valor_previsto: string | null; data_prevista: string | null; status: string | null;
+  valor_pago: string | null; data_pagamento: string | null; metodo_pagamento: string | null;
+  parcelas: number | null; plano_parcelas: { date: string; value: string }[] | null;
+  observacoes: string | null;
+}
+
+function fromApi(a: DespesaApiItem): Expense {
+  return {
+    id: a.id,
+    kind: a.tipo as ExpenseKind,
+    service: a.servico,
+    destination: a.destino,
+    predictedValue: a.valor_previsto != null ? Number(a.valor_previsto) : undefined,
+    predictedDate: a.data_prevista ?? undefined,
+    status: (a.status as ExpenseStatus) ?? undefined,
+    paidValue: a.valor_pago != null ? Number(a.valor_pago) : undefined,
+    paymentDate: a.data_pagamento ?? undefined,
+    paymentMethod: (a.metodo_pagamento as PaymentMethod) ?? undefined,
+    installments: a.parcelas ?? undefined,
+    installmentPlan: a.plano_parcelas
+      ? a.plano_parcelas.map(p => ({ date: p.date, value: Number(p.value) }))
+      : undefined,
+    observations: a.observacoes ?? undefined,
+  };
+}
+
+function toApiPayload(e: Expense) {
+  return {
+    tipo: e.kind,
+    servico: e.service,
+    destino: e.destination,
+    valor_previsto: e.predictedValue ?? null,
+    data_prevista: e.predictedDate ?? null,
+    status: e.status ?? null,
+    valor_pago: e.paidValue ?? null,
+    data_pagamento: e.paymentDate ?? null,
+    metodo_pagamento: e.paymentMethod ?? null,
+    parcelas: e.installments ?? null,
+    plano_parcelas: e.installmentPlan ?? null,
+    observacoes: e.observations ?? null,
+  };
+}
 
 export function FinanceProvider({ children }: { children: React.ReactNode }) {
-  const [expenses, setExpenses] = useState<Expense[]>(sampleExpenses);
+  const [expenses, setExpenses] = useState<Expense[]>([]);
   const [goals, setGoals] = useState<Goal[]>([]);
+  const qc = useQueryClient();
 
-  const addExpense = useCallback((e: Expense) => setExpenses(p => [...p, e]), []);
-  const updateExpense = useCallback((e: Expense) => setExpenses(p => p.map(x => x.id === e.id ? e : x)), []);
-  const deleteExpense = useCallback((id: string) => setExpenses(p => p.filter(x => x.id !== id)), []);
+  const invalidateDashboard = useCallback(() => {
+    qc.invalidateQueries({ queryKey: ['dashboard', 'kpis'] });
+    qc.invalidateQueries({ queryKey: ['dashboard', 'projections'] });
+  }, [qc]);
+
+  useEffect(() => {
+    apiFetch<DespesaApiItem[]>('/despesas')
+      .then(data => setExpenses(data.map(fromApi)))
+      .catch(() => { /* mantém lista vazia se API indisponível */ });
+  }, []);
+
+  const addExpense = useCallback((e: Expense) => {
+    setExpenses(p => [...p, e]);
+    apiFetch<DespesaApiItem>('/despesas', {
+      init: { method: 'POST', body: JSON.stringify(toApiPayload(e)) },
+    }).then(created => {
+      setExpenses(p => p.map(x => x.id === e.id ? fromApi(created) : x));
+      invalidateDashboard();
+    }).catch(() => { /* mantém entrada otimista */ });
+  }, [invalidateDashboard]);
+
+  const updateExpense = useCallback((e: Expense) => {
+    setExpenses(p => p.map(x => x.id === e.id ? e : x));
+    apiFetch<DespesaApiItem>(`/despesas/${e.id}`, {
+      init: { method: 'PUT', body: JSON.stringify(toApiPayload(e)) },
+    }).then(() => invalidateDashboard())
+      .catch(() => { /* atualização otimista já aplicada */ });
+  }, [invalidateDashboard]);
+
+  const deleteExpense = useCallback((id: string) => {
+    setExpenses(p => p.filter(x => x.id !== id));
+    apiFetch(`/despesas/${id}`, { init: { method: 'DELETE' } })
+      .then(() => invalidateDashboard())
+      .catch(() => { /* remoção otimista já aplicada */ });
+  }, [invalidateDashboard]);
 
   const upsertGoal = useCallback((g: Goal) => {
     setGoals(p => {

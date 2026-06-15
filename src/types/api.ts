@@ -148,9 +148,10 @@ export interface CreatePedidoPayload {
   forma_pagamento_efetiva?: string;
   num_parcelas_efetivas?: number;
   plano_parcelas?: { date: string; value: number }[];
+  plano_parcelas_pedido?: { date: string; value: number }[];
 }
 
-export type UpdatePedidoPayload = Partial<Omit<CreatePedidoPayload, 'id_loja' | 'id_vendedor' | 'nome_cliente' | 'status' | 'formas_pagamento'>>;
+export type UpdatePedidoPayload = Partial<Omit<CreatePedidoPayload, 'id_loja' | 'id_vendedor' | 'nome_cliente' | 'status'>>;
 
 export interface PedidoFilters {
   page?: number;
@@ -177,6 +178,7 @@ export interface SubCompraApiItem {
   purchaseValue: number;
   paymentMethod: string;
   installments?: number;
+  card?: string;
   status: string;
 }
 

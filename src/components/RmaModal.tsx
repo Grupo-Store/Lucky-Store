@@ -281,7 +281,7 @@ export function RmaModal({ open, onClose, orders, rma, onSave, nextRmaNumber }: 
     <Dialog open={open} onOpenChange={v => !v && onClose()}>
       <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto bg-card">
         <DialogHeader>
-          <DialogTitle className="text-secondary text-xl flex items-center gap-2">
+          <DialogTitle className="text-xl font-bold text-[#16273F] flex items-center gap-2" style={{ fontFamily: "'Space Grotesk', sans-serif" }}>
             {!isEdit && step !== 'pick-order' && (
               <Button variant="ghost" size="icon" className="h-7 w-7" onClick={goBack}>
                 <ArrowLeft className="h-4 w-4" />
@@ -318,7 +318,7 @@ export function RmaModal({ open, onClose, orders, rma, onSave, nextRmaNumber }: 
             <div className="overflow-x-auto rounded-lg border">
               <Table>
                 <TableHeader>
-                  <TableRow className="bg-secondary/10">
+                  <TableRow className="bg-[#F8FAFD]">
                     <TableHead>OS</TableHead>
                     <TableHead>Cliente</TableHead>
                     <TableHead>Loja</TableHead>
@@ -382,7 +382,7 @@ export function RmaModal({ open, onClose, orders, rma, onSave, nextRmaNumber }: 
               <div className="overflow-x-auto rounded-lg border">
                 <Table>
                   <TableHeader>
-                    <TableRow className="bg-secondary/10">
+                    <TableRow className="bg-[#F8FAFD]">
                       <TableHead className="w-10"></TableHead>
                       <TableHead>Produto</TableHead>
                       <TableHead>Quantidade</TableHead>
@@ -413,7 +413,7 @@ export function RmaModal({ open, onClose, orders, rma, onSave, nextRmaNumber }: 
               <Button
                 onClick={goToForm}
                 disabled={localParentItems.length > 0 && selectedItemIds.size === 0}
-                className="bg-secondary hover:bg-secondary/90"
+                className="bg-[#2F6BFF] hover:bg-[#1E4FD8] text-white"
               >
                 {localParentItems.length > 0
                   ? `Próximo (${selectedItemIds.size} ${selectedItemIds.size === 1 ? 'item' : 'itens'})`
@@ -426,15 +426,15 @@ export function RmaModal({ open, onClose, orders, rma, onSave, nextRmaNumber }: 
         {/* ===== STEP 3: form ===== */}
         {step === 'form' && parent && (
           <>
-            <section className="border rounded-lg p-4">
-              <h3 className="text-sm font-bold text-secondary uppercase tracking-wide mb-3">Informações Gerais</h3>
+            <section className="border border-[#E2E8F1] rounded-xl p-4">
+              <h3 className="text-xs font-bold text-[#5B6B82] uppercase tracking-widest mb-3">Informações Gerais</h3>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 <div>
                   <Label>Nº RMA (auto)</Label>
-                  <Input readOnly className="bg-muted border-border font-semibold" value={rmaNumberDisplay} />
+                  <Input readOnly className="bg-[#F4F7FB] border-[#E2E8F1] font-semibold" value={rmaNumberDisplay} />
                 </div>
-                <div><Label>Cliente</Label><Input readOnly value={parent.customer} className="bg-muted border-border" /></div>
-                <div><Label>CPF/CNPJ</Label><Input readOnly value={parent.cnpj || '—'} className="bg-muted border-border" /></div>
+                <div><Label>Cliente</Label><Input readOnly value={parent.customer} className="bg-[#F4F7FB] border-[#E2E8F1]" /></div>
+                <div><Label>CPF/CNPJ</Label><Input readOnly value={parent.cnpj || '—'} className="bg-[#F4F7FB] border-[#E2E8F1]" /></div>
                 <div>
                   <Label>Data de Registro *</Label>
                   <Popover open={regDateOpen} onOpenChange={setRegDateOpen}>
@@ -454,7 +454,7 @@ export function RmaModal({ open, onClose, orders, rma, onSave, nextRmaNumber }: 
                 <div>
                   <Label>Empresa *</Label>
                   <Select value={company || ''} onValueChange={v => setCompany(v as Company)}>
-                    <SelectTrigger className="bg-white border-border"><SelectValue placeholder="Selecionar" /></SelectTrigger>
+                    <SelectTrigger className="bg-[#FBFCFE] border-[#E2E8F1]"><SelectValue placeholder="Selecionar" /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="Lucky Store">Lucky Store</SelectItem>
                       <SelectItem value="BTech">BTech</SelectItem>
@@ -465,7 +465,7 @@ export function RmaModal({ open, onClose, orders, rma, onSave, nextRmaNumber }: 
                 <div>
                   <Label>Vendedor *</Label>
                   <Select value={seller || ''} onValueChange={v => setSeller(v as Seller)}>
-                    <SelectTrigger className="bg-white border-border"><SelectValue placeholder="Selecionar" /></SelectTrigger>
+                    <SelectTrigger className="bg-[#FBFCFE] border-[#E2E8F1]"><SelectValue placeholder="Selecionar" /></SelectTrigger>
                     <SelectContent>
                       {vendedores.map(v => <SelectItem key={v.id} value={v.nome}>{v.nome}</SelectItem>)}
                     </SelectContent>
@@ -505,35 +505,35 @@ export function RmaModal({ open, onClose, orders, rma, onSave, nextRmaNumber }: 
                 </div>
                 <div>
                   <Label>Frete <span className="text-xs text-muted-foreground">(soma)</span></Label>
-                  <Input readOnly value={toBRL(freightTotal)} className="bg-muted border-border font-semibold" />
+                  <Input readOnly value={toBRL(freightTotal)} className="bg-[#F4F7FB] border-[#E2E8F1] font-semibold" />
                 </div>
               </div>
             </section>
 
-            <section className="border rounded-lg p-4">
+            <section className="border border-[#E2E8F1] rounded-xl p-4">
               <div className="flex justify-between items-center mb-3">
-                <h3 className="text-sm font-bold text-secondary uppercase tracking-wide">Produtos do RMA</h3>
-                <Button size="sm" onClick={addRmaItem} className="bg-secondary hover:bg-secondary/90">
+                <h3 className="text-xs font-bold text-[#5B6B82] uppercase tracking-widest">Produtos do RMA</h3>
+                <Button size="sm" onClick={addRmaItem} className="bg-[#2F6BFF] hover:bg-[#1E4FD8] text-white">
                   <Plus className="h-4 w-4 mr-1" /> Adicionar Item
                 </Button>
               </div>
               <div className="space-y-3">
                 {rmaItems.map(it => (
-                  <div key={it.id} className="border rounded-md p-3 bg-muted/20 grid grid-cols-1 md:grid-cols-4 gap-3 items-end">
+                  <div key={it.id} className="border border-[#E2E8F1] rounded-lg p-3 bg-[#F8FAFD] grid grid-cols-1 md:grid-cols-4 gap-3 items-end">
                     <div>
                       <Label>Produto</Label>
-                      <Input className="bg-white border-border" value={it.name}
+                      <Input className="bg-[#FBFCFE] border-[#E2E8F1]" value={it.name}
                         onChange={e => updateRmaItem(it.id, 'name', e.target.value)} onKeyDown={handleEnterBlur} />
                     </div>
                     <div>
                       <Label>Quantidade</Label>
-                      <Input type="number" min={1} className="bg-white border-border" value={it.quantity}
+                      <Input type="number" min={1} className="bg-[#FBFCFE] border-[#E2E8F1]" value={it.quantity}
                         onChange={e => updateRmaItem(it.id, 'quantity', parseInt(e.target.value) || 1)} onKeyDown={handleEnterBlur} />
                     </div>
                     <div>
                       <Label>Reparado por</Label>
                       <Input
-                        className="bg-white border-border"
+                        className="bg-[#FBFCFE] border-[#E2E8F1]"
                         value={it.repairedBy || ''}
                         onChange={e => updateRmaItem(it.id, 'repairedBy', e.target.value)}
                         onKeyDown={handleEnterBlur}
@@ -572,10 +572,10 @@ export function RmaModal({ open, onClose, orders, rma, onSave, nextRmaNumber }: 
               </div>
             </section>
 
-            <section className="border rounded-lg p-4">
+            <section className="border border-[#E2E8F1] rounded-xl p-4">
               <div className="flex justify-between items-center mb-3">
-                <h3 className="text-sm font-bold text-secondary uppercase tracking-wide">Frete</h3>
-                <Button size="sm" onClick={addFreight} className="bg-secondary hover:bg-secondary/90">
+                <h3 className="text-xs font-bold text-[#5B6B82] uppercase tracking-widest">Frete</h3>
+                <Button size="sm" onClick={addFreight} className="bg-[#2F6BFF] hover:bg-[#1E4FD8] text-white">
                   <Plus className="h-4 w-4 mr-1" /> Adicionar Frete
                 </Button>
               </div>
@@ -589,15 +589,15 @@ export function RmaModal({ open, onClose, orders, rma, onSave, nextRmaNumber }: 
                   <p className="text-sm text-muted-foreground text-center py-3">Nenhum frete adicionado</p>
                 )}
               </div>
-              <div className="mt-3 text-right text-sm font-semibold text-secondary">
+              <div className="mt-3 text-right text-sm font-semibold text-[#2F6BFF]">
                 Total: {toBRL(freightTotal)}
               </div>
             </section>
 
-            <section className="border rounded-lg p-4">
-              <h3 className="text-sm font-bold text-secondary uppercase tracking-wide mb-3">Observações</h3>
+            <section className="border border-[#E2E8F1] rounded-xl p-4">
+              <h3 className="text-xs font-bold text-[#5B6B82] uppercase tracking-widest mb-3">Observações</h3>
               <Textarea
-                className="bg-white border-border min-h-24"
+                className="bg-[#FBFCFE] border-[#E2E8F1] min-h-24"
                 value={observations}
                 onChange={e => setObservations(e.target.value)}
                 placeholder="Anotações sobre este RMA..."
@@ -612,7 +612,7 @@ export function RmaModal({ open, onClose, orders, rma, onSave, nextRmaNumber }: 
               <Button
                 onClick={handleSave}
                 disabled={isPending || rmaItems.length === 0}
-                className="bg-secondary hover:bg-secondary/90"
+                className="bg-[#2F6BFF] hover:bg-[#1E4FD8] text-white"
               >
                 {isPending ? 'Salvando...' : (isEdit ? 'Salvar Alterações' : 'Criar RMA')}
               </Button>
@@ -634,12 +634,12 @@ function RmaFreightRow({ idx, card, onChange, onRemove }: {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState('');
   return (
-    <div className="grid grid-cols-12 gap-2 items-center border rounded-md p-2 bg-muted/20">
-      <span className="col-span-1 text-xs font-bold text-secondary">#{idx + 1}</span>
-      <Input placeholder="Entregador" className="col-span-4 bg-white border-border"
+    <div className="grid grid-cols-12 gap-2 items-center border border-[#E2E8F1] rounded-lg p-2 bg-[#F8FAFD]">
+      <span className="col-span-1 text-xs font-bold text-[#5B6B82]">#{idx + 1}</span>
+      <Input placeholder="Entregador" className="col-span-4 bg-[#FBFCFE] border-[#E2E8F1]"
         value={card.deliveryPerson} onChange={e => onChange('deliveryPerson', e.target.value)} onKeyDown={handleEnterBlur} />
       <div className="col-span-3">
-        <Input placeholder="R$ 0,00" className="bg-white border-border"
+        <Input placeholder="R$ 0,00" className="bg-[#FBFCFE] border-[#E2E8F1]"
           value={editing ? draft : toBRL(card.value || 0)}
           onFocus={() => { setEditing(true); setDraft(card.value ? String(card.value) : ''); }}
           onBlur={() => { onChange('value', parseBRL(draft) || parseFloat(draft) || 0); setEditing(false); }}

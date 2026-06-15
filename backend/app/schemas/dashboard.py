@@ -34,6 +34,7 @@ class DashboardKpisResponse(BaseModel):
     imposto_compra: float
     imposto_venda: float
     outros_custos: float
+    custo_frete: float
 
 
 # ─── Breakdown ────────────────────────────────────────────────────────────────
@@ -151,6 +152,10 @@ class DailySeriesItem(BaseModel):
     faturamento: float
     lucro: float
     ano_anterior: float
+    custo: float = 0
+    gastos_fixos: float = 0
+    ganhos_financeiros: float = 0
+    fretes: float = 0
 
 
 class DailySeriesResponse(BaseModel):
@@ -172,3 +177,14 @@ class ProjectionsResponse(BaseModel):
     gap_floor: Optional[float]
     meta_diaria_dinamica: Optional[float]
     pct_meta: Optional[float]
+
+
+# ─── Card spend ───────────────────────────────────────────────────────────────
+
+class CardSpendItem(BaseModel):
+    card: str
+    total: float
+
+
+class CardSpendResponse(BaseModel):
+    items: List[CardSpendItem]

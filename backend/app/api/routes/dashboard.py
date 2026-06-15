@@ -19,6 +19,7 @@ from app.schemas.dashboard import (
     VendorGoalsListResponse,
     DailySeriesResponse,
     ProjectionsResponse,
+    CardSpendResponse,
 )
 from app.services import dashboard as svc
 
@@ -60,6 +61,15 @@ def breakdown_by_seller(
     _: User = Depends(get_current_user),
 ):
     return svc.get_breakdown_by_seller(db, **f)
+
+
+@router.get("/card-spend", response_model=CardSpendResponse)
+def card_spend(
+    f: dict = Depends(_filters),
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_user),
+):
+    return svc.get_card_spend(db, **f)
 
 
 @router.get("/daily-series", response_model=DailySeriesResponse)

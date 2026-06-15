@@ -15,10 +15,10 @@ describe('KpiCard', () => {
     expect(valueEl).toHaveClass('text-green-700');
   });
 
-  it('falls back to text-secondary when accent is not provided', () => {
+  it('falls back to the default ink color when accent is not provided', () => {
     render(<KpiCard label="Revenue" value="R$ 1.000" />);
     const valueEl = screen.getByText('R$ 1.000');
-    expect(valueEl).toHaveClass('text-secondary');
+    expect(valueEl).toHaveClass('text-[#16273F]');
   });
 
   it('renders sub text when provided', () => {

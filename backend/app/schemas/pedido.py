@@ -121,6 +121,7 @@ class PedidoCreate(BaseModel):
     forma_pagamento_efetiva: Optional[str] = None
     num_parcelas_efetivas: Optional[int] = None
     plano_parcelas: Optional[List[Any]] = None
+    plano_parcelas_pedido: Optional[List[Any]] = None
 
     @field_validator("status")
     @classmethod
@@ -146,6 +147,7 @@ class PedidoUpdate(BaseModel):
     observacao: Optional[str] = None
     fornecedor_principal: Optional[str] = None
     nota_fiscal_fornecedor: Optional[str] = None
+    formas_pagamento: Optional[List[FormaPagamentoIn]] = None
     custo: Optional[CustoPedidoIn] = None
     data_pagamento: Optional[date] = None
     multa: Optional[Decimal] = None
@@ -153,6 +155,7 @@ class PedidoUpdate(BaseModel):
     forma_pagamento_efetiva: Optional[str] = None
     num_parcelas_efetivas: Optional[int] = None
     plano_parcelas: Optional[List[Any]] = None
+    plano_parcelas_pedido: Optional[List[Any]] = None
 
 
 class StatusChangeRequest(BaseModel):
@@ -243,6 +246,7 @@ class PedidoListItemResponse(BaseModel):
     forma_pagamento_efetiva: Optional[str] = None
     num_parcelas_efetivas: Optional[int] = None
     plano_parcelas: Optional[List[Any]] = None
+    plano_parcelas_pedido: Optional[List[Any]] = None
 
     class Config:
         from_attributes = True

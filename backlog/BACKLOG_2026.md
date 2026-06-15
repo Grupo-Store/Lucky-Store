@@ -883,15 +883,16 @@
 **Priority:** P2 - Nice to have  
 **Responsável:** → **Gustavo**
 
-- [ ] Create Financial Calendar page
-  - [ ] Calendar view of month
-  - [ ] Color-coded entries (expense, payment, penalty, interest)
-  - [ ] Click to view details
-  - [ ] Monthly summary
-- [ ] Display expense entries
-- [ ] Display order penalties (MULTA)
-- [ ] Display order interest (JUROS)
-- [ ] Display installment entries
+**Frontend Team Tasks:**
+- [x] Create Financial Calendar page
+  - [x] Calendar view of month
+  - [x] Color-coded entries (expense, payment, penalty, interest)
+  - [x] Click to view details
+  - [x] Monthly summary
+- [x] Display expense entries
+- [x] Display order penalties (MULTA)
+- [x] Display order interest (JUROS)
+- [x] Display installment entries
 
 **Effort:** 1 frontend dev, 3-4 days  
 **Success Criteria:**
