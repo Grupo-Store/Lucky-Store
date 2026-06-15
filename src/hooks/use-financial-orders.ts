@@ -2,6 +2,12 @@ import { useQuery } from '@tanstack/react-query'
 import { apiFetch } from '@/lib/api'
 import type { PedidoListItem, PedidoListResponse } from './use-orders-query'
 import type { Order, OrderStatus, PaymentMethod, Company, ItemStatus } from '@/store/OrderStore'
+import { FORMA_PAGAMENTO_MAP } from '@/api/storeConfig'
+
+// forma da API ('credito') → PaymentMethod do frontend ('Credit Card')
+const FORMA_TO_PAYMENT: Record<string, PaymentMethod> = Object.fromEntries(
+  Object.entries(FORMA_PAGAMENTO_MAP).map(([k, v]) => [v, k as PaymentMethod])
+) as Record<string, PaymentMethod>
 
 export function adaptPedidoToOrder(p: PedidoListItem): Order {
   return {
@@ -18,7 +24,9 @@ export function adaptPedidoToOrder(p: PedidoListItem): Order {
     supplier: p.fornecedor_principal ?? '',
     invoice: p.numero_nf ?? '',
     invoiceSupplier: p.nota_fiscal_fornecedor ?? '',
-    paymentMethods: (p.formas_pagamento ?? []).map(fp => fp.forma as PaymentMethod),
+    paymentMethods: (p.formas_pagamento ?? [])
+      .map(fp => FORMA_TO_PAYMENT[fp.forma] ?? (fp.forma as PaymentMethod))
+      .filter(Boolean) as PaymentMethod[],
     installments: p.parcelas ?? 1,
     deliveryDate: p.data_entrega,
     status: p.status as OrderStatus,
@@ -55,14 +63,22 @@ export function adaptPedidoToOrder(p: PedidoListItem): Order {
         value: Number(f.valor) || 0,
         deliveryDate: f.data_frete,
       })),
-    paymentDate: (p as any).data_pagamento ?? undefined,
-    penaltyValue: Number((p as any).valor_multa) || 0,
-    interestValue: Number((p as any).valor_juros) || 0,
-    paymentMethod: ((p as any).metodo_pagamento as PaymentMethod) || undefined,
-    paymentInstallmentPlan: ((p as any).plano_parcelas ?? []).map((x: { date: string; value: number }) => ({
+    paymentDate: p.data_pagamento ?? undefined,
+    penaltyValue: Number(p.multa) || 0,
+    interestValue: Number(p.juros) || 0,
+    paymentMethod: p.forma_pagamento_efetiva
+      ? (FORMA_TO_PAYMENT[p.forma_pagamento_efetiva] ?? (p.forma_pagamento_efetiva as PaymentMethod))
+      : undefined,
+    paymentInstallments: p.num_parcelas_efetivas ?? 1,
+    paymentInstallmentPlan: (p.plano_parcelas ?? []).map(x => ({
       date: x.date,
       value: Number(x.value) || 0,
     })),
+    orderInstallmentPlan: (p.plano_parcelas_pedido ?? []).map(x => ({
+      date: x.date,
+      value: Number(x.value) || 0,
+    })),
+    directSupplyItems: [],
   }
 }
 

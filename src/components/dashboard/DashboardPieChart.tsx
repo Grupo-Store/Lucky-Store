@@ -1,20 +1,20 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { PieChart, Pie, Cell, Legend, Tooltip, ResponsiveContainer } from 'recharts';
 
-const PIE_COLORS = ['#3b82f6', '#f59e0b', '#10b981'];
+const PIE_COLORS = ['#f59e0b', '#3b82f6', '#10b981'];
 const BRL = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
 interface DashboardPieChartProps {
-  impostoCompra: number;
-  impostoVenda: number;
+  custoPedidos: number;
+  custoFrete: number;
   outrosCustos: number;
 }
 
-export function DashboardPieChart({ impostoCompra, impostoVenda, outrosCustos }: DashboardPieChartProps) {
+export function DashboardPieChart({ custoPedidos, custoFrete, outrosCustos }: DashboardPieChartProps) {
   const data = [
-    { name: 'Imposto de Compra', value: impostoCompra },
-    { name: 'Imposto de Venda', value: impostoVenda },
-    { name: 'Outros Custos', value: outrosCustos },
+    { name: 'Pedidos', value: custoPedidos },
+    { name: 'Fretes', value: custoFrete },
+    { name: 'Despesas', value: outrosCustos },
   ].filter(d => d.value > 0);
 
   return (

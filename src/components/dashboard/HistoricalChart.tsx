@@ -14,10 +14,13 @@ import { cn } from '@/lib/utils';
 import { useDailyHistorical, type DashboardQueryParams } from '@/hooks/use-dashboard-query';
 
 const LINE_CONFIG = [
-  { key: 'faturamento',  label: 'Faturamento',       color: '#0f4c5c' },
-  { key: 'custo',        label: 'Custo',              color: '#ef4444' },
-  { key: 'lucro',        label: 'Lucro',              color: '#16a34a' },
-  { key: 'ano_anterior', label: 'Fat. Ano Anterior',  color: '#9ca3af', dashed: true },
+  { key: 'faturamento',         label: 'Faturamento',        color: '#0f4c5c' },
+  { key: 'custo',               label: 'Custo',              color: '#ef4444' },
+  { key: 'lucro',               label: 'Lucro',              color: '#16a34a' },
+  { key: 'gastos_fixos',        label: 'Gastos Fixos',       color: '#f59e0b' },
+  { key: 'ganhos_financeiros',  label: 'Ganhos Financeiros', color: '#2F6BFF' },
+  { key: 'fretes',              label: 'Fretes',             color: '#9b6bff' },
+  { key: 'ano_anterior',        label: 'Fat. Ano Anterior',  color: '#9ca3af', dashed: true },
 ] as const;
 
 type LineKey = (typeof LINE_CONFIG)[number]['key'];
@@ -39,6 +42,9 @@ export function HistoricalChart({ params }: HistoricalChartProps) {
     faturamento: true,
     custo: true,
     lucro: true,
+    gastos_fixos: true,
+    ganhos_financeiros: true,
+    fretes: true,
     ano_anterior: true,
   });
 
@@ -47,8 +53,11 @@ export function HistoricalChart({ params }: HistoricalChartProps) {
   const chartData = (data?.items ?? []).map(item => ({
     date: formatDate(item.data),
     faturamento: Number(item.faturamento),
-    custo: 0,
+    custo: Number(item.custo),
     lucro: Number(item.lucro),
+    gastos_fixos: Number(item.gastos_fixos),
+    ganhos_financeiros: Number(item.ganhos_financeiros),
+    fretes: Number(item.fretes),
     ano_anterior: Number(item.ano_anterior),
   }));
 
@@ -87,9 +96,9 @@ export function HistoricalChart({ params }: HistoricalChartProps) {
 
       <CardContent>
         {isLoading ? (
-          <Skeleton className="h-[280px] w-full" />
+          <Skeleton className="h-[440px] w-full" />
         ) : (
-          <ResponsiveContainer width="100%" height={280}>
+          <ResponsiveContainer width="100%" height={440}>
             <LineChart data={chartData} margin={{ top: 4, right: 8, left: 8, bottom: 4 }}>
               <CartesianGrid strokeDasharray="3 3" vertical={false} />
               <XAxis

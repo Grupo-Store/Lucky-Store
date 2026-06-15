@@ -79,6 +79,13 @@ class PedidoService:
             observacao=data.observacao,
             fornecedor_principal=data.fornecedor_principal,
             nota_fiscal_fornecedor=data.nota_fiscal_fornecedor,
+            data_pagamento=data.data_pagamento,
+            multa=data.multa,
+            juros=data.juros,
+            forma_pagamento_efetiva=data.forma_pagamento_efetiva,
+            num_parcelas_efetivas=data.num_parcelas_efetivas,
+            plano_parcelas=data.plano_parcelas,
+            plano_parcelas_pedido=data.plano_parcelas_pedido,
             created_by=current_user_id,
         )
         db.add(pedido)
@@ -198,9 +205,19 @@ class PedidoService:
 
         dump = data.model_dump(exclude_none=True)
         custo_data = dump.pop('custo', None)
+        formas_data = dump.pop('formas_pagamento', None)
 
         for field, value in dump.items():
             setattr(pedido, field, value)
+
+        # Sincroniza formas de pagamento (relação) — substitui o conjunto atual.
+        if formas_data is not None:
+            for fp in list(pedido.formas_pagamento):
+                db.delete(fp)
+            pedido.formas_pagamento = []
+            db.flush()
+            for fp in formas_data:
+                db.add(PedidoFormaPagamento(id_pedido=pedido.id, forma=fp['forma']))
 
         if custo_data:
             if pedido.custo:

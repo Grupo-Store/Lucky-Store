@@ -23,11 +23,9 @@ const DashboardFilterCtx = createContext<Ctx | null>(null);
 
 export function DashboardFilterProvider({ children }: { children: React.ReactNode }) {
   const today = new Date();
-  const defaultMonth = today.getMonth() === 0 ? 11 : today.getMonth() - 1;
-  const defaultYear  = today.getMonth() === 0 ? today.getFullYear() - 1 : today.getFullYear();
   const [filters, setFilters] = useState<DashboardFilters>({
-    year: defaultYear,
-    month: defaultMonth,
+    year: today.getFullYear(),
+    month: today.getMonth(),
   });
   const [mode, setMode] = useState<DashboardViewMode>('company');
   const [section, setSection] = useState<DashboardSection>('geral');

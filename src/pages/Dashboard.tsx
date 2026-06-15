@@ -22,11 +22,13 @@ import { CompanyBreakdownTable } from '@/components/dashboard/CompanyBreakdownTa
 import { SellerCard } from '@/components/dashboard/SellerCard';
 import { SellerGoalChart } from '@/components/dashboard/SellerGoalChart';
 import { HistoricalChart } from '@/components/dashboard/HistoricalChart';
+import { CardSpendChart } from '@/components/dashboard/CardSpendChart';
 import {
   useDashboardKpis,
   useDashboardProjections,
   useDashboardBreakdownByCompany,
   useDashboardBreakdownBySeller,
+  useDashboardCardSpend,
   useDashboardGoals,
   useUpsertGoal,
   useDeleteGoal,
@@ -367,6 +369,7 @@ export default function Dashboard() {
   const { data: proj,      isLoading: projLoading,      isError: projError }      = useDashboardProjections(params);
   const { data: byCompany, isLoading: byCompanyLoading, isError: byCompanyError } = useDashboardBreakdownByCompany(params);
   const { data: bySeller,  isLoading: bySellerLoading,  isError: bySellerError }  = useDashboardBreakdownBySeller(params);
+  const { data: cardSpend } = useDashboardCardSpend(params);
 
   useEffect(() => {
     if (kpisError || projError || byCompanyError || bySellerError) {
@@ -444,7 +447,7 @@ export default function Dashboard() {
   const datePicker = (
     <Popover open={dateOpen} onOpenChange={setDateOpen}>
       <PopoverTrigger asChild>
-        <Button variant="outline" className="gap-2">
+        <Button variant="outline" className="gap-2" style={{ borderColor: '#E2E8F1', borderRadius: 10, color: '#16273F' }}>
           <CalendarIcon className="h-4 w-4" />
           {globalFilters.rangeFrom && globalFilters.rangeTo
             ? `${format(globalFilters.rangeFrom, 'dd/MM/yy')} – ${format(globalFilters.rangeTo, 'dd/MM/yy')}`
@@ -456,13 +459,13 @@ export default function Dashboard() {
           <button
             onClick={() => setDateTab('data')}
             className={cn('flex-1 px-4 py-2 text-sm font-semibold transition',
-              dateTab === 'data' ? 'bg-secondary text-secondary-foreground' : 'text-muted-foreground hover:bg-muted')}>
+              dateTab === 'data' ? 'bg-[#2F6BFF] text-white' : 'text-muted-foreground hover:bg-muted')}>
             Data
           </button>
           <button
             onClick={() => setDateTab('periodo')}
             className={cn('flex-1 px-4 py-2 text-sm font-semibold transition',
-              dateTab === 'periodo' ? 'bg-secondary text-secondary-foreground' : 'text-muted-foreground hover:bg-muted')}>
+              dateTab === 'periodo' ? 'bg-[#2F6BFF] text-white' : 'text-muted-foreground hover:bg-muted')}>
             Período
           </button>
         </div>
@@ -511,32 +514,34 @@ export default function Dashboard() {
 
   // ─── Filter row ────────────────────────────────────────────────────────────
   const filterRow = (
-    <div className="bg-card border rounded-xl px-4 py-3 flex items-center justify-between gap-4 flex-wrap">
+    <div style={{ background: '#fff', border: '1px solid #E2E8F1', borderRadius: 16, padding: '12px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', boxShadow: '0 4px 16px -8px rgba(13,33,66,.08)' }}>
       {/* Company tabs */}
       <div className="flex items-center gap-1 flex-wrap">
         <button
           onClick={() => setCompany('all')}
-          className={cn(
-            'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-all',
-            company === 'all'
-              ? 'bg-secondary text-secondary-foreground'
-              : 'text-muted-foreground hover:text-foreground'
-          )}
+          style={{
+            display: 'flex', alignItems: 'center', gap: 6,
+            padding: '7px 14px', borderRadius: 10, fontSize: 13, fontWeight: 500,
+            border: 'none', cursor: 'pointer', transition: 'all .15s',
+            background: company === 'all' ? '#0B1626' : 'transparent',
+            color: company === 'all' ? '#fff' : '#5B6B82',
+          }}
         >
-          <SlidersHorizontal className="h-3.5 w-3.5" />
+          <SlidersHorizontal style={{ width: 14, height: 14 }} />
           Geral
-          <span className="text-[10px] bg-muted px-1 rounded ml-0.5">3</span>
+          <span style={{ fontSize: 10, background: company === 'all' ? 'rgba(255,255,255,.18)' : '#EDF1F7', padding: '1px 5px', borderRadius: 4, marginLeft: 2 }}>3</span>
         </button>
         {(['Lucky Store', 'BTech', 'AJJ'] as CompanyKey[]).map(c => (
           <button
             key={c}
             onClick={() => setCompany(c)}
-            className={cn(
-              'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-all',
-              company === c
-                ? 'bg-secondary text-secondary-foreground'
-                : 'text-muted-foreground hover:text-foreground'
-            )}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 6,
+              padding: '7px 14px', borderRadius: 10, fontSize: 13, fontWeight: 500,
+              border: 'none', cursor: 'pointer', transition: 'all .15s',
+              background: company === c ? '#0B1626' : 'transparent',
+              color: company === c ? '#fff' : '#5B6B82',
+            }}
           >
             <span className={cn('w-2 h-2 rounded-full shrink-0', COMPANY_DOT[c])} />
             {c}
@@ -548,7 +553,11 @@ export default function Dashboard() {
       {datePicker}
 
       {/* Configurar Metas */}
-      <Button onClick={() => setGoalsOpen(true)} className="gap-1.5 shrink-0">
+      <Button
+        onClick={() => setGoalsOpen(true)}
+        className="gap-1.5 shrink-0"
+        style={{ background: 'linear-gradient(135deg, #2F6BFF 0%, #1E4FD8 100%)', border: 'none', color: '#fff', borderRadius: 10, boxShadow: '0 6px 18px -6px rgba(47,107,255,.5)' }}
+      >
         <Target className="h-4 w-4" /> Configurar Metas
       </Button>
     </div>
@@ -592,14 +601,14 @@ export default function Dashboard() {
 
               {/* RESUMO DO MÊS */}
               <div className="space-y-3">
-                <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">Resumo do Mês</p>
+                <p style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.15em', textTransform: 'uppercase', color: '#5B6B82' }}>Resumo do Mês</p>
                 {kpisLoading ? kpiSkeleton(4) : (
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                     <KpiCard
                       label="Total de Pedidos"
                       value={String(kpis?.num_pedidos ?? 0)}
                       sub={`${(kpis?.num_pedidos ?? 0) - (kpis?.num_cancelamentos ?? 0)} concluídos · ${kpis?.num_cancelamentos ?? 0} cancelado${(kpis?.num_cancelamentos ?? 0) !== 1 ? 's' : ''}`}
-                      accent="text-secondary"
+                      accent="text-[#2F6BFF]"
                       borderAccent="border-l-4 border-l-green-500"
                     />
                     <KpiCard
@@ -624,7 +633,7 @@ export default function Dashboard() {
                       label="Ticket Médio"
                       value={BRL(kpis?.ticket_venda ?? 0)}
                       sub="Por pedido concluído"
-                      accent="text-secondary"
+                      accent="text-[#2F6BFF]"
                       borderAccent="border-l-4 border-l-blue-500"
                     />
                   </div>
@@ -633,7 +642,7 @@ export default function Dashboard() {
 
               {/* RESULTADO FINANCEIRO */}
               <div className="space-y-3">
-                <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">Resultado Financeiro</p>
+                <p style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.15em', textTransform: 'uppercase', color: '#5B6B82' }}>Resultado Financeiro</p>
                 {kpisLoading ? kpiSkeleton(4) : (
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                     <KpiCard
@@ -656,10 +665,10 @@ export default function Dashboard() {
                       badge="= calculado"
                     />
                     {/* Lucro Líquido — col 4 rows 1-2 no desktop, card normal no mobile */}
-                    <div className="md:row-span-2 rounded-xl bg-secondary text-secondary-foreground p-5 flex flex-col justify-between">
-                      <p className="text-xs font-semibold uppercase tracking-widest opacity-70">Lucro Líquido</p>
-                      <p className="text-3xl font-bold leading-tight my-2">{BRL(lucroLiquido)}</p>
-                      <div className="flex items-center flex-wrap gap-x-1.5 gap-y-1 text-xs opacity-80">
+                    <div className="md:row-span-2 p-5 flex flex-col justify-between" style={{ borderRadius: 14, background: 'linear-gradient(150deg, #0B1626 0%, #0E1C31 65%, #0A1422 100%)', color: '#EAF1FB', boxShadow: '0 8px 24px -8px rgba(11,22,38,.45)' }}>
+                      <p style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.1em', textTransform: 'uppercase', opacity: 0.65, margin: 0 }}>Lucro Líquido</p>
+                      <p style={{ fontSize: '1.8rem', fontWeight: 700, lineHeight: 1.2, margin: '10px 0', fontFamily: "'Space Grotesk', sans-serif" }}>{BRL(lucroLiquido)}</p>
+                      <div className="flex items-center flex-wrap gap-x-1.5 gap-y-1 text-xs" style={{ opacity: 0.75 }}>
                         <span className="flex items-center gap-1">
                           <span className="w-2 h-2 rounded-full bg-green-400 inline-block" />
                           Lucro bruto
@@ -698,8 +707,8 @@ export default function Dashboard() {
               </div>
 
               <DashboardPieChart
-                impostoCompra={kpis?.imposto_compra ?? 0}
-                impostoVenda={kpis?.imposto_venda ?? 0}
+                custoPedidos={kpis?.custo ?? 0}
+                custoFrete={kpis?.custo_frete ?? 0}
                 outrosCustos={kpis?.outros_custos ?? 0}
               />
               <HistoricalChart params={params} />
@@ -711,15 +720,18 @@ export default function Dashboard() {
                 <>
                   {/* ── VENDAS ── */}
                   {section === 'vendas' && (
-                    <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                      <KpiCard label="Pedidos" value={String(kpis?.num_pedidos ?? 0)} />
-                      <KpiCard label="Margem" value={PCT(kpis?.margem ?? 0)} />
-                      <KpiCard
-                        label="Cancelamentos"
-                        value={String(kpis?.num_cancelamentos ?? 0)}
-                        sub={`Perda: ${BRL(kpis?.valor_cancelamentos ?? 0)}`}
-                        accent="text-red-600"
-                      />
+                    <div className="space-y-4">
+                      <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                        <KpiCard label="Pedidos" value={String(kpis?.num_pedidos ?? 0)} />
+                        <KpiCard label="Margem" value={PCT(kpis?.margem ?? 0)} />
+                        <KpiCard
+                          label="Cancelamentos"
+                          value={String(kpis?.num_cancelamentos ?? 0)}
+                          sub={`Perda: ${BRL(kpis?.valor_cancelamentos ?? 0)}`}
+                          accent="text-red-600"
+                        />
+                      </div>
+                      <CardSpendChart items={cardSpend?.items ?? []} />
                     </div>
                   )}
 
@@ -778,7 +790,7 @@ export default function Dashboard() {
                           label="Projeção do Mês"
                           value={BRL(proj?.projecao_mes ?? 0)}
                           sub={`Média/dia: ${BRL(proj?.media_diaria ?? 0)}`}
-                          accent="text-secondary"
+                          accent="text-[#2F6BFF]"
                         />
                         <KpiCard
                           label="Gap para Piso"
@@ -806,14 +818,18 @@ export default function Dashboard() {
       {mode === 'seller' && (
         <div className="space-y-4">
           {/* Seller filter row */}
-          <div className="bg-card border rounded-xl px-4 py-3 flex items-center justify-between gap-4 flex-wrap">
+          <div style={{ background: '#fff', border: '1px solid #E2E8F1', borderRadius: 16, padding: '12px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', boxShadow: '0 4px 16px -8px rgba(13,33,66,.08)' }}>
             {datePicker}
-            <Button onClick={() => setGoalsOpen(true)} className="gap-1.5 shrink-0">
+            <Button
+              onClick={() => setGoalsOpen(true)}
+              className="gap-1.5 shrink-0"
+              style={{ background: 'linear-gradient(135deg, #2F6BFF 0%, #1E4FD8 100%)', border: 'none', color: '#fff', borderRadius: 10, boxShadow: '0 6px 18px -6px rgba(47,107,255,.5)' }}
+            >
               <Target className="h-4 w-4" /> Configurar Metas
             </Button>
           </div>
 
-          <h3 className="text-lg font-semibold text-secondary">Performance por Vendedor</h3>
+          <h3 style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 700, fontSize: 18, color: '#16273F', margin: 0 }}>Performance por Vendedor</h3>
 
           {bySellerLoading ? (
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 animate-pulse">

@@ -37,7 +37,8 @@ class Pedido(Base):
     juros = Column(Numeric(12, 2), nullable=True)
     forma_pagamento_efetiva = Column(String(50), nullable=True)
     num_parcelas_efetivas = Column(Integer, nullable=True)
-    plano_parcelas = Column(JSONB, nullable=True)
+    plano_parcelas = Column(JSONB, nullable=True)          # parcelas de multa/juros (Financeiro)
+    plano_parcelas_pedido = Column(JSONB, nullable=True)   # parcelas do valor do pedido (Informações Gerais)
 
     created_by = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)

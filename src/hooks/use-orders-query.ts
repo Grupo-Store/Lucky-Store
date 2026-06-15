@@ -52,6 +52,7 @@ export interface PedidoListItem {
   forma_pagamento_efetiva: string | null
   num_parcelas_efetivas: number | null
   plano_parcelas: { date: string; value: number }[] | null
+  plano_parcelas_pedido: { date: string; value: number }[] | null
 }
 
 export interface PedidoListResponse {

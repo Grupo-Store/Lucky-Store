@@ -55,7 +55,8 @@ function AuditSearchPanel({
             onKeyDown={e => e.key === 'Enter' && handleBuscar()}
           />
         </div>
-        <Button onClick={handleBuscar} disabled={!input.trim() || loading}>
+        <Button onClick={handleBuscar} disabled={!input.trim() || loading}
+          className="bg-[#2F6BFF] hover:bg-[#1E4FD8] text-white">
           {loading ? 'Buscando…' : 'Buscar'}
         </Button>
       </div>

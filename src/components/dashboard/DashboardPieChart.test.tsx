@@ -13,21 +13,21 @@ vi.mock('recharts', () => ({
 
 describe('DashboardPieChart', () => {
   it('renderiza o título "Custo Total — Composição"', () => {
-    render(<DashboardPieChart impostoCompra={100} impostoVenda={200} outrosCustos={50} />);
+    render(<DashboardPieChart custoPedidos={100} custoFrete={200} outrosCustos={50} />);
     expect(screen.getByText('Custo Total — Composição')).toBeInTheDocument();
   });
 
   it('renderiza os 3 nomes de slice quando todos os valores > 0', () => {
-    render(<DashboardPieChart impostoCompra={100} impostoVenda={200} outrosCustos={50} />);
-    expect(screen.getByText('Imposto de Compra')).toBeInTheDocument();
-    expect(screen.getByText('Imposto de Venda')).toBeInTheDocument();
-    expect(screen.getByText('Outros Custos')).toBeInTheDocument();
+    render(<DashboardPieChart custoPedidos={100} custoFrete={200} outrosCustos={50} />);
+    expect(screen.getByText('Pedidos')).toBeInTheDocument();
+    expect(screen.getByText('Fretes')).toBeInTheDocument();
+    expect(screen.getByText('Despesas')).toBeInTheDocument();
   });
 
-  it('filtra slice com value = 0 (outrosCustos=0 não aparece)', () => {
-    render(<DashboardPieChart impostoCompra={100} impostoVenda={200} outrosCustos={0} />);
-    expect(screen.getByText('Imposto de Compra')).toBeInTheDocument();
-    expect(screen.getByText('Imposto de Venda')).toBeInTheDocument();
-    expect(screen.queryByText('Outros Custos')).not.toBeInTheDocument();
+  it('filtra slice com value = 0 (Despesas=0 não aparece)', () => {
+    render(<DashboardPieChart custoPedidos={100} custoFrete={200} outrosCustos={0} />);
+    expect(screen.getByText('Pedidos')).toBeInTheDocument();
+    expect(screen.getByText('Fretes')).toBeInTheDocument();
+    expect(screen.queryByText('Despesas')).not.toBeInTheDocument();
   });
 });

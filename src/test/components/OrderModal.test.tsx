@@ -97,7 +97,7 @@ describe('OrderModal — create mode', () => {
       />,
       { wrapper: makeWrapper() }
     );
-    expect(screen.getByText(/Novo Pedido/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/Novo Pedido/i).length).toBeGreaterThan(0);
   });
 
   it('shows the "Criar Pedido" save button', () => {
@@ -172,7 +172,7 @@ describe('OrderModal — edit mode', () => {
       />,
       { wrapper: makeWrapper() }
     );
-    expect(screen.getByText(/Editar Pedido/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/Editar Pedido/i).length).toBeGreaterThan(0);
   });
 
   it('shows the "Salvar Alterações" button in edit mode', () => {
