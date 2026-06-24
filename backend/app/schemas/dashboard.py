@@ -71,6 +71,7 @@ class GoalCreate(BaseModel):
     ano: int
     mes: int
     id_loja: UUID
+    tipo: str = "faturamento"
     target: Decimal
     floor: Optional[Decimal] = None
 
@@ -95,6 +96,7 @@ class GoalResponse(BaseModel):
     mes: int
     id_loja: UUID
     nome_loja: Optional[str] = None
+    tipo: str
     target: float
     floor: Optional[float]
 
@@ -111,6 +113,7 @@ class VendorGoalCreate(BaseModel):
     ano: int
     mes: int
     id_vendedor: UUID
+    tipo: str = "faturamento"
     target: Decimal
     floor: Optional[Decimal] = None
 
@@ -135,6 +138,7 @@ class VendorGoalResponse(BaseModel):
     mes: int
     id_vendedor: UUID
     nome_vendedor: Optional[str] = None
+    tipo: str
     target: float
     floor: Optional[float]
 
@@ -177,6 +181,13 @@ class ProjectionsResponse(BaseModel):
     gap_floor: Optional[float]
     meta_diaria_dinamica: Optional[float]
     pct_meta: Optional[float]
+    # Lucro líquido goal fields
+    meta_lucro_target: Optional[float] = None
+    meta_lucro_floor: Optional[float] = None
+    gap_lucro_target: Optional[float] = None
+    gap_lucro_floor: Optional[float] = None
+    pct_meta_lucro: Optional[float] = None
+    meta_lucro_diaria_dinamica: Optional[float] = None
 
 
 # ─── Card spend ───────────────────────────────────────────────────────────────
