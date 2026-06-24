@@ -221,6 +221,7 @@ export interface Order {
   salesTaxValue: number;
   /** Final sales value entered by user */
   salesValue: number;
+  refundTotal?: number;
   items: OrderItem[];
   directSupplyItems: DirectSupplyOrderItem[];
   /** Freight cards for non-RMA orders */

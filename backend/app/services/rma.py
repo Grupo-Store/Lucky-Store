@@ -266,6 +266,12 @@ class RmaService:
         item.status = data.new_status
         if data.consertado_por is not None:
             item.consertado_por = data.consertado_por
+        if data.valor_estornado is not None:
+            item.valor_estornado = data.valor_estornado
+        if data.data_estorno is not None:
+            item.data_estorno = data.data_estorno
+        if data.motivo_estorno is not None:
+            item.motivo_estorno = data.motivo_estorno
 
         db.add(StatusHistory(
             entity_type=EntityType.ITEM_RMA,

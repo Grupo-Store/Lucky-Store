@@ -248,6 +248,7 @@ export function pedidoListToOrder(item: PedidoListItem): Order {
     salesTaxPercent:    parseFloat(item.custo?.pct_imposto_venda      ?? '0') || 0,
     salesTaxValue:      parseFloat(item.custo?.imposto_venda          ?? '0') || 0,
     salesValue: item.valor_venda ?? 0,
+    refundTotal: parseFloat(String(item.valor_total_estornado ?? '0')) || 0,
     items: (item.produtos ?? []).filter(p => !p.is_direct_supply).map(p => ({
       id: p.id,
       name: p.descricao,

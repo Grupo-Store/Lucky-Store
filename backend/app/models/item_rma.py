@@ -1,7 +1,7 @@
 import uuid
 import enum
 from datetime import datetime
-from sqlalchemy import Column, String, Integer, Text, DateTime, ForeignKey, UniqueConstraint, Enum as SQLEnum
+from sqlalchemy import Column, String, Integer, Text, DateTime, Date, ForeignKey, UniqueConstraint, Enum as SQLEnum, Numeric
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 from app.database import Base
@@ -31,6 +31,9 @@ class ItemRma(Base):
     quantidade = Column(Integer, nullable=False)
     status = Column(SQLEnum(ItemRmaStatus, native_enum=False, values_callable=lambda x: [e.value for e in x]), nullable=False, default=ItemRmaStatus.NOT_RECEIVED)
     consertado_por = Column(String(255), nullable=True)
+    valor_estornado = Column(Numeric(12, 2), nullable=True)
+    data_estorno = Column(Date, nullable=True)
+    motivo_estorno = Column(String(255), nullable=True)
 
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)

@@ -1,5 +1,6 @@
 from pydantic import BaseModel, field_validator
 from datetime import date, datetime
+from decimal import Decimal
 from uuid import UUID
 from typing import Optional, List
 from app.models.item_rma import ItemRmaStatus
@@ -22,6 +23,9 @@ class ItemRmaCreate(BaseModel):
 class ItemRmaStatusUpdate(BaseModel):
     new_status: ItemRmaStatus
     consertado_por: Optional[str] = None
+    valor_estornado: Optional[Decimal] = None
+    data_estorno: Optional[date] = None
+    motivo_estorno: Optional[str] = None
 
 
 class ItemRmaResponse(BaseModel):
@@ -32,6 +36,9 @@ class ItemRmaResponse(BaseModel):
     quantidade: int
     status: ItemRmaStatus
     consertado_por: Optional[str]
+    valor_estornado: Optional[Decimal] = None
+    data_estorno: Optional[date] = None
+    motivo_estorno: Optional[str] = None
     created_at: datetime
     updated_at: datetime
 
