@@ -275,7 +275,7 @@ export function OrderModal({ open, onClose, order, onSave, nextOS, prefill }: Pr
     const cur = form.paymentMethods || [];
     set('paymentMethods', cur.includes(m) ? cur.filter(x => x !== m) : [...cur, m]);
   };
-  const hasCredit = (form.paymentMethods || []).includes('Credit Card');
+  const hasCredit = (form.paymentMethods || []).includes('Credit Card') || (form.paymentMethods || []).includes('Boleto');
 
   /* ---------------- Cancellation ---------------- */
   const handleCancelToggle = (v: boolean) => {
@@ -1236,7 +1236,7 @@ function PagamentoSection({ form, set }: { form: Partial<Order>; set: (k: keyof 
   const [payDateOpen, setPayDateOpen] = useState(false);
 
   // ── Conjunto A: parcelas do VALOR DO PEDIDO (Informações Gerais → Crédito) ──
-  const orderIsCredit = (form.paymentMethods || []).includes('Credit Card');
+  const orderIsCredit = (form.paymentMethods || []).includes('Credit Card') || (form.paymentMethods || []).includes('Boleto');
   const orderN = orderIsCredit ? (form.installments || 0) : 0;
   const orderPlan = form.orderInstallmentPlan || [];
   const baseValue = form.salesValue || 0;
@@ -1257,7 +1257,7 @@ function PagamentoSection({ form, set }: { form: Partial<Order>; set: (k: keyof 
   };
 
   // ── Conjunto B: parcelas de MULTA/JUROS (Financeiro → Crédito) ──
-  const chargeIsCredit = form.paymentMethod === 'Credit Card';
+  const chargeIsCredit = form.paymentMethod === 'Credit Card' || form.paymentMethod === 'Boleto';
   const chargeN = chargeIsCredit ? (form.paymentInstallments || 0) : 0;
   const chargePlan = form.paymentInstallmentPlan || [];
   const multa = form.penaltyValue || 0;
