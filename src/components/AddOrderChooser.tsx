@@ -296,8 +296,8 @@ export function AddOrderChooser({ open, onClose, onChooseNew, onChooseFromQuote 
                     <TableHead className="w-10"></TableHead>
                     <TableHead>Item</TableHead>
                     <TableHead>Qtd</TableHead>
-                    <TableHead className="text-right">Val. Cotação</TableHead>
-                    <TableHead className="text-right">Val. Fechamento</TableHead>
+                    <TableHead className="text-right">Custo do produto</TableHead>
+                    <TableHead className="text-right">Valor enviado na cotação</TableHead>
                     <TableHead>Tipo</TableHead>
                   </TableRow>
                 </TableHeader>
