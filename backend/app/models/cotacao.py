@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime, timezone
-from sqlalchemy import Column, String, Text, Boolean, Date, DateTime, ForeignKey, UniqueConstraint
+from sqlalchemy import Column, String, Text, Boolean, Date, DateTime, ForeignKey, UniqueConstraint, Integer
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.types import Numeric
 from sqlalchemy.orm import relationship
@@ -13,6 +13,9 @@ class Cotacao(Base):
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     id_loja = Column(UUID(as_uuid=True), ForeignKey("lojas.id"), nullable=False)
     id_vendedor = Column(UUID(as_uuid=True), ForeignKey("vendedores.id"), nullable=False)
+
+    # Número sequencial de registro (1, 2, 3, ...) — atribuído via sequence na criação
+    numero = Column(Integer, nullable=True)
 
     numero_requisicao = Column(String(50), nullable=True)
     b2b_company = Column(String(255), nullable=True)
@@ -40,6 +43,14 @@ class Cotacao(Base):
     observacao = Column(Text, nullable=True)
     pct_imposto_lucky = Column(Numeric(5, 2), nullable=True)
     pct_imposto_btech = Column(Numeric(5, 2), nullable=True)
+
+    # Envio de cotação
+    data_entrega = Column(Date, nullable=True)
+    previsao_entrega = Column(Date, nullable=True)
+    forma_pagamento = Column(String(50), nullable=True)
+    detalhes_pagamento = Column(Text, nullable=True)
+    prazo_pagamento = Column(Date, nullable=True)
+    garantia = Column(Text, nullable=True)
 
     created_by = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)

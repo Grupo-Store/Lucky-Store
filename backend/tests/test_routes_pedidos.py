@@ -25,6 +25,7 @@ def _fake_pedido(pedido_id=None):
     p.id_loja = uuid.uuid4()
     p.id_vendedor = uuid.uuid4()
     p.id_cliente = uuid.uuid4()
+    p.id_cotacao = None
     p.numero_os = "OS-001"
     p.numero_nf = None
     p.numero_oc = None

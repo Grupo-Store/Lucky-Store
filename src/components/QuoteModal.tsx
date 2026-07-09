@@ -1,4 +1,5 @@
-import { useState, useEffect, KeyboardEvent } from 'react';
+import { useState, useEffect, useRef, KeyboardEvent } from 'react';
+import { createPortal } from 'react-dom';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -14,7 +15,7 @@ import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
-import { Company, Seller } from '@/store/OrderStore';
+import { Company, Seller, PaymentMethod, PAYMENT_METHODS, PAYMENT_METHOD_LABELS } from '@/store/OrderStore';
 import {
   Quote, QuoteItem, DirectSupplyQuoteItem, QuotePhases, QuotePhaseKey,
   QUOTE_PHASE_COLORS, QUOTE_PHASE_LABELS, emptyPhases,
@@ -112,12 +113,227 @@ const QUOTE_MODAL_CSS = `
   }
 `;
 
+/* ===== Print document template (Imprimir → Salvar como PDF) ===== */
+const QUOTE_PRINT_CSS = `
+  #qm-print-root{display:none}
+  @media print{
+    @page{size:A4;margin:16mm 0 0 0}
+    html,body{background:#fff !important}
+    body>*{display:none !important}
+    body>#qm-print-root{display:block !important}
+  }
+  .qp-doc{font-family:'Inter',system-ui,sans-serif;color:#1f2d3d;font-size:12.5px;line-height:1.5;
+    background:#fff;position:relative;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+
+  /* Onda decorativa — fixa, repetida no rodapé de toda página */
+  .qp-wave{position:fixed;left:0;right:0;bottom:0;width:100%;height:36%;z-index:0;pointer-events:none}
+
+  /* Tabela de página: <tfoot> repete o rodapé no FIM de toda página e reserva o espaço */
+  .qp-page{width:100%;border-collapse:collapse;position:relative;z-index:1}
+  .qp-page>tfoot{display:table-footer-group}
+  .qp-page>tfoot>tr>td,.qp-page>tbody>tr>td{padding:0;vertical-align:top}
+  /* min-height preenche uma página para o rodapé ficar no fim mesmo com pouco conteúdo */
+  .qp-body{min-height:248mm}
+
+  /* Rodapé (texto + imagem, quando houver) */
+  .qp-footer{text-align:center;padding:6mm 14mm 8mm}
+  .qp-footer-img{display:block;margin:0 auto;max-width:100%;width:540px;max-height:38mm;height:auto}
+  .qp-footer-text{font-size:9.5px;color:#5b6b82;line-height:1.55;margin:8px auto 0;max-width:94%}
+
+  /* Conteúdo — flui; a margem superior de cada página vem do @page */
+  .qp-content{padding:0 14mm}
+  .qp-inner{max-width:150mm;margin:0 auto}
+  .qp-header{text-align:center;padding-bottom:8px}
+  .qp-header-img{display:block;margin:0 auto;max-width:300px;width:58%;height:auto}
+
+  .qp-title{text-align:center;font-family:'Space Grotesk',sans-serif;font-size:17px;font-weight:800;
+    letter-spacing:.18em;color:#2c5f9e;margin:4px 0 16px;padding-bottom:10px;border-bottom:2px solid #5b9bd5;break-inside:avoid}
+  .qp-info{display:grid;grid-template-columns:1fr 1fr;gap:7px 28px;margin-bottom:18px;break-inside:avoid}
+  .qp-info>div{display:flex;flex-direction:column;border-bottom:1px solid #d4e3f3;padding-bottom:5px}
+  .qp-info span{font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:#7e93ab}
+  .qp-info b{font-size:13px;font-weight:600;color:#1f2d3d}
+  .qp-table{width:100%;border-collapse:collapse;margin-bottom:14px}
+  .qp-table thead{display:table-header-group}
+  .qp-table thead th{background:#5b9bd5;color:#fff;font-size:10.5px;font-weight:600;text-transform:uppercase;
+    letter-spacing:.04em;text-align:left;padding:9px 12px}
+  .qp-table th.c,.qp-table td.c{text-align:center}
+  .qp-table th.r,.qp-table td.r{text-align:right}
+  .qp-table tbody tr{break-inside:avoid}
+  .qp-table tbody td{padding:8px 12px;border-bottom:1px solid #cfe0f3;font-size:12px}
+  .qp-table tbody tr:nth-child(even){background:#f2f7fc}
+  .qp-empty{text-align:center;color:#7e93ab;font-style:italic}
+  .qp-terms{margin:2px 0 14px;border:1px solid #d4e3f3;border-radius:10px;padding:12px 18px;background:#fafcff;
+    display:flex;flex-direction:column;gap:6px;break-inside:avoid}
+  .qp-terms>div{font-size:12.5px}
+  .qp-terms .k{color:#2c5f9e;font-weight:700}
+  .qp-terms .v{color:#1f2d3d}
+  .qp-total{display:flex;align-items:center;gap:18px;width:fit-content;margin-left:auto;
+    background:linear-gradient(155deg,#6aa9e0,#4a86c5);color:#fff;border-radius:10px;padding:11px 22px;margin-bottom:8px;break-inside:avoid}
+  .qp-total .k{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:#e3eefb}
+  .qp-total .v{font-size:20px;font-weight:800;font-family:'Space Grotesk',sans-serif;font-variant-numeric:tabular-nums}
+  .qp-totalrow{display:flex;align-items:flex-start;gap:24px;margin-bottom:8px;break-inside:avoid}
+  .qp-obs{flex:1;font-size:9.5px;color:#1f2d3d;border:1px solid #d4e3f3;border-radius:8px;padding:8px 12px;background:#fafcff;line-height:1.45}
+  .qp-obs-h{display:block;font-size:9.5px;text-transform:uppercase;letter-spacing:.05em;color:#7e93ab;font-weight:700;margin-bottom:3px}
+  .qp-obs p{margin:0;white-space:pre-wrap}
+  .qp-endrow{display:flex;justify-content:space-between;align-items:flex-end;gap:24px;margin-top:18px;break-inside:avoid}
+  .qp-signoff{flex:1;font-size:12.5px;color:#1f2d3d}
+  .qp-signoff p{margin:0 0 2px}
+  .qp-signoff p:last-child{margin-top:12px}
+  .qp-sign{text-align:center;min-width:210px}
+  .qp-sign-line{border-top:1px solid #1f2d3d;width:210px;margin:0 auto 5px}
+  .qp-sign-name{font-size:12px;color:#1f2d3d}
+`;
+
+/** Razão social + CNPJ + iniciais + imagens (cabeçalho/rodapé) por loja (para o PDF) */
+const STORE_INFO: Record<string, { label: string; cnpj?: string; initials: string; header: string; footer?: string }> = {
+  'Lucky Store': { label: 'Lucky Store', cnpj: '11.849.935/0001-63', initials: 'LS', header: '/quote-header.png', footer: '/quote-footer.png' },
+  'BTech':       { label: 'BTech Store', cnpj: '54.677.704/0001-22', initials: 'BS', header: '/btech-header.jpeg' },
+  'AJJ':         { label: 'AJJ',         initials: 'AJJ',                              header: '/quote-header.png', footer: '/quote-footer.png' },
+};
+
+interface PrintRow { name: string; quantity: number; unit: number; supplier: string }
+
+function QuotePrintTemplate({ form, rows, total }: { form: Quote; rows: PrintRow[]; total: number }) {
+  const seller = (form.seller || '').trim();
+  const sellerName = seller ? (/campos$/i.test(seller) ? seller : `${seller} Campos`) : '—';
+  const sendDate = format(new Date(), 'dd/MM/yyyy');
+
+  const store = STORE_INFO[form.company] ??
+    { label: form.company || '—', initials: (form.company || '').slice(0, 2).toUpperCase(), header: '/quote-header.png', footer: '/quote-footer.png' };
+  const storeLine = store.cnpj ? `${store.label} - ${store.cnpj}` : store.label;
+  const titleText = `Cotação - ${[form.index, store.initials, form.storeIndex, form.directBilling ? 'FD' : ''].filter(Boolean).join(' ')}`;
+
+  const paymentLabel = form.paymentMethod
+    ? (PAYMENT_METHOD_LABELS[form.paymentMethod] ?? form.paymentMethod)
+    : '';
+  // Só inclui no PDF os termos preenchidos
+  const terms: [string, string][] = [
+    form.deliveryDate ? ['Entrega', fmtDate(form.deliveryDate)] : null,
+    form.deliveryForecast ? ['Previsão de Entrega', fmtDate(form.deliveryForecast)] : null,
+    paymentLabel ? ['Forma de Pagamento', paymentLabel] : null,
+    form.paymentDetails?.trim() ? ['Detalhes do Pagamento', form.paymentDetails.trim()] : null,
+    form.paymentDeadline ? ['Prazo de Pagamento', fmtDate(form.paymentDeadline)] : null,
+    form.warranty?.trim() ? ['Garantia', form.warranty.trim()] : null,
+  ].filter((t): t is [string, string] => t !== null);
+
+  return (
+    <div className="qp-doc">
+      <svg className="qp-wave" viewBox="0 0 1000 360" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M0,200 C260,90 560,270 1000,150 L1000,360 L0,360 Z" fill="#dceaf8" />
+        <path d="M0,270 C320,170 640,330 1000,230 L1000,360 L0,360 Z" fill="#c2dcf3" />
+      </svg>
+
+      {/* min-height dinâmico: a reserva do rodapé varia se a loja tem imagem */}
+      <style>{`@media print{.qp-body{min-height:${store.footer ? '212mm' : '252mm'}}}`}</style>
+
+      <table className="qp-page">
+        {/* Rodapé — repetido no FIM de toda página */}
+        <tfoot>
+          <tr><td>
+            <div className="qp-footer">
+              {store.footer && <img className="qp-footer-img" src={store.footer} alt="" />}
+              <p className="qp-footer-text">
+                CNPJ 11849935/0001-63 Rua Marchal Deodoro Nr 300 SL 1107, Encruzilhada Recife, PE CEP: 52.030-172 Fone/Fax: +55 81 3228.8509 e-mail: contato@luckystore.com.br
+              </p>
+            </div>
+          </td></tr>
+        </tfoot>
+
+        {/* Conteúdo — flui por quantas páginas forem necessárias */}
+        <tbody>
+          <tr><td>
+            <div className="qp-body">
+              <header className="qp-header">
+                <img className="qp-header-img" src={store.header} alt={store.label} />
+              </header>
+
+              <div className="qp-content">
+              <div className="qp-inner">
+            <div className="qp-title">{titleText}</div>
+
+            <section className="qp-info">
+              <div><span>Empresa</span><b>{form.b2bCompany || '—'}</b></div>
+              {form.customer ? <div><span>Cliente</span><b>{form.customer}</b></div> : null}
+              <div><span>CNPJ</span><b>{form.cnpj || '—'}</b></div>
+              <div><span>Nº da Requisição</span><b>{form.requestNumber || '—'}</b></div>
+              <div><span>Data da Requisição</span><b>{form.requestDate ? fmtDate(form.requestDate) : '—'}</b></div>
+              <div><span>Data de Envio da Cotação</span><b>{sendDate}</b></div>
+              <div><span>Loja</span><b>{storeLine}</b></div>
+              <div><span>Liner</span><b>{sellerName}</b></div>
+            </section>
+
+            <table className="qp-table">
+              <thead>
+                <tr>
+                  <th>Produto</th>
+                  <th className="c">Qtd</th>
+                  <th className="r">Valor Unidade</th>
+                  <th>Fornecedor</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.length === 0 ? (
+                  <tr><td className="qp-empty" colSpan={4}>Nenhum item na cotação</td></tr>
+                ) : rows.map((r, i) => (
+                  <tr key={i}>
+                    <td>{r.name || '—'}</td>
+                    <td className="c">{r.quantity || 0}</td>
+                    <td className="r">{toBRL(r.unit || 0)}</td>
+                    <td>{r.supplier || '—'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+
+            {terms.length > 0 && (
+              <section className="qp-terms">
+                {terms.map(([k, v]) => (
+                  <div key={k}><span className="k">{k}</span> - <span className="v">{v}</span></div>
+                ))}
+              </section>
+            )}
+
+            <div className="qp-totalrow">
+              {form.observations?.trim() && (
+                <div className="qp-obs">
+                  <span className="qp-obs-h">Observações</span>
+                  <p>{form.observations.trim()}</p>
+                </div>
+              )}
+              <div className="qp-total">
+                <span className="k">Valor Total</span>
+                <span className="v">{toBRL(total)}</span>
+              </div>
+            </div>
+
+            <div className="qp-endrow">
+              <div className="qp-signoff">
+                <p>Sujeito a disponibilidade</p>
+                <p>Agora disponível</p>
+                <p>Fico a sua disposição, obrigado.</p>
+              </div>
+              <div className="qp-sign">
+                <div className="qp-sign-line" />
+                <span className="qp-sign-name">{sellerName}</span>
+              </div>
+            </div>
+              </div>{/* /qp-inner */}
+              </div>{/* /qp-content */}
+            </div>{/* /qp-body */}
+          </td></tr>
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 const emptyQuote = (index: string): Quote => ({
   id: '', index, createdAt: Date.now(), b2bCompany: '', customer: '', cnpj: '',
   requestNumber: '', requestDate: format(new Date(), 'yyyy-MM-dd'),
   company: '', directBilling: false, supplier: '', seller: '',
   value: 0, items: [], directSupplyItems: [], observations: '', phases: emptyPhases(),
   taxLucky: 0, taxBTech: 0,
+  deliveryDate: '', deliveryForecast: '', paymentMethod: '', paymentDetails: '', paymentDeadline: '', warranty: '',
 });
 
 interface Props {
@@ -151,6 +367,22 @@ export function QuoteModal({ open, onClose, quote, onSave, onDelete, nextIndex }
   const [form, setForm] = useState<Quote>(() => emptyQuote(nextIndex()));
   const [datePopover, setDatePopover] = useState<string | null>(null);
   const isEdit = !!quote;
+
+  // Container do PDF: instância única no <body>, recriada por montagem e com limpeza
+  // de qualquer "#qm-print-root" órfão (ex.: deixado por hot-reload) que conteria dados antigos.
+  const printRootRef = useRef<HTMLDivElement | null>(null);
+  if (printRootRef.current === null && typeof document !== 'undefined') {
+    const el = document.createElement('div');
+    el.id = 'qm-print-root';
+    printRootRef.current = el;
+  }
+  useEffect(() => {
+    const el = printRootRef.current;
+    if (!el) return;
+    document.querySelectorAll('#qm-print-root').forEach(n => { if (n !== el) n.remove(); });
+    document.body.appendChild(el);
+    return () => { el.remove(); };
+  }, []);
 
   const { data: vendedoresData } = useVendedores();
   const vendedores = vendedoresData?.items ?? [];
@@ -266,6 +498,12 @@ export function QuoteModal({ open, onClose, quote, onSave, onDelete, nextIndex }
         pct_imposto_lucky: q.taxLucky != null ? String(q.taxLucky) : undefined,
         pct_imposto_btech: q.taxBTech != null ? String(q.taxBTech) : undefined,
         observacao: q.observations || undefined,
+        data_entrega: q.deliveryDate || undefined,
+        previsao_entrega: q.deliveryForecast || undefined,
+        forma_pagamento: q.paymentMethod || undefined,
+        detalhes_pagamento: q.paymentDetails || undefined,
+        prazo_pagamento: q.paymentDeadline || undefined,
+        garantia: q.warranty || undefined,
       };
       updateQuote(payload, {
         onSuccess: async () => {
@@ -318,6 +556,12 @@ export function QuoteModal({ open, onClose, quote, onSave, onDelete, nextIndex }
         pct_imposto_lucky: q.taxLucky != null ? String(q.taxLucky) : undefined,
         pct_imposto_btech: q.taxBTech != null ? String(q.taxBTech) : undefined,
         observacao: q.observations || undefined,
+        data_entrega: q.deliveryDate || undefined,
+        previsao_entrega: q.deliveryForecast || undefined,
+        forma_pagamento: q.paymentMethod || undefined,
+        detalhes_pagamento: q.paymentDetails || undefined,
+        prazo_pagamento: q.paymentDeadline || undefined,
+        garantia: q.warranty || undefined,
         itens: [
           ...(q.items || []).map(i => ({
             descricao: i.name,
@@ -395,6 +639,12 @@ export function QuoteModal({ open, onClose, quote, onSave, onDelete, nextIndex }
   /* ---------------- Presentation-only derived values ---------------- */
   const activePhases = (Object.keys(form.phases) as QuotePhaseKey[]).filter(k => form.phases[k].active);
   const marginBarW = Math.max(0, Math.min(margin, 100));
+
+  /* ---------------- Print rows (regular + direct-supply items) ---------------- */
+  const printRows: PrintRow[] = [
+    ...items.map(i => ({ name: i.name, quantity: i.quantity || 0, unit: i.closingValue || 0, supplier: i.supplier || '' })),
+    ...dsItems.map(i => ({ name: i.name, quantity: i.quantity || 0, unit: i.closingValue || 0, supplier: i.supplier || '' })),
+  ].filter(r => (r.name && r.name.trim()) || r.unit > 0);
 
   return (
     <Dialog open={open} onOpenChange={v => !v && onClose()}>
@@ -641,6 +891,49 @@ export function QuoteModal({ open, onClose, quote, onSave, onDelete, nextIndex }
           </div>{/* /qm-body sec-itens */}
         </section>
 
+        {/* ============== ENVIO DE COTAÇÃO ============== */}
+        <section className="qm-card" id="sec-envio">
+          <h2><Package className="h-[15px] w-[15px]" /> Envio de Cotação</h2>
+          <div className="qm-body">
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+            <div>
+              <Label>Entrega</Label>
+              <DateField phaseKey="delivery" value={form.deliveryDate}
+                onChange={d => set('deliveryDate', d || '')} />
+            </div>
+            <div>
+              <Label>Previsão de Entrega</Label>
+              <DateField phaseKey="deliveryForecast" value={form.deliveryForecast}
+                onChange={d => set('deliveryForecast', d || '')} />
+            </div>
+            <div>
+              <Label>Forma de Pagamento</Label>
+              <Select value={form.paymentMethod || ''} onValueChange={v => set('paymentMethod', v as PaymentMethod)}>
+                <SelectTrigger className="bg-[#FBFCFE] border-[#E2E8F1]"><SelectValue placeholder="Selecionar" /></SelectTrigger>
+                <SelectContent>
+                  {PAYMENT_METHODS.map(m => <SelectItem key={m} value={m}>{PAYMENT_METHOD_LABELS[m]}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label>Prazo de Pagamento</Label>
+              <DateField phaseKey="paymentDeadline" value={form.paymentDeadline}
+                onChange={d => set('paymentDeadline', d || '')} />
+            </div>
+            <div>
+              <Label>Detalhes do Pagamento</Label>
+              <Input className="bg-[#FBFCFE] border-[#E2E8F1]" value={form.paymentDetails || ''}
+                onChange={e => set('paymentDetails', e.target.value)} onKeyDown={handleEnterBlur} />
+            </div>
+            <div>
+              <Label>Garantia</Label>
+              <Input className="bg-[#FBFCFE] border-[#E2E8F1]" value={form.warranty || ''}
+                onChange={e => set('warranty', e.target.value)} onKeyDown={handleEnterBlur} />
+            </div>
+          </div>
+          </div>{/* /qm-body sec-envio */}
+        </section>
+
         {/* ============== 3. OBSERVAÇÕES ============== */}
         <section className="qm-card" id="sec-obs">
           <h2><FileText className="h-[15px] w-[15px]" /> Observações</h2>
@@ -772,7 +1065,7 @@ export function QuoteModal({ open, onClose, quote, onSave, onDelete, nextIndex }
               <Button variant="outline" onClick={onClose} className="w-full h-11" style={{ borderColor: '#e7ebf0', borderRadius: 13 }}>
                 Cancelar
               </Button>
-              <Button variant="outline" onClick={() => window.print()} className="w-full h-11" style={{ borderColor: '#e7ebf0', borderRadius: 13 }}>
+              <Button variant="outline" onClick={() => { (document.activeElement as HTMLElement | null)?.blur(); setTimeout(() => window.print(), 60); }} className="w-full h-11" style={{ borderColor: '#e7ebf0', borderRadius: 13 }}>
                 <Printer className="h-4 w-4 mr-1.5" /> Imprimir
               </Button>
               {isEdit && onDelete && (
@@ -787,6 +1080,7 @@ export function QuoteModal({ open, onClose, quote, onSave, onDelete, nextIndex }
               <a href="#sec-geral">Informações Gerais</a>
               {form.directBilling && <a href="#sec-forn">Fornecimento Direto</a>}
               <a href="#sec-itens">Itens da Cotação</a>
+              <a href="#sec-envio">Envio de Cotação</a>
               <a href="#sec-obs">Observações</a>
               <a href="#sec-status">Status</a>
               <a href="#sec-impostos">Impostos</a>
@@ -795,6 +1089,15 @@ export function QuoteModal({ open, onClose, quote, onSave, onDelete, nextIndex }
 
         </div>{/* /qm-editor */}
       </DialogContent>
+
+      {/* Print-only document (rendered into <body>; only this prints) */}
+      {open && printRootRef.current && createPortal(
+        <>
+          <style>{QUOTE_PRINT_CSS}</style>
+          <QuotePrintTemplate form={form} rows={printRows} total={allRevenue} />
+        </>,
+        printRootRef.current,
+      )}
     </Dialog>
   );
 }

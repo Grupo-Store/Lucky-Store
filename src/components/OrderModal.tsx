@@ -141,6 +141,7 @@ interface Props {
 
 export function OrderModal({ open, onClose, order, onSave, nextOS, prefill }: Props) {
   const [form, setForm] = useState<Partial<Order>>(() => emptyOrder(nextOS?.() || ''));
+  const [sourceQuoteId, setSourceQuoteId] = useState<string | undefined>(undefined);
   const isEdit = !!order;
 
   const qc = useQueryClient();
@@ -164,6 +165,7 @@ export function OrderModal({ open, onClose, order, onSave, nextOS, prefill }: Pr
   useEffect(() => {
     if (order) {
       setForm({ ...order, freight: order.freight || [], directSupplyItems: order.directSupplyItems || [] });
+      setSourceQuoteId(undefined);
     } else if (prefill) {
       setForm({
         ...emptyOrder(nextOS?.() || ''),
@@ -179,8 +181,10 @@ export function OrderModal({ open, onClose, order, onSave, nextOS, prefill }: Pr
         })),
         directSupplyItems: (prefill.directSupplyItems || []).map(i => ({ ...i })),
       });
+      setSourceQuoteId(prefill.sourceQuoteId);
     } else {
       setForm(emptyOrder(nextOS?.() || ''));
+      setSourceQuoteId(undefined);
     }
     setEditingField(null);
   }, [order, open, nextOS, prefill]);
@@ -491,6 +495,7 @@ export function OrderModal({ open, onClose, order, onSave, nextOS, prefill }: Pr
       const payload: CreatePedidoPayload = {
         id_loja: LOJA_IDS[o.company] ?? '',
         id_vendedor: vendorIdByName(o.seller ?? ''),
+        id_cotacao: sourceQuoteId || undefined,
         nome_cliente: o.customer,
         cpf_cnpj: o.cnpj || undefined,
         data_pedido: o.orderDate,

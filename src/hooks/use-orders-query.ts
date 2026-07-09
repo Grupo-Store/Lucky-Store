@@ -24,6 +24,7 @@ export interface FreteApiItem {
 
 export interface PedidoListItem {
   id: string
+  id_cotacao: string | null
   numero_os: string
   data_pedido: string
   data_entrega: string

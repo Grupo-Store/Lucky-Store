@@ -65,6 +65,7 @@ class PedidoService:
             id_loja=data.id_loja,
             id_vendedor=data.id_vendedor,
             id_cliente=id_cliente,
+            id_cotacao=data.id_cotacao,
             numero_os=data.numero_os or _generate_numero_os(db),
             numero_nf=data.numero_nf,
             numero_oc=data.numero_oc,

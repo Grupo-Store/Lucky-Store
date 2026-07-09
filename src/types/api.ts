@@ -127,6 +127,7 @@ export interface PedidoResponse {
 export interface CreatePedidoPayload {
   id_loja: string;
   id_vendedor: string;
+  id_cotacao?: string;
   nome_cliente: string;
   cpf_cnpj?: string;
   data_pedido: string;
@@ -223,6 +224,8 @@ export interface CotacaoResponse {
   id: string;
   id_loja: string;
   id_vendedor: string;
+  numero: number | null;
+  numero_loja: number | null;
   cliente: string;
   cnpj_cliente: string | null;
   numero_requisicao: string | null;
@@ -235,6 +238,12 @@ export interface CotacaoResponse {
   pct_imposto_lucky: string | null;
   pct_imposto_btech: string | null;
   observacao: string | null;
+  data_entrega: string | null;
+  previsao_entrega: string | null;
+  forma_pagamento: string | null;
+  detalhes_pagamento: string | null;
+  prazo_pagamento: string | null;
+  garantia: string | null;
   status_enviada: boolean;
   data_envio: string | null;
   status_em_fechamento: boolean;
@@ -265,6 +274,12 @@ export interface CreateCotacaoPayload {
   pct_imposto_lucky?: string;
   pct_imposto_btech?: string;
   observacao?: string;
+  data_entrega?: string;
+  previsao_entrega?: string;
+  forma_pagamento?: string;
+  detalhes_pagamento?: string;
+  prazo_pagamento?: string;
+  garantia?: string;
   itens?: {
     descricao: string;
     quantidade: number;

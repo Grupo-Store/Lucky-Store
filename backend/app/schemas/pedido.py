@@ -97,6 +97,7 @@ class CustoPedidoOut(CustoPedidoIn):
 class PedidoCreate(BaseModel):
     id_loja: UUID
     id_vendedor: UUID
+    id_cotacao: Optional[UUID] = None
     nome_cliente: str
     cpf_cnpj: Optional[str] = None
     numero_os: Optional[str] = None
@@ -218,6 +219,7 @@ class PedidoDetailResponse(PedidoResponse):
 
 class PedidoListItemResponse(BaseModel):
     id: UUID
+    id_cotacao: Optional[UUID] = None
     numero_os: str
     data_pedido: date
     data_entrega: date

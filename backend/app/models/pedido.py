@@ -13,6 +13,8 @@ class Pedido(Base):
     id_loja = Column(UUID(as_uuid=True), ForeignKey("lojas.id"), nullable=False)
     id_vendedor = Column(UUID(as_uuid=True), ForeignKey("vendedores.id"), nullable=False)
     id_cliente = Column(UUID(as_uuid=True), ForeignKey("clientes.id"), nullable=False)
+    # Cotação de origem (preenchido quando o pedido é criado a partir de uma conversão)
+    id_cotacao = Column(UUID(as_uuid=True), ForeignKey("cotacoes.id"), nullable=True)
 
     numero_os = Column(String(50), nullable=False)
     numero_nf = Column(String(50), nullable=True)

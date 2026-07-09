@@ -1,4 +1,4 @@
-import { ShoppingCart, LayoutDashboard, LogOut, Wallet, Settings, UserCircle } from 'lucide-react';
+import { ShoppingCart, LayoutDashboard, LogOut, Wallet, Settings, UserCircle, History } from 'lucide-react';
 import { NavLink } from '@/components/NavLink';
 import { useAuth } from '@/store/AuthStore';
 import {
@@ -68,6 +68,7 @@ const navItems = [
   { title: 'Vendas',      url: '/',          icon: ShoppingCart    },
   { title: 'Financeiro',  url: '/financial', icon: Wallet          },
   { title: 'Dashboard',   url: '/dashboard', icon: LayoutDashboard },
+  { title: 'Histórico',   url: '/history',   icon: History         },
   { title: 'Admin',       url: '/admin',     icon: Settings        },
   { title: 'Minha Conta', url: '/account',   icon: UserCircle      },
 ];

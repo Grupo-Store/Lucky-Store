@@ -93,7 +93,8 @@ function cotacaoToQuote(c: CotacaoResponse): Quote {
   const hasDirect = allItems.some(i => i.is_direct_supply);
   return {
     id: c.id,
-    index: '',
+    index: c.numero != null ? String(c.numero) : '',
+    storeIndex: c.numero_loja ?? undefined,
     createdAt: new Date(c.created_at).getTime(),
     customer: cleanStr(c.cliente),
     cnpj: cleanStr(c.cnpj_cliente),
@@ -136,6 +137,12 @@ function cotacaoToQuote(c: CotacaoResponse): Quote {
     },
     taxLucky: parseFloat(c.pct_imposto_lucky ?? '0') || 0,
     taxBTech: parseFloat(c.pct_imposto_btech ?? '0') || 0,
+    deliveryDate: c.data_entrega ?? '',
+    deliveryForecast: c.previsao_entrega ?? '',
+    paymentMethod: (c.forma_pagamento ?? '') as Quote['paymentMethod'],
+    paymentDetails: cleanStr(c.detalhes_pagamento),
+    paymentDeadline: c.prazo_pagamento ?? '',
+    warranty: cleanStr(c.garantia),
   };
 }
 

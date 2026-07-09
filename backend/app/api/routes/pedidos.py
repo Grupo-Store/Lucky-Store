@@ -72,6 +72,7 @@ def list_pedidos(
     items_out = [
         PedidoListItemResponse(
             id=p.id,
+            id_cotacao=p.id_cotacao,
             numero_os=p.numero_os,
             data_pedido=p.data_pedido,
             data_entrega=p.data_entrega,
