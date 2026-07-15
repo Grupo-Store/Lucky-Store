@@ -469,6 +469,9 @@ export default function Sales() {
           : p.status),
         projectedValue: parseFloat(p.valor_projetado) || 0,
         purchaseValue: parseFloat(p.valor_compra ?? '0') || 0,
+        supplier: p.sub_compras && p.sub_compras.length > 0
+          ? [...new Set(p.sub_compras.map(sc => sc.supplier).filter(Boolean))].join(', ')
+          : (p.fornecedor ?? ''),
         orderId: o.id,
         os: o.numero_os,
         customer: o.nome_cliente ?? '',
@@ -483,7 +486,8 @@ export default function Sales() {
         p.customer.toLowerCase().includes(q) ||
         (p.company || '').toLowerCase().includes(q) ||
         (p.seller || '').toLowerCase().includes(q) ||
-        p.name.toLowerCase().includes(q)
+        p.name.toLowerCase().includes(q) ||
+        (p.supplier || '').toLowerCase().includes(q)
       ))
       .filter(p => prodStatusFilter === 'all' || p.status === prodStatusFilter)
       .filter(p => {
@@ -1126,7 +1130,7 @@ export default function Sales() {
                     ))}
                   </div>
 
-                  <SearchBar value={prodSearch} onChange={setProdSearch} placeholder="OS, Cliente, Empresa, Vendedor, Produto..." className="flex-1 min-w-[160px]" />
+                  <SearchBar value={prodSearch} onChange={setProdSearch} placeholder="OS, Cliente, Empresa, Vendedor, Produto, Fornecedor..." className="flex-1 min-w-[160px]" />
 
                   <Select value={prodStatusFilter} onValueChange={setProdStatusFilter}>
                     <SelectTrigger style={{ width: 168, background: '#FBFCFE', borderColor: '#E2E8F1', borderRadius: 10, flexShrink: 0 }}>
@@ -1169,7 +1173,7 @@ export default function Sales() {
                   <Table>
                     <TableHeader>
                       <TableRow style={{ background: '#F8FAFD', borderBottom: '1px solid #EEF2F8' }}>
-                        {['OS Pai', 'Produto', 'Cliente', 'Qtd.', 'Status', 'Entrega Pedido', 'Entrega Produto'].map(h => (
+                        {['OS Pai', 'Produto', 'Fornecedor', 'Cliente', 'Qtd.', 'Status', 'Entrega Pedido', 'Entrega Produto'].map(h => (
                           <TableHead key={h} style={{ fontSize: 11.5, fontWeight: 600, letterSpacing: '0.1em', textTransform: 'uppercase', color: '#5B6B82', padding: '12px 18px' }}>{h}</TableHead>
                         ))}
                       </TableRow>
@@ -1183,6 +1187,7 @@ export default function Sales() {
                               <span style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600 }}>{p.os}</span>
                             </TableCell>
                             <TableCell style={{ padding: '15px 18px' }}>{p.name}</TableCell>
+                            <TableCell style={{ padding: '15px 18px' }}>{p.supplier || '—'}</TableCell>
                             <TableCell style={{ padding: '15px 18px' }}>{p.customer}</TableCell>
                             <TableCell style={{ padding: '15px 18px' }}>{p.quantity}</TableCell>
                             <TableCell style={{ padding: '15px 18px' }} onClick={e => e.stopPropagation()}>
@@ -1217,7 +1222,7 @@ export default function Sales() {
                         );
                       })}
                       {pagedProducts.length === 0 && (
-                        <TableRow><TableCell colSpan={7} className="text-center py-8 text-muted-foreground">Nenhum produto encontrado</TableCell></TableRow>
+                        <TableRow><TableCell colSpan={8} className="text-center py-8 text-muted-foreground">Nenhum produto encontrado</TableCell></TableRow>
                       )}
                     </TableBody>
                   </Table>
