@@ -38,7 +38,25 @@ function handleEnterBlur(e: KeyboardEvent<HTMLInputElement>) {
   if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
 }
 
-type Step = 'pick-order' | 'pick-items' | 'form';
+type Step = 'pick-order' | 'pick-items' | 'pick-sub-purchase' | 'form';
+
+interface LocalSubPurchase {
+  id: string;
+  supplier: string;
+  purchaseDate?: string;
+  purchaseValue: number;
+  quantity: number;
+}
+
+interface LocalParentItem {
+  id: string;
+  name: string;
+  quantity: number;
+  status: ItemStatus;
+  projectedValue: number;
+  purchaseValue: number;
+  subPurchases: LocalSubPurchase[];
+}
 
 interface RmaParent {
   id: string;
@@ -88,8 +106,11 @@ export function RmaModal({ open, onClose, orders, rma, onSave, nextRmaNumber }: 
   }, [deliveredData, orderSearch]);
 
   /* ---------- Step 2: item selection ---------- */
-  const [localParentItems, setLocalParentItems] = useState<OrderItem[]>([]);
+  const [localParentItems, setLocalParentItems] = useState<LocalParentItem[]>([]);
   const [selectedItemIds, setSelectedItemIds] = useState<Set<string>>(new Set());
+
+  /* ---------- Step 2.5: sub-purchase selection ---------- */
+  const [selectedSubPurchaseIds, setSelectedSubPurchaseIds] = useState<Record<string, string>>({});
 
   /* ---------- Form state ---------- */
   const [parent, setParent] = useState<RmaParent | null>(null);
@@ -132,6 +153,7 @@ export function RmaModal({ open, onClose, orders, rma, onSave, nextRmaNumber }: 
       setParent(null);
       setLocalParentItems([]);
       setSelectedItemIds(new Set());
+      setSelectedSubPurchaseIds({});
       setRegistrationDate(format(new Date(), 'yyyy-MM-dd'));
       setDeliveryDate(format(addDays(new Date(), 14), 'yyyy-MM-dd'));
       setActualDeliveryDate('');
@@ -149,16 +171,24 @@ export function RmaModal({ open, onClose, orders, rma, onSave, nextRmaNumber }: 
     setCompany((o.nome_loja ?? '') as Company);
     setSeller((o.nome_vendedor ?? '') as Seller);
     setRmaNumberDisplay(nextRmaNumber(o.numero_os));
-    const apiItems: OrderItem[] = (o.produtos ?? []).map(p => ({
+    const apiItems: LocalParentItem[] = (o.produtos ?? []).map(p => ({
       id: p.id,
       name: p.descricao,
       quantity: p.quantidade,
       status: p.status as ItemStatus,
       projectedValue: parseFloat(String(p.valor_projetado)) || 0,
       purchaseValue: parseFloat(String(p.valor_compra ?? '0')) || 0,
+      subPurchases: (p.sub_compras ?? []).map(sc => ({
+        id: sc.id,
+        supplier: sc.supplier,
+        purchaseDate: sc.purchaseDate,
+        purchaseValue: sc.purchaseValue,
+        quantity: sc.selectedQuantity,
+      })),
     }));
     setLocalParentItems(apiItems);
     setSelectedItemIds(new Set());
+    setSelectedSubPurchaseIds({});
     setRmaItems([]);
     setStep('pick-items');
   };
@@ -171,24 +201,43 @@ export function RmaModal({ open, onClose, orders, rma, onSave, nextRmaNumber }: 
     });
   };
 
-  const goToForm = () => {
+  const itemsNeedingSubSelection = useMemo(() => {
+    return localParentItems.filter(i => selectedItemIds.has(i.id) && i.subPurchases.length > 1);
+  }, [localParentItems, selectedItemIds]);
+
+  const goToSubPurchaseOrForm = () => {
+    if (itemsNeedingSubSelection.length > 0) {
+      setStep('pick-sub-purchase');
+    } else {
+      buildRmaItemsAndGoToForm();
+    }
+  };
+
+  const buildRmaItemsAndGoToForm = () => {
     if (localParentItems.length > 0) {
       const picked = localParentItems.filter(i => selectedItemIds.has(i.id));
-      setRmaItems(picked.map<RmaItem>(i => ({
-        id: crypto.randomUUID(),
-        sourceItemId: i.id,
-        name: i.name,
-        quantity: i.quantity,
-        repairedBy: '',
-        status: 'Not Received',
-      })));
+      setRmaItems(picked.map<RmaItem>(i => {
+        const subId = selectedSubPurchaseIds[i.id];
+        const sub = subId ? i.subPurchases.find(s => s.id === subId) : null;
+        const suffix = sub ? ` (${sub.supplier})` : '';
+        return {
+          id: crypto.randomUUID(),
+          sourceItemId: i.id,
+          name: i.name + suffix,
+          quantity: sub ? sub.quantity : i.quantity,
+          repairedBy: '',
+          status: 'Not Received',
+        };
+      }));
     }
     setStep('form');
   };
 
   /* ---------- Back navigation ---------- */
   const goBack = () => {
-    if (step === 'form') setStep('pick-items');
+    if (step === 'form' && itemsNeedingSubSelection.length > 0) setStep('pick-sub-purchase');
+    else if (step === 'form') setStep('pick-items');
+    else if (step === 'pick-sub-purchase') setStep('pick-items');
     else if (step === 'pick-items') setStep('pick-order');
   };
 
@@ -289,6 +338,7 @@ export function RmaModal({ open, onClose, orders, rma, onSave, nextRmaNumber }: 
             )}
             {step === 'pick-order' && 'Novo RMA — Selecionar Pedido Entregue'}
             {step === 'pick-items' && `RMA — Selecionar Itens (Pedido #${parent?.os})`}
+            {step === 'pick-sub-purchase' && `RMA — Especificar Compra (Pedido #${parent?.os})`}
             {step === 'form' && (isEdit ? `Editar RMA — ${rmaNumberDisplay}` : `Novo RMA — ${rmaNumberDisplay}`)}
           </DialogTitle>
         </DialogHeader>
@@ -411,13 +461,69 @@ export function RmaModal({ open, onClose, orders, rma, onSave, nextRmaNumber }: 
             <div className="flex justify-end gap-2">
               <Button variant="outline" onClick={onClose}>Cancelar</Button>
               <Button
-                onClick={goToForm}
+                onClick={goToSubPurchaseOrForm}
                 disabled={localParentItems.length > 0 && selectedItemIds.size === 0}
                 className="bg-[#2F6BFF] hover:bg-[#1E4FD8] text-white"
               >
                 {localParentItems.length > 0
                   ? `Próximo (${selectedItemIds.size} ${selectedItemIds.size === 1 ? 'item' : 'itens'})`
                   : 'Continuar'}
+              </Button>
+            </div>
+          </>
+        )}
+
+        {/* ===== STEP 2.5: pick sub-purchase ===== */}
+        {step === 'pick-sub-purchase' && parent && (
+          <>
+            <p className="text-sm text-muted-foreground">
+              Os itens abaixo foram comprados de múltiplos fornecedores. Selecione qual compra está sendo trocada.
+            </p>
+            <div className="space-y-4">
+              {itemsNeedingSubSelection.map(item => (
+                <div key={item.id} className="border border-[#E2E8F1] rounded-xl p-4">
+                  <h4 className="text-sm font-bold text-[#16273F] mb-3">{item.name} (Qtd: {item.quantity})</h4>
+                  <div className="space-y-2">
+                    {item.subPurchases.map(sp => (
+                      <label
+                        key={sp.id}
+                        className={cn(
+                          'flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-colors',
+                          selectedSubPurchaseIds[item.id] === sp.id
+                            ? 'border-[#2F6BFF] bg-[#EEF2FF]'
+                            : 'border-[#E2E8F1] bg-[#F8FAFD] hover:bg-[#F0F4FA]'
+                        )}
+                        onClick={() => setSelectedSubPurchaseIds(prev => ({ ...prev, [item.id]: sp.id }))}
+                      >
+                        <input
+                          type="radio"
+                          name={`sub-${item.id}`}
+                          checked={selectedSubPurchaseIds[item.id] === sp.id}
+                          onChange={() => setSelectedSubPurchaseIds(prev => ({ ...prev, [item.id]: sp.id }))}
+                          className="accent-[#2F6BFF]"
+                        />
+                        <div className="flex-1">
+                          <span className="font-semibold text-sm">{sp.supplier || 'Fornecedor não informado'}</span>
+                          <div className="text-xs text-muted-foreground mt-0.5">
+                            Qtd: {sp.quantity}
+                            {sp.purchaseDate && <> · Compra: {format(new Date(sp.purchaseDate + 'T12:00:00'), 'dd/MM/yyyy')}</>}
+                            {sp.purchaseValue > 0 && <> · Valor: {toBRL(sp.purchaseValue)}</>}
+                          </div>
+                        </div>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={onClose}>Cancelar</Button>
+              <Button
+                onClick={buildRmaItemsAndGoToForm}
+                disabled={itemsNeedingSubSelection.some(i => !selectedSubPurchaseIds[i.id])}
+                className="bg-[#2F6BFF] hover:bg-[#1E4FD8] text-white"
+              >
+                Próximo
               </Button>
             </div>
           </>
