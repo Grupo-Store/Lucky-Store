@@ -13,6 +13,7 @@ export interface DashboardKpis {
   periodo_inicio: string
   periodo_fim: string
   receita: number
+  estornos: number
   custo: number
   lucro: number
   margem: number
@@ -42,6 +43,12 @@ export interface DashboardProjections {
   gap_floor: number | null
   meta_diaria_dinamica: number | null
   pct_meta: number | null
+  meta_lucro_target: number | null
+  meta_lucro_floor: number | null
+  gap_lucro_target: number | null
+  gap_lucro_floor: number | null
+  pct_meta_lucro: number | null
+  meta_lucro_diaria_dinamica: number | null
 }
 
 export interface BreakdownItem {
@@ -114,6 +121,29 @@ export function useDashboardCardSpend(params: DashboardQueryParams) {
   })
 }
 
+// ─── Contagens operacionais (snapshot) ─────────────────────────────────────────
+
+export interface DashboardCounts {
+  pedidos_abertos: number
+  pedidos_entregues: number
+  cotacoes_abertas: number
+  cotacoes_fechadas: number
+  rmas_abertos: number
+  rmas_entregues: number
+  produtos_para_comprar: number
+}
+
+export function useDashboardCounts(params: DashboardQueryParams) {
+  // Contagens de estado atual — só a loja importa (o backend ignora o período).
+  const p = { id_loja: params.id_loja }
+  return useQuery<DashboardCounts>({
+    queryKey: ['dashboard', 'counts', p],
+    queryFn: () => apiFetch('/dashboard/counts', { params: { ...p } }),
+    staleTime: 30_000,
+    refetchOnWindowFocus: true,
+  })
+}
+
 // ─── Goals ────────────────────────────────────────────────────────────────────
 
 export interface ApiGoal {
@@ -122,6 +152,7 @@ export interface ApiGoal {
   mes: number
   id_loja: string
   nome_loja: string | null
+  tipo: string
   target: number
   floor: number | null
 }
@@ -137,7 +168,7 @@ export function useDashboardGoals() {
 export function useUpsertGoal() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: (data: { ano: number; mes: number; id_loja: string; target: number; floor: number | null }) =>
+    mutationFn: (data: { ano: number; mes: number; id_loja: string; tipo: string; target: number; floor: number | null }) =>
       apiFetch<ApiGoal>('/dashboard/goals', {
         init: { method: 'POST', body: JSON.stringify(data) },
       }),
@@ -168,6 +199,7 @@ export interface ApiVendorGoal {
   mes: number
   id_vendedor: string
   nome_vendedor: string | null
+  tipo: string
   target: number
   floor: number | null
 }
@@ -183,7 +215,7 @@ export function useVendorGoals(params?: { ano?: number; mes?: number }) {
 export function useUpsertVendorGoal() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: (data: { ano: number; mes: number; id_vendedor: string; target: number; floor: number | null }) =>
+    mutationFn: (data: { ano: number; mes: number; id_vendedor: string; tipo: string; target: number; floor: number | null }) =>
       apiFetch<ApiVendorGoal>('/dashboard/vendor-goals', {
         init: { method: 'POST', body: JSON.stringify(data) },
       }),

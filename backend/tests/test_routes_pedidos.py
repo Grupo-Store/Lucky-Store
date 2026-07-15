@@ -123,7 +123,8 @@ class TestListPedidos:
 
     def test_returns_items_and_pagination_fields(self, make_test_client, mock_db):
         client = make_test_client(pedidos_router)
-        with patch("app.api.routes.pedidos.PedidoService.list", return_value=([_fake_pedido()], 1, 1)):
+        with patch("app.api.routes.pedidos.PedidoService.list", return_value=([_fake_pedido()], 1, 1)), \
+             patch("app.api.routes.pedidos._total_estornado", return_value=Decimal("0")):
             resp = client.get("/pedidos")
         body = resp.json()
         assert body["total"] == 1

@@ -1,6 +1,7 @@
 import { render, screen } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { MemoryRouter } from 'react-router-dom';
 import Dashboard from './Dashboard';
 
 vi.mock('@/hooks/use-dashboard-query', () => ({
@@ -9,6 +10,10 @@ vi.mock('@/hooks/use-dashboard-query', () => ({
   useDashboardBreakdownByCompany: vi.fn(),
   useDashboardBreakdownBySeller: vi.fn(),
   useDashboardCardSpend: vi.fn(() => ({ data: { items: [] }, isLoading: false })),
+  useDashboardCounts: vi.fn(() => ({ data: {
+    pedidos_abertos: 0, pedidos_entregues: 0, cotacoes_abertas: 0, cotacoes_fechadas: 0,
+    rmas_abertos: 0, rmas_entregues: 0, produtos_para_comprar: 0,
+  } })),
   useDashboardGoals: vi.fn(() => ({ data: { items: [] }, isLoading: false })),
   useUpsertGoal: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
   useDeleteGoal: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
@@ -111,7 +116,9 @@ function makeQueryClient() {
 function renderDashboard() {
   return render(
     <QueryClientProvider client={makeQueryClient()}>
-      <Dashboard />
+      <MemoryRouter>
+        <Dashboard />
+      </MemoryRouter>
     </QueryClientProvider>
   );
 }

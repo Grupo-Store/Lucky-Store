@@ -29,7 +29,14 @@ export function adaptPedidoToOrder(p: PedidoListItem): Order {
       .filter(Boolean) as PaymentMethod[],
     installments: p.parcelas ?? 1,
     deliveryDate: p.data_entrega,
-    status: p.status as OrderStatus,
+    status: (() => {
+      const s = p.status as OrderStatus;
+      if (p.is_cancelled) return 'Cancelled' as OrderStatus;
+      if (s === 'Delivered' || s === 'Cancelled') return s;
+      const today = new Date().toISOString().slice(0, 10);
+      if (p.data_entrega && p.data_entrega < today) return 'Delayed' as OrderStatus;
+      return s;
+    })(),
     isRMA: p.is_rma ?? false,
     cancelled: p.is_cancelled ?? false,
     observations: p.observacao ?? '',
@@ -66,6 +73,7 @@ export function adaptPedidoToOrder(p: PedidoListItem): Order {
     paymentDate: p.data_pagamento ?? undefined,
     penaltyValue: Number(p.multa) || 0,
     interestValue: Number(p.juros) || 0,
+    refundTotal: Number(p.valor_total_estornado) || 0,
     paymentMethod: p.forma_pagamento_efetiva
       ? (FORMA_TO_PAYMENT[p.forma_pagamento_efetiva] ?? (p.forma_pagamento_efetiva as PaymentMethod))
       : undefined,

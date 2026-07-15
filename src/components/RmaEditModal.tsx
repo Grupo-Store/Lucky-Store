@@ -8,7 +8,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
-import { CalendarIcon, ClipboardList, Wrench, Truck, Printer, Plus, Trash2 } from 'lucide-react';
+import { CalendarIcon, ClipboardList, Wrench, Truck, Printer, Plus, Trash2, RotateCcw } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
@@ -122,6 +122,9 @@ interface LocalItem {
   quantidade: number;
   status: ItemRmaStatus;
   consertado_por: string;
+  valor_estornado: number;
+  data_estorno: string;
+  motivo_estorno: string;
 }
 
 interface LocalFrete {
@@ -162,6 +165,9 @@ export function RmaEditModal({ open, onClose, rma }: Props) {
         quantidade: i.quantidade,
         status: i.status,
         consertado_por: i.consertado_por ?? '',
+        valor_estornado: parseFloat(i.valor_estornado ?? '0') || 0,
+        data_estorno: i.data_estorno ?? '',
+        motivo_estorno: i.motivo_estorno ?? '',
       })));
       // Fretes de RMA ainda não têm persistência no backend (sem endpoint/campo em RmaResponse).
       // Mantemos somente em estado local até o modelo de dados suportá-los.
@@ -201,10 +207,21 @@ export function RmaEditModal({ open, onClose, rma }: Props) {
 
       for (const item of localItems) {
         const orig = rma.itens.find(i => i.id === item.id);
-        if (orig && (item.status !== orig.status || item.consertado_por !== (orig.consertado_por ?? ''))) {
+        const origEstornado = parseFloat(orig?.valor_estornado ?? '0') || 0;
+        const changed = orig && (
+          item.status !== orig.status ||
+          item.consertado_por !== (orig.consertado_por ?? '') ||
+          item.valor_estornado !== origEstornado ||
+          item.data_estorno !== (orig.data_estorno ?? '') ||
+          item.motivo_estorno !== (orig.motivo_estorno ?? '')
+        );
+        if (changed) {
           await apiClient.patch(`/rma/${rma.id}/items/${item.id}/status`, {
             new_status: item.status,
             consertado_por: item.consertado_por || undefined,
+            valor_estornado: item.valor_estornado || null,
+            data_estorno: item.data_estorno || null,
+            motivo_estorno: item.motivo_estorno || null,
           });
         }
       }
@@ -348,6 +365,71 @@ export function RmaEditModal({ open, onClose, rma }: Props) {
               </div>
             </section>
 
+            {/* ===== Devoluções / Estorno ===== */}
+            <section className="rm-card" id="sec-devolucao">
+              <h2><RotateCcw className="h-4 w-4" /> Devoluções / Estorno</h2>
+              <div className="rm-body">
+                {localItems.filter(i => i.valor_estornado > 0 || i.motivo_estorno).length === 0 && localItems.length > 0 && (
+                  <div className="rm-empty">Nenhum estorno registrado. Preencha o valor estornado nos itens abaixo.</div>
+                )}
+                {localItems.map((item, idx) => (
+                  <div key={item.id} className="rm-ditem">
+                    <div className="rm-itemhead">
+                      <span className="t">{item.descricao} (Qtd: {item.quantidade})</span>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3 items-end">
+                      <div>
+                        <Label>Valor Estornado (R$)</Label>
+                        <Input
+                          type="number" step="0.01" min={0}
+                          className="bg-[#FBFCFE] border-[#E2E8F1]"
+                          placeholder="0,00"
+                          value={item.valor_estornado || ''}
+                          onChange={e => setLocalItems(prev => prev.map(i => i.id === item.id ? { ...i, valor_estornado: parseFloat(e.target.value) || 0 } : i))}
+                          onKeyDown={handleEnterBlur}
+                        />
+                      </div>
+                      <div>
+                        <Label>Data do Estorno</Label>
+                        <Popover>
+                          <PopoverTrigger asChild>
+                            <Button variant="outline" className="w-full justify-start text-left font-normal bg-white">
+                              <CalendarIcon className="mr-2 h-4 w-4" />
+                              {item.data_estorno ? fmtDate(item.data_estorno) : 'Selecionar'}
+                            </Button>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-auto p-0">
+                            <Calendar
+                              mode="single"
+                              selected={item.data_estorno ? new Date(item.data_estorno + 'T12:00:00') : undefined}
+                              onSelect={d => setLocalItems(prev => prev.map(i => i.id === item.id ? { ...i, data_estorno: d ? format(d, 'yyyy-MM-dd') : '' } : i))}
+                              locale={ptBR}
+                              className="p-3 pointer-events-auto"
+                            />
+                          </PopoverContent>
+                        </Popover>
+                      </div>
+                      <div>
+                        <Label>Motivo</Label>
+                        <Input
+                          className="bg-[#FBFCFE] border-[#E2E8F1]"
+                          placeholder="Motivo do estorno"
+                          value={item.motivo_estorno}
+                          onChange={e => setLocalItems(prev => prev.map(i => i.id === item.id ? { ...i, motivo_estorno: e.target.value } : i))}
+                          onKeyDown={handleEnterBlur}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                ))}
+                {localItems.some(i => i.valor_estornado > 0) && (
+                  <div className="rm-fretetotal" style={{ color: '#d24545' }}>
+                    Total Estornado: {toBRL(localItems.reduce((s, i) => s + (i.valor_estornado || 0), 0))}
+                  </div>
+                )}
+              </div>
+            </section>
+
             {/* ===== Fretes (UI pronta — sem persistência ainda) ===== */}
             <section className="rm-card" id="sec-fretes">
               <h2>
@@ -415,6 +497,12 @@ export function RmaEditModal({ open, onClose, rma }: Props) {
                   <span className="k">Status</span>
                   <span className="v" style={{ color: stColor, fontWeight: 700 }}>{primaryStatus ? statusLabel(primaryStatus) : '—'}</span>
                 </div>
+                {localItems.some(i => i.valor_estornado > 0) && (
+                  <div className="rm-line">
+                    <span className="k">Valor Estornado</span>
+                    <span className="v" style={{ color: '#d24545' }}>{toBRL(localItems.reduce((s, i) => s + (i.valor_estornado || 0), 0))}</span>
+                  </div>
+                )}
               </div>
             </div>
 
@@ -439,6 +527,7 @@ export function RmaEditModal({ open, onClose, rma }: Props) {
             <nav className="rm-jump">
               <a href="#sec-geral">Informações Gerais</a>
               <a href="#sec-itens">Itens do RMA</a>
+              <a href="#sec-devolucao">Devoluções / Estorno</a>
               <a href="#sec-fretes">Fretes</a>
             </nav>
           </aside>

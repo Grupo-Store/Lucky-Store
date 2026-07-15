@@ -15,23 +15,27 @@ const BRL = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', curren
 
 interface SellerGoalChartProps {
   items: SellerBreakdownItem[];
-  // Per-seller goals not yet supported by backend — alvo/piso are mocked as 0
   goals?: Record<string, { alvo: number; piso: number }>;
+  // Tipo de meta em visualização — define a métrica realizada exibida (faturamento vs lucro)
+  metaTipo?: 'faturamento' | 'lucro';
 }
 
-export function SellerGoalChart({ items, goals = {} }: SellerGoalChartProps) {
+export function SellerGoalChart({ items, goals = {}, metaTipo = 'faturamento' }: SellerGoalChartProps) {
+  const isLucro = metaTipo === 'lucro';
   const data = items.map((item) => ({
     name: item.nome,
     alvo: goals[item.id_vendedor]?.alvo ?? 0,
     piso: goals[item.id_vendedor]?.piso ?? 0,
-    vendas: item.receita,
-    lucro: Math.max(item.lucro, 0), // show only positive lucro in chart
+    // Realizado acompanha o tipo de meta: lucro (só positivo) ou faturamento
+    realizado: isLucro ? Math.max(item.lucro, 0) : item.receita,
   }));
+  const realizadoLabel = isLucro ? 'Lucro' : 'Vendas';
+  const realizadoColor = isLucro ? '#16a34a' : '#0f4c5c';
 
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="text-secondary">Vendas vs Meta por Vendedor</CardTitle>
+        <CardTitle className="text-secondary">{realizadoLabel} vs Meta por Vendedor</CardTitle>
       </CardHeader>
       <CardContent>
         <ResponsiveContainer width="100%" height={300}>
@@ -45,16 +49,14 @@ export function SellerGoalChart({ items, goals = {} }: SellerGoalChartProps) {
                 const labels: Record<string, string> = {
                   alvo: 'Alvo',
                   piso: 'Piso',
-                  vendas: 'Vendas',
-                  lucro: 'Lucro',
+                  realizado: realizadoLabel,
                 };
                 return labels[value] ?? value;
               }}
             />
             <Bar dataKey="alvo" name="alvo" fill="#f59e0b" radius={[4, 4, 0, 0]} />
             <Bar dataKey="piso" name="piso" fill="#ef4444" radius={[4, 4, 0, 0]} />
-            <Bar dataKey="vendas" name="vendas" fill="#0f4c5c" radius={[4, 4, 0, 0]} />
-            <Bar dataKey="lucro" name="lucro" fill="#16a34a" radius={[4, 4, 0, 0]} />
+            <Bar dataKey="realizado" name="realizado" fill={realizadoColor} radius={[4, 4, 0, 0]} />
           </BarChart>
         </ResponsiveContainer>
       </CardContent>

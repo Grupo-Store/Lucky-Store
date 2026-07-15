@@ -20,6 +20,7 @@ from app.schemas.dashboard import (
     DailySeriesResponse,
     ProjectionsResponse,
     CardSpendResponse,
+    DashboardCountsResponse,
 )
 from app.services import dashboard as svc
 
@@ -70,6 +71,15 @@ def card_spend(
     _: User = Depends(get_current_user),
 ):
     return svc.get_card_spend(db, **f)
+
+
+@router.get("/counts", response_model=DashboardCountsResponse)
+def get_counts(
+    f: dict = Depends(_filters),
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_user),
+):
+    return svc.get_counts(db, **f)
 
 
 @router.get("/daily-series", response_model=DailySeriesResponse)

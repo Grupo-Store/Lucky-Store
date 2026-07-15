@@ -1,4 +1,5 @@
-import { useState, useMemo, memo } from 'react';
+import { useState, useMemo, memo, useEffect } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useOrdersQuery, OrderFilters, PedidoListItem, FreteApiItem } from '@/hooks/use-orders-query';
@@ -23,7 +24,7 @@ import {
   RMA_STATUS_LABELS, RMA_STATUS_COLORS, PaymentInstallment, PaymentMethod,
 } from '@/store/OrderStore';
 import {
-  useQuotes as useLocalQuotes, Quote, DirectSupplyQuoteItem, QuotePhaseKey, QUOTE_PHASE_LABELS, QUOTE_PHASE_COLORS,
+  Quote, DirectSupplyQuoteItem, QuotePhaseKey, QUOTE_PHASE_LABELS, QUOTE_PHASE_COLORS,
   getHighestPhase, getPhaseDate, getDisplayValue, emptyPhases,
 } from '@/store/QuoteStore';
 import { LOJA_IDS, VENDEDOR_IDS, FORMA_PAGAMENTO_MAP } from '@/api/storeConfig';
@@ -218,6 +219,15 @@ const FORMA_TO_PAYMENT: Record<string, PaymentMethod> = Object.fromEntries(
   Object.entries(FORMA_PAGAMENTO_MAP).map(([k, v]) => [v, k as PaymentMethod])
 );
 
+function getEffectiveStatus(status: string, isCancelled: boolean, deliveryDate: string | null | undefined): OrderStatus {
+  const s = status as OrderStatus;
+  if (isCancelled) return 'Cancelled';
+  if (s === 'Delivered' || s === 'Cancelled') return s;
+  const todayStr = new Date().toISOString().slice(0, 10);
+  if (deliveryDate && deliveryDate < todayStr) return 'Delayed';
+  return s;
+}
+
 export function pedidoListToOrder(item: PedidoListItem): Order {
   return {
     id: item.id,
@@ -238,7 +248,7 @@ export function pedidoListToOrder(item: PedidoListItem): Order {
       .filter(Boolean) as PaymentMethod[],
     installments: item.parcelas ?? 1,
     deliveryDate: item.data_entrega,
-    status: item.status as OrderStatus,
+    status: getEffectiveStatus(item.status, item.is_cancelled ?? false, item.data_entrega),
     isRMA: item.is_rma ?? false,
     cancelled: item.is_cancelled ?? false,
     observations: item.observacao ?? '',
@@ -255,6 +265,7 @@ export function pedidoListToOrder(item: PedidoListItem): Order {
     salesTaxPercent:    parseFloat(item.custo?.pct_imposto_venda      ?? '0') || 0,
     salesTaxValue:      parseFloat(item.custo?.imposto_venda          ?? '0') || 0,
     salesValue: item.valor_venda ?? 0,
+    refundTotal: parseFloat(String(item.valor_total_estornado ?? '0')) || 0,
     items: (item.produtos ?? []).filter(p => !p.is_direct_supply).map(p => ({
       id: p.id,
       name: p.descricao,
@@ -324,11 +335,28 @@ function isInRange(iso: string, range: DateRange): boolean {
   return d >= from && d <= to;
 }
 
+// Situação coarse do RMA (client-side)
+const RMA_DELIVERED_STATUSES: RmaStatus[] = ['Delivered', 'Completed'];
+const RMA_CLOSED_STATUSES: RmaStatus[] = ['Delivered', 'Completed', 'Cancelled'];
+
+/** Intenção de navegação vinda dos cards do dashboard de Vendas. */
+interface SalesNav {
+  tab: 'orders' | 'products' | 'quotes';
+  orderView?: 'all' | 'open' | 'rma';
+  orderStatus?: PedidoStatus;
+  quoteStatus?: string;
+  prodStatus?: string;
+  prodView?: 'all' | 'open';
+  rmaStatus?: 'all' | 'open' | 'delivered';
+  idLoja?: string;
+}
+
 
 export default function Sales() {
-  const { orders, addOrder, updateOrder, deleteOrder, updateItemStatus, nextOS, nextRmaNumber } = useOrders();
-  const { nextIndex } = useLocalQuotes();
+  const { orders, addOrder, updateOrder, deleteOrder, updateItemStatus, nextRmaNumber } = useOrders();
   const { mutate: deleteQuoteMutation } = useDeleteQuote();
+  const location = useLocation();
+  const navigate = useNavigate();
   const [tab, setTab] = useState('orders');
   const [modalOpen, setModalOpen] = useState(false);
   const [editOrder, setEditOrder] = useState<Order | null>(null);
@@ -351,6 +379,17 @@ export default function Sales() {
     page: 1, limit: 20, sort_by: 'data_pedido', sort_dir: 'desc',
   });
   const { data, isLoading, isError, refetch } = useOrdersQuery(filters);
+
+  // Próxima OS (preview) no formato real "OS-0XX", a partir dos pedidos carregados.
+  // O número definitivo é gerado pelo backend (sequence) ao salvar.
+  const nextOSReal = useMemo(() => {
+    const max = (data?.items ?? []).reduce((m, it) => {
+      const n = parseInt(String(it.numero_os).replace(/\D/g, ''), 10);
+      return Number.isFinite(n) && n > m ? n : m;
+    }, 0);
+    const next = `OS-${String(max + 1).padStart(3, '0')}`;
+    return () => next;
+  }, [data]);
 
   /* ---------- Products-specific API query (no pagination, loads all) ---------- */
   const prodApiFilters = useMemo<OrderFilters>(
@@ -407,9 +446,19 @@ export default function Sales() {
   const { data: quotesData, isLoading: quotesLoading, isError: quotesError, refetch: quotesRefetch } =
     useQuotesAPI(quoteApiFilters);
 
+  // Próximo índice (preview) da cotação: sequencial 1..N a partir das cotações carregadas.
+  // O número definitivo é gerado pelo backend (sequence) ao salvar.
+  const nextIndexReal = useMemo(() => {
+    const max = (quotesData?.items ?? []).reduce((m, c) => (c.numero != null && c.numero > m ? c.numero : m), 0);
+    const next = String(max + 1);
+    return () => next;
+  }, [quotesData]);
+
   /* ---------- RMA tab state ---------- */
   const [rmaSearch, setRmaSearch] = useState('');
   const [rmaDateRange, setRmaDateRange] = useState<DateRange>({});
+  // Filtro de situação do RMA (client-side): todos, em aberto ou entregues
+  const [rmaStatusFilter, setRmaStatusFilter] = useState<'all' | 'open' | 'delivered'>('all');
   const [rmaEditModalOpen, setRmaEditModalOpen] = useState(false);
   const [editingRma, setEditingRma] = useState<RmaResponse | null>(null);
   const [rmaApiFilters, setRmaApiFilters] = useState<RmaFilters>({
@@ -417,6 +466,34 @@ export default function Sales() {
   });
   const { data: rmasData, isLoading: rmasLoading, isError: rmasError, refetch: rmasRefetch } =
     useRmas(rmaApiFilters);
+
+  /* ---------- Deep-link vindo dos cards do dashboard (location.state.salesNav) ---------- */
+  useEffect(() => {
+    const nav = (location.state as { salesNav?: SalesNav } | null)?.salesNav;
+    if (!nav) return;
+
+    const idLoja = nav.idLoja;
+    if (nav.tab) setTab(nav.tab);
+
+    if (nav.tab === 'orders') {
+      setOrderView(nav.orderView ?? 'all');
+      setFilters(f => ({ ...f, status: nav.orderStatus, id_loja: idLoja, page: 1 }));
+      if (nav.orderView === 'rma') {
+        setRmaStatusFilter(nav.rmaStatus ?? 'all');
+        setRmaApiFilters(f => ({ ...f, id_loja: idLoja, page: 1 }));
+      }
+    } else if (nav.tab === 'quotes') {
+      setQuoteStatusFilter(nav.quoteStatus ?? 'all');
+      setQuoteApiFilters(f => ({ ...f, id_loja: idLoja, page: 1 }));
+    } else if (nav.tab === 'products') {
+      setProdView(nav.prodView ?? 'all');
+      setProdStatusFilter(nav.prodStatus ?? 'all');
+    }
+
+    // Limpa o state para não reaplicar em re-render / ao voltar
+    navigate('.', { replace: true, state: null });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.state]);
 
   const toggleSort = (field: string) => {
     setFilters(f => ({
@@ -433,7 +510,10 @@ export default function Sales() {
     const q = quoteSearch.toLowerCase().trim();
     return items.filter(qt => {
       const highest = getCotacaoPhase(qt);
-      if (quoteStatusFilter !== 'all' && highest !== quoteStatusFilter) return false;
+      if (quoteStatusFilter === 'open') {
+        // "Em aberto" = ainda não fechada e não caída
+        if (highest === 'closed' || highest === 'dropped') return false;
+      } else if (quoteStatusFilter !== 'all' && highest !== quoteStatusFilter) return false;
       if (q && !(
         qt.cliente.toLowerCase().includes(q) ||
         (qt.numero_requisicao ?? '').toLowerCase().includes(q) ||
@@ -448,17 +528,21 @@ export default function Sales() {
     });
   }, [quotesData, quoteSearch, quoteStatusFilter, quoteRange, quoteDateField]);
 
-  /* ---------- RMAs (client-side search on top of API data) ---------- */
+  /* ---------- RMAs (client-side search + situação on top of API data) ---------- */
   const filteredRmas = useMemo(() => {
     const items = rmasData?.items ?? [];
     const q = rmaSearch.toLowerCase().trim();
-    if (!q) return items;
-    return items.filter(r =>
-      r.numero_rma.toLowerCase().includes(q) ||
-      r.id_pedido_origem.toLowerCase().includes(q) ||
-      (RMA_FULL_STATUS_LABELS[r.status] ?? r.status).toLowerCase().includes(q)
-    );
-  }, [rmasData, rmaSearch]);
+    return items.filter(r => {
+      if (rmaStatusFilter === 'open' && RMA_CLOSED_STATUSES.includes(r.status)) return false;
+      if (rmaStatusFilter === 'delivered' && !RMA_DELIVERED_STATUSES.includes(r.status)) return false;
+      if (q && !(
+        r.numero_rma.toLowerCase().includes(q) ||
+        r.id_pedido_origem.toLowerCase().includes(q) ||
+        (RMA_FULL_STATUS_LABELS[r.status] ?? r.status).toLowerCase().includes(q)
+      )) return false;
+      return true;
+    });
+  }, [rmasData, rmaSearch, rmaStatusFilter]);
 
   /* ---------- Products (from API) ---------- */
   const products = useMemo(() => {
@@ -476,6 +560,9 @@ export default function Sales() {
           : p.status),
         projectedValue: parseFloat(p.valor_projetado) || 0,
         purchaseValue: parseFloat(p.valor_compra ?? '0') || 0,
+        supplier: p.sub_compras && p.sub_compras.length > 0
+          ? [...new Set(p.sub_compras.map(sc => sc.supplier).filter(Boolean))].join(', ')
+          : (p.fornecedor ?? ''),
         orderId: o.id,
         os: o.numero_os,
         customer: o.nome_cliente ?? '',
@@ -490,7 +577,8 @@ export default function Sales() {
         p.customer.toLowerCase().includes(q) ||
         (p.company || '').toLowerCase().includes(q) ||
         (p.seller || '').toLowerCase().includes(q) ||
-        p.name.toLowerCase().includes(q)
+        p.name.toLowerCase().includes(q) ||
+        (p.supplier || '').toLowerCase().includes(q)
       ))
       .filter(p => prodStatusFilter === 'all' || p.status === prodStatusFilter)
       .filter(p => {
@@ -609,6 +697,7 @@ export default function Sales() {
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="all">Todos os Status</SelectItem>
+                      <SelectItem value="open">Em aberto</SelectItem>
                       {(Object.keys(QUOTE_PHASE_LABELS) as QuotePhaseKey[]).map(k => (
                         <SelectItem key={k} value={k}>
                           <span className={cn('px-2 py-0.5 rounded text-xs font-medium', QUOTE_PHASE_COLORS[k])}>{QUOTE_PHASE_LABELS[k]}</span>
@@ -775,6 +864,20 @@ export default function Sales() {
                     className="flex-1 min-w-[160px]"
                   />
 
+                  {/* Situação (RMA only) — filtro coarse: em aberto / entregues */}
+                  {orderView === 'rma' && (
+                    <Select value={rmaStatusFilter} onValueChange={v => setRmaStatusFilter(v as 'all' | 'open' | 'delivered')}>
+                      <SelectTrigger style={{ width: 150, background: '#FBFCFE', borderColor: '#E2E8F1', borderRadius: 10, flexShrink: 0 }}>
+                        <SelectValue placeholder="Situação" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">Todas as situações</SelectItem>
+                        <SelectItem value="open">Em aberto</SelectItem>
+                        <SelectItem value="delivered">Entregues</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  )}
+
                   {/* Status select */}
                   {orderView !== 'rma' ? (
                     <Select value={filters.status ?? 'all'} onValueChange={v => setFilters(f => ({ ...f, status: v === 'all' ? undefined : v, page: 1 }))}>
@@ -864,12 +967,12 @@ export default function Sales() {
 
                   {/* Clear */}
                   {(orderView === 'rma'
-                    ? (rmaSearch || rmaApiFilters.status || rmaDateRange.from)
+                    ? (rmaSearch || rmaApiFilters.status || rmaDateRange.from || rmaStatusFilter !== 'all')
                     : (orderSearch || orderRange.from || orderAlertsOnly || filters.status)
                   ) && (
                     <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={() => {
                       if (orderView === 'rma') {
-                        setRmaSearch(''); setRmaDateRange({});
+                        setRmaSearch(''); setRmaDateRange({}); setRmaStatusFilter('all');
                         setRmaApiFilters(f => ({ ...f, status: undefined, data_inicio: undefined, data_fim: undefined, page: 1 }));
                       } else {
                         setOrderSearch(''); setOrderRange({}); setOrderAlertsOnly(false);
@@ -1009,6 +1112,8 @@ export default function Sales() {
                               </TableRow>
                             ))
                           ) : displayedOrders.map(item => {
+                            const effectiveStatus = getEffectiveStatus(item.status, item.is_cancelled ?? false, item.data_entrega);
+                            const orderValue = item.valor_venda ?? 0;
                             const warn = WARN_STATUSES.includes(item.status as OrderStatus) &&
                               differenceInCalendarDays(new Date(item.data_entrega + 'T12:00:00'), new Date()) <= 3;
                             const lojaDot: Record<string, string> = { 'Lucky Store': '#2F6BFF', 'BTech': '#19A974', 'AJJ': '#9B6BFF' };
@@ -1050,14 +1155,14 @@ export default function Sales() {
                                 <TableCell style={{ padding: '15px 18px' }}>{fmtDate(item.data_entrega)}</TableCell>
                                 <TableCell style={{ padding: '15px 18px' }} onClick={e => e.stopPropagation()}>
                                   <Select
-                                    value={item.status}
+                                    value={effectiveStatus}
                                     onValueChange={v =>
                                       updateOrderStatusInline({ id: item.id, new_status: v as PedidoStatus })
                                     }
                                   >
                                     <SelectTrigger className={cn(
                                       'h-7 text-xs font-semibold border py-0',
-                                      ORDER_STATUS_COLORS[item.status as OrderStatus] ?? 'bg-muted',
+                                      ORDER_STATUS_COLORS[effectiveStatus] ?? 'bg-muted',
                                     )} style={{ width: 'auto', minWidth: 140, borderRadius: 8, paddingLeft: 10, paddingRight: 6 }}>
                                       <SelectValue />
                                     </SelectTrigger>
@@ -1073,9 +1178,9 @@ export default function Sales() {
                                   </Select>
                                 </TableCell>
                                 <TableCell className="text-right font-semibold" style={{ padding: '15px 18px', fontVariantNumeric: 'tabular-nums' }}>
-                                  {item.is_rma || item.valor_venda == null
+                                  {item.is_rma
                                     ? <span className="text-muted-foreground">—</span>
-                                    : formatBRL(item.valor_venda)}
+                                    : formatBRL(orderValue)}
                                 </TableCell>
                               </TableRow>
                             );
@@ -1133,7 +1238,7 @@ export default function Sales() {
                     ))}
                   </div>
 
-                  <SearchBar value={prodSearch} onChange={setProdSearch} placeholder="OS, Cliente, Empresa, Vendedor, Produto..." className="flex-1 min-w-[160px]" />
+                  <SearchBar value={prodSearch} onChange={setProdSearch} placeholder="OS, Cliente, Empresa, Vendedor, Produto, Fornecedor..." className="flex-1 min-w-[160px]" />
 
                   <Select value={prodStatusFilter} onValueChange={setProdStatusFilter}>
                     <SelectTrigger style={{ width: 168, background: '#FBFCFE', borderColor: '#E2E8F1', borderRadius: 10, flexShrink: 0 }}>
@@ -1176,7 +1281,7 @@ export default function Sales() {
                   <Table>
                     <TableHeader>
                       <TableRow style={{ background: '#F8FAFD', borderBottom: '1px solid #EEF2F8' }}>
-                        {['OS Pai', 'Produto', 'Cliente', 'Qtd.', 'Status', 'Entrega Pedido', 'Entrega Produto'].map(h => (
+                        {['OS Pai', 'Produto', 'Fornecedor', 'Cliente', 'Qtd.', 'Status', 'Entrega Pedido', 'Entrega Produto'].map(h => (
                           <TableHead key={h} style={{ fontSize: 11.5, fontWeight: 600, letterSpacing: '0.1em', textTransform: 'uppercase', color: '#5B6B82', padding: '12px 18px' }}>{h}</TableHead>
                         ))}
                       </TableRow>
@@ -1190,6 +1295,7 @@ export default function Sales() {
                               <span style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600 }}>{p.os}</span>
                             </TableCell>
                             <TableCell style={{ padding: '15px 18px' }}>{p.name}</TableCell>
+                            <TableCell style={{ padding: '15px 18px' }}>{p.supplier || '—'}</TableCell>
                             <TableCell style={{ padding: '15px 18px' }}>{p.customer}</TableCell>
                             <TableCell style={{ padding: '15px 18px' }}>{p.quantity}</TableCell>
                             <TableCell style={{ padding: '15px 18px' }} onClick={e => e.stopPropagation()}>
@@ -1224,7 +1330,7 @@ export default function Sales() {
                         );
                       })}
                       {pagedProducts.length === 0 && (
-                        <TableRow><TableCell colSpan={7} className="text-center py-8 text-muted-foreground">Nenhum produto encontrado</TableCell></TableRow>
+                        <TableRow><TableCell colSpan={8} className="text-center py-8 text-muted-foreground">Nenhum produto encontrado</TableCell></TableRow>
                       )}
                     </TableBody>
                   </Table>
@@ -1249,7 +1355,7 @@ export default function Sales() {
           order={editOrder}
           onSave={o => editOrder ? updateOrder(o) : addOrder(o)}
           onDelete={deleteOrder}
-          nextOS={nextOS}
+          nextOS={nextOSReal}
           prefill={orderPrefill}
         />
         <ProductModal
@@ -1265,7 +1371,7 @@ export default function Sales() {
           quote={editQuote}
           onSave={() => {}}
           onDelete={id => deleteQuoteMutation(id)}
-          nextIndex={nextIndex}
+          nextIndex={nextIndexReal}
         />
         <RmaModal
           open={rmaModalOpen}

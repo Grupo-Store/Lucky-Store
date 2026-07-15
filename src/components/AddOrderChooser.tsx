@@ -42,6 +42,7 @@ export interface OrderPrefill {
   /** Cotação de origem, quando o pedido é criado a partir de uma cotação */
   sourceQuoteId?: string;
   customer: string;
+  customerCompany?: string;
   cnpj: string;
   company: Quote['company'];
   seller: Quote['seller'];
@@ -141,18 +142,21 @@ export function AddOrderChooser({ open, onClose, onChooseNew, onChooseFromQuote 
         quantity: i.quantidade,
         projectedValue: parseFloat(i.valor_unitario) || 0,
       })),
-      directSupplyItems: dsItems.map(i => ({
-        id: crypto.randomUUID(),
-        name: i.descricao,
-        quantity: i.quantidade,
-        projectedValue: parseFloat(i.valor_unitario) || 0,
-        purchaseValue: 0,
-        closingValue: i.valor_fechamento ? parseFloat(i.valor_fechamento) : parseFloat(i.valor_unitario) || 0,
-        supplier: i.fornecedor || '',
-        supplierPct: parseFloat(i.porcentagem_fornecedor ?? '0') || 0,
-        supplierFreight: parseFloat(i.frete_fornecedor ?? '0') || 0,
-        supplierInvoice: '',
-      })),
+      directSupplyItems: dsItems.map(i => {
+        const closingVal = i.valor_fechamento ? (parseFloat(i.valor_fechamento) || 0) : (parseFloat(i.valor_unitario) || 0);
+        return {
+          id: crypto.randomUUID(),
+          name: i.descricao,
+          quantity: i.quantidade,
+          projectedValue: parseFloat(i.valor_unitario) || 0,
+          purchaseValue: 0,
+          closingValue: closingVal,
+          supplier: i.fornecedor || '',
+          supplierPct: parseFloat(i.porcentagem_fornecedor ?? '0') || 0,
+          supplierFreight: parseFloat(i.frete_fornecedor ?? '0') || 0,
+          supplierInvoice: '',
+        };
+      }),
     };
     onChooseFromQuote(prefill);
     handleOpenChange(false);
@@ -299,8 +303,8 @@ export function AddOrderChooser({ open, onClose, onChooseNew, onChooseFromQuote 
                     <TableHead className="w-10"></TableHead>
                     <TableHead>Item</TableHead>
                     <TableHead>Qtd</TableHead>
-                    <TableHead className="text-right">Val. Cotação</TableHead>
-                    <TableHead className="text-right">Val. Fechamento</TableHead>
+                    <TableHead className="text-right">Custo do produto</TableHead>
+                    <TableHead className="text-right">Valor enviado na cotação</TableHead>
                     <TableHead>Tipo</TableHead>
                   </TableRow>
                 </TableHeader>

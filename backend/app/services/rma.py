@@ -266,6 +266,15 @@ class RmaService:
         item.status = data.new_status
         if data.consertado_por is not None:
             item.consertado_por = data.consertado_por
+        # Estorno: aplica apenas os campos enviados na requisição (permite limpar com null,
+        # sem apagar quando o patch vem só de status — ex.: mudança de status no fluxo de vendas)
+        fields_set = data.model_fields_set
+        if "valor_estornado" in fields_set:
+            item.valor_estornado = data.valor_estornado
+        if "data_estorno" in fields_set:
+            item.data_estorno = data.data_estorno
+        if "motivo_estorno" in fields_set:
+            item.motivo_estorno = data.motivo_estorno
 
         db.add(StatusHistory(
             entity_type=EntityType.ITEM_RMA,

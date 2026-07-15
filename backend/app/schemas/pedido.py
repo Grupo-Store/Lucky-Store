@@ -1,4 +1,4 @@
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, field_validator, model_validator
 from datetime import date, datetime
 from decimal import Decimal
 from uuid import UUID
@@ -194,6 +194,12 @@ class PedidoResponse(BaseModel):
     data_pedido: date
     data_entrega: date
     status: str
+
+    @model_validator(mode='after')
+    def auto_delayed(self) -> 'PedidoResponse':
+        if self.status not in _FINAL_STATUSES and self.data_entrega < date.today():
+            self.status = "Delayed"
+        return self
     is_rma: Optional[bool]
     is_cancelled: Optional[bool]
     is_direct_billing: Optional[bool]
@@ -217,6 +223,9 @@ class PedidoDetailResponse(PedidoResponse):
     status_history: List[StatusHistoryOut] = []
 
 
+_FINAL_STATUSES = {"Delivered", "Cancelled", "Delayed"}
+
+
 class PedidoListItemResponse(BaseModel):
     id: UUID
     id_cotacao: Optional[UUID] = None
@@ -224,6 +233,12 @@ class PedidoListItemResponse(BaseModel):
     data_pedido: date
     data_entrega: date
     status: str
+
+    @model_validator(mode='after')
+    def auto_delayed(self) -> 'PedidoListItemResponse':
+        if self.status not in _FINAL_STATUSES and self.data_entrega < date.today():
+            self.status = "Delayed"
+        return self
     is_rma: Optional[bool] = None
     is_cancelled: Optional[bool] = None
     is_direct_billing: Optional[bool] = None
@@ -249,6 +264,7 @@ class PedidoListItemResponse(BaseModel):
     num_parcelas_efetivas: Optional[int] = None
     plano_parcelas: Optional[List[Any]] = None
     plano_parcelas_pedido: Optional[List[Any]] = None
+    valor_total_estornado: Optional[Decimal] = None
 
     class Config:
         from_attributes = True

@@ -287,8 +287,9 @@ export function ProductModal({ open, onClose, order, item, onSave }: Props) {
                   <div>
                     <Label>Qtd. Selecionada</Label>
                     <Input type="number" min={1} max={item.quantity} className="bg-[#FBFCFE] border-[#E2E8F1]"
-                      value={sp.selectedQuantity}
-                      onChange={e => updateSub(sp.id, 'selectedQuantity', parseInt(e.target.value) || 0)}
+                      value={sp.selectedQuantity || ''}
+                      onChange={e => updateSub(sp.id, 'selectedQuantity', e.target.value === '' ? 0 : parseInt(e.target.value) || 0)}
+                      onBlur={() => { if (!sp.selectedQuantity) updateSub(sp.id, 'selectedQuantity', 1); }}
                       onKeyDown={handleEnterBlur} />
                   </div>
                   <div>
@@ -351,7 +352,7 @@ export function ProductModal({ open, onClose, order, item, onSave }: Props) {
                       </SelectContent>
                     </Select>
                   </div>
-                  {sp.paymentMethod === 'Credit Card' && (
+                  {(sp.paymentMethod === 'Credit Card' || sp.paymentMethod === 'Boleto') && (
                     <div>
                       <Label>Parcelas</Label>
                       <Input type="number" min={1} max={24} className="bg-[#FBFCFE] border-[#E2E8F1]"

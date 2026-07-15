@@ -170,6 +170,7 @@ export function OrderModal({ open, onClose, order, onSave, nextOS, prefill }: Pr
       setForm({
         ...emptyOrder(nextOS?.() || ''),
         customer: prefill.customer,
+        customerCompany: prefill.customerCompany || '',
         cnpj: prefill.cnpj,
         company: prefill.company,
         seller: prefill.seller,
@@ -279,7 +280,7 @@ export function OrderModal({ open, onClose, order, onSave, nextOS, prefill }: Pr
     const cur = form.paymentMethods || [];
     set('paymentMethods', cur.includes(m) ? cur.filter(x => x !== m) : [...cur, m]);
   };
-  const hasCredit = (form.paymentMethods || []).includes('Credit Card');
+  const hasCredit = (form.paymentMethods || []).includes('Credit Card') || (form.paymentMethods || []).includes('Boleto');
 
   /* ---------------- Cancellation ---------------- */
   const handleCancelToggle = (v: boolean) => {
@@ -617,6 +618,9 @@ export function OrderModal({ open, onClose, order, onSave, nextOS, prefill }: Pr
   const [stColor, stBg, stBorder] = STATUS_HEX[curStatus] || STATUS_HEX['To Buy'];
   const marginPct = (form.salesValue || 0) > 0 ? (profit / (form.salesValue || 1)) * 100 : 0;
   const marginBarW = Math.max(0, Math.min(marginPct, 100));
+  const partialProfit = (form.salesValue || 0) - partialCost;
+  const partialMarginPct = (form.salesValue || 0) > 0 ? (partialProfit / (form.salesValue || 1)) * 100 : 0;
+  const partialMarginBarW = Math.max(0, Math.min(partialMarginPct, 100));
 
   return (
     <Dialog open={open} onOpenChange={v => !v && onClose()}>
@@ -700,10 +704,23 @@ export function OrderModal({ open, onClose, order, onSave, nextOS, prefill }: Pr
               </Select>
             </div>
 
-            <div>
-              <Label>Cliente <span className="text-destructive">*</span></Label>
-              <Input className="bg-[#FBFCFE] border-[#E2E8F1]" value={form.customer || ''} onChange={e => set('customer', e.target.value)} onKeyDown={handleEnterBlur} />
-            </div>
+            {form.customerCompany ? (
+              <>
+                <div>
+                  <Label>Cliente <span className="text-destructive">*</span></Label>
+                  <Input readOnly value={form.customerCompany} className="bg-[#F4F7FB] border-[#E2E8F1] font-semibold" />
+                </div>
+                <div>
+                  <Label>Contato</Label>
+                  <Input className="bg-[#FBFCFE] border-[#E2E8F1]" value={form.customer || ''} onChange={e => set('customer', e.target.value)} onKeyDown={handleEnterBlur} />
+                </div>
+              </>
+            ) : (
+              <div>
+                <Label>Cliente <span className="text-destructive">*</span></Label>
+                <Input className="bg-[#FBFCFE] border-[#E2E8F1]" value={form.customer || ''} onChange={e => set('customer', e.target.value)} onKeyDown={handleEnterBlur} />
+              </div>
+            )}
             <div>
               <Label>CPF/CNPJ</Label>
               <Input className="bg-[#FBFCFE] border-[#E2E8F1]" value={form.cnpj || ''} onChange={e => set('cnpj', e.target.value)} onKeyDown={handleEnterBlur} />
@@ -734,7 +751,6 @@ export function OrderModal({ open, onClose, order, onSave, nextOS, prefill }: Pr
               </Select>
             </div>
 
-            {/* Sales Value (moved from summary) */}
             {renderCurrencyInput('salesValue', 'Valor de Venda')}
 
             <div>
@@ -885,7 +901,7 @@ export function OrderModal({ open, onClose, order, onSave, nextOS, prefill }: Pr
                       </div>
                       <div className="col-span-1">
                         <Input type="number" min={1} className="bg-[#FBFCFE] border-[#E2E8F1]"
-                          value={item.quantity} onChange={e => updateDsItem(item.id, 'quantity', parseInt(e.target.value) || 1)} onKeyDown={handleEnterBlur} />
+                          value={item.quantity || ''} onChange={e => updateDsItem(item.id, 'quantity', e.target.value === '' ? 0 : parseInt(e.target.value) || 0)} onBlur={() => { if (!item.quantity) updateDsItem(item.id, 'quantity', 1); }} onKeyDown={handleEnterBlur} />
                         <span className="text-[10px] text-muted-foreground">Qtd</span>
                       </div>
                       <div className="col-span-2">
@@ -980,7 +996,7 @@ export function OrderModal({ open, onClose, order, onSave, nextOS, prefill }: Pr
                   <Input placeholder="Nome do Item" className="col-span-4 bg-[#FBFCFE] border-[#E2E8F1]"
                     value={item.name} onChange={e => updateItem(item.id, 'name', e.target.value)} onKeyDown={handleEnterBlur} />
                   <Input type="number" min="1" placeholder="Qtd" className="col-span-1 bg-[#FBFCFE] border-[#E2E8F1]"
-                    value={item.quantity} onChange={e => updateItem(item.id, 'quantity', parseInt(e.target.value) || 1)} onKeyDown={handleEnterBlur} />
+                    value={item.quantity || ''} onChange={e => updateItem(item.id, 'quantity', e.target.value === '' ? 0 : parseInt(e.target.value) || 0)} onBlur={() => { if (!item.quantity) updateItem(item.id, 'quantity', 1); }} onKeyDown={handleEnterBlur} />
                   <Select value={item.status} onValueChange={v => updateItem(item.id, 'status', v)}>
                     <SelectTrigger className={cn('col-span-2 border', ITEM_STATUS_COLORS[item.status])}>
                       <SelectValue />
@@ -996,11 +1012,12 @@ export function OrderModal({ open, onClose, order, onSave, nextOS, prefill }: Pr
                     </SelectContent>
                   </Select>
                   <div className="col-span-2">
-                    <Input placeholder="Valor Projetado R$" className="bg-[#FBFCFE] border-[#E2E8F1]"
+                    <Input placeholder="Custo Projetado R$" className="bg-[#FBFCFE] border-[#E2E8F1]"
                       value={itEditing('projectedValue') ? editingDsValue : toBRL(item.projectedValue || 0)}
                       onFocus={() => itFocus('projectedValue', item.projectedValue || 0)}
                       onBlur={() => itBlurBRL('projectedValue')}
                       onChange={e => setEditingDsValue(e.target.value)} onKeyDown={handleEnterBlur} />
+                    <span className="text-[10px] text-muted-foreground">Custo Projetado</span>
                   </div>
                   <div className="col-span-2">
                     {item.subPurchases && item.subPurchases.length > 0 ? (
@@ -1014,6 +1031,7 @@ export function OrderModal({ open, onClose, order, onSave, nextOS, prefill }: Pr
                         onBlur={() => itBlurBRL('purchaseValue')}
                         onChange={e => setEditingDsValue(e.target.value)} onKeyDown={handleEnterBlur} />
                     )}
+                    <span className="text-[10px] text-muted-foreground">Val. Compra</span>
                   </div>
                   <Button variant="ghost" size="icon" className="col-span-1" onClick={() => removeItem(item.id)}>
                     <Trash2 className="h-4 w-4 text-destructive" />
@@ -1094,7 +1112,23 @@ export function OrderModal({ open, onClose, order, onSave, nextOS, prefill }: Pr
               <h3>Resumo de Valores</h3>
               <div className="opm-sumbody">
                 <div className="opm-line"><span className="k">Valor de Venda</span><span className="v">{toBRL(form.salesValue || 0)}</span></div>
+                {(form.refundTotal ?? 0) > 0 && (
+                  <div className="opm-line"><span className="k" style={{ color: '#d24545' }}>Valor Estornado</span><span className="v" style={{ color: '#d24545' }}>-{toBRL(form.refundTotal!)}</span></div>
+                )}
+                {(form.refundTotal ?? 0) > 0 && (
+                  <div className="opm-line"><span className="k" style={{ fontWeight: 700 }}>Saldo do Pedido</span><span className="v" style={{ fontWeight: 700 }}>{toBRL((form.salesValue || 0) - (form.refundTotal || 0))}</span></div>
+                )}
                 <div className="opm-line"><span className="k">Custo parcial</span><span className="v">{toBRL(partialCost)}</span></div>
+                <div className="opm-result">
+                  <div className="lk">Lucro parcial</div>
+                  <div className="lv" style={{ color: partialProfit >= 0 ? '#eafaf6' : '#ffd2d2' }}>{toBRL(partialProfit)}</div>
+                  <div className="opm-marg">
+                    <div className="top"><span>Margem</span><b>{(form.salesValue || 0) > 0 ? `${partialMarginPct.toFixed(1)}%` : '—'}</b></div>
+                    <div className="opm-mtrack">
+                      <i style={{ width: `${partialMarginBarW}%`, background: partialProfit >= 0 ? 'linear-gradient(90deg,#7be3a8,#1fd07a)' : 'linear-gradient(90deg,#f1a3a3,#e05a5a)' }} />
+                    </div>
+                  </div>
+                </div>
                 <div className="opm-line"><span className="k">Custo final</span><span className="v">{toBRL(finalCost)}</span></div>
                 <div className="opm-result">
                   <div className="lk">Lucro do pedido</div>
@@ -1241,7 +1275,7 @@ function PagamentoSection({ form, set }: { form: Partial<Order>; set: (k: keyof 
   const [payDateOpen, setPayDateOpen] = useState(false);
 
   // ── Conjunto A: parcelas do VALOR DO PEDIDO (Informações Gerais → Crédito) ──
-  const orderIsCredit = (form.paymentMethods || []).includes('Credit Card');
+  const orderIsCredit = (form.paymentMethods || []).includes('Credit Card') || (form.paymentMethods || []).includes('Boleto');
   const orderN = orderIsCredit ? (form.installments || 0) : 0;
   const orderPlan = form.orderInstallmentPlan || [];
   const baseValue = form.salesValue || 0;
@@ -1262,7 +1296,7 @@ function PagamentoSection({ form, set }: { form: Partial<Order>; set: (k: keyof 
   };
 
   // ── Conjunto B: parcelas de MULTA/JUROS (Financeiro → Crédito) ──
-  const chargeIsCredit = form.paymentMethod === 'Credit Card';
+  const chargeIsCredit = form.paymentMethod === 'Credit Card' || form.paymentMethod === 'Boleto';
   const chargeN = chargeIsCredit ? (form.paymentInstallments || 0) : 0;
   const chargePlan = form.paymentInstallmentPlan || [];
   const multa = form.penaltyValue || 0;

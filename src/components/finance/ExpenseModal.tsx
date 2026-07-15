@@ -52,7 +52,7 @@ export function ExpenseModal({ open, onClose, expense, onSave, onDelete }: Props
 
   const isPrevisao = e.kind === 'PREVISAO';
   const showPayment = e.kind === 'PAGO' || e.status === 'Pago';
-  const isCredit = e.paymentMethod === 'Credit Card';
+  const isCredit = e.paymentMethod === 'Credit Card' || e.paymentMethod === 'Boleto';
   const baseValue = e.paidValue ?? e.predictedValue ?? 0;
 
   // Sync installment plan length
