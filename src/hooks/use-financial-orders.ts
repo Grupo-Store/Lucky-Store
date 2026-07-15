@@ -29,7 +29,14 @@ export function adaptPedidoToOrder(p: PedidoListItem): Order {
       .filter(Boolean) as PaymentMethod[],
     installments: p.parcelas ?? 1,
     deliveryDate: p.data_entrega,
-    status: p.status as OrderStatus,
+    status: (() => {
+      const s = p.status as OrderStatus;
+      if (p.is_cancelled) return 'Cancelled' as OrderStatus;
+      if (s === 'Delivered' || s === 'Cancelled') return s;
+      const today = new Date().toISOString().slice(0, 10);
+      if (p.data_entrega && p.data_entrega < today) return 'Delayed' as OrderStatus;
+      return s;
+    })(),
     isRMA: p.is_rma ?? false,
     cancelled: p.is_cancelled ?? false,
     observations: p.observacao ?? '',

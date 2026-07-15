@@ -212,6 +212,15 @@ const FORMA_TO_PAYMENT: Record<string, PaymentMethod> = Object.fromEntries(
   Object.entries(FORMA_PAGAMENTO_MAP).map(([k, v]) => [v, k as PaymentMethod])
 );
 
+function getEffectiveStatus(status: string, isCancelled: boolean, deliveryDate: string | null | undefined): OrderStatus {
+  const s = status as OrderStatus;
+  if (isCancelled) return 'Cancelled';
+  if (s === 'Delivered' || s === 'Cancelled') return s;
+  const todayStr = new Date().toISOString().slice(0, 10);
+  if (deliveryDate && deliveryDate < todayStr) return 'Delayed';
+  return s;
+}
+
 export function pedidoListToOrder(item: PedidoListItem): Order {
   return {
     id: item.id,
@@ -232,7 +241,7 @@ export function pedidoListToOrder(item: PedidoListItem): Order {
       .filter(Boolean) as PaymentMethod[],
     installments: item.parcelas ?? 1,
     deliveryDate: item.data_entrega,
-    status: item.status as OrderStatus,
+    status: getEffectiveStatus(item.status, item.is_cancelled ?? false, item.data_entrega),
     isRMA: item.is_rma ?? false,
     cancelled: item.is_cancelled ?? false,
     observations: item.observacao ?? '',
@@ -1096,6 +1105,7 @@ export default function Sales() {
                               </TableRow>
                             ))
                           ) : displayedOrders.map(item => {
+                            const effectiveStatus = getEffectiveStatus(item.status, item.is_cancelled ?? false, item.data_entrega);
                             const warn = WARN_STATUSES.includes(item.status as OrderStatus) &&
                               differenceInCalendarDays(new Date(item.data_entrega + 'T12:00:00'), new Date()) <= 3;
                             const lojaDot: Record<string, string> = { 'Lucky Store': '#2F6BFF', 'BTech': '#19A974', 'AJJ': '#9B6BFF' };
@@ -1137,14 +1147,14 @@ export default function Sales() {
                                 <TableCell style={{ padding: '15px 18px' }}>{fmtDate(item.data_entrega)}</TableCell>
                                 <TableCell style={{ padding: '15px 18px' }} onClick={e => e.stopPropagation()}>
                                   <Select
-                                    value={item.status}
+                                    value={effectiveStatus}
                                     onValueChange={v =>
                                       updateOrderStatusInline({ id: item.id, new_status: v as PedidoStatus })
                                     }
                                   >
                                     <SelectTrigger className={cn(
                                       'h-7 text-xs font-semibold border py-0',
-                                      ORDER_STATUS_COLORS[item.status as OrderStatus] ?? 'bg-muted',
+                                      ORDER_STATUS_COLORS[effectiveStatus] ?? 'bg-muted',
                                     )} style={{ width: 'auto', minWidth: 140, borderRadius: 8, paddingLeft: 10, paddingRight: 6 }}>
                                       <SelectValue />
                                     </SelectTrigger>

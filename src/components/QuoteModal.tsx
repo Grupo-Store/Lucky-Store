@@ -531,7 +531,7 @@ export function QuoteModal({ open, onClose, quote, onSave, onDelete, nextIndex }
                       </div>
                       <div style={{ gridColumn: 'span 3' }}>
                         <CurrencyInput value={item.quoteValue || 0} onChange={n => updateDsItem(item.id, 'quoteValue', n)} />
-                        <span className="text-[10px] text-muted-foreground">Val. Cotação</span>
+                        <span className="text-[10px] text-muted-foreground">Custo do produto</span>
                       </div>
                       <div style={{ gridColumn: 'span 3' }}>
                         <Input readOnly className="bg-[#F4F7FB] border-[#E2E8F1] font-semibold" value={toBRL(lineCost)} />
@@ -539,7 +539,7 @@ export function QuoteModal({ open, onClose, quote, onSave, onDelete, nextIndex }
                       </div>
                       <div style={{ gridColumn: 'span 3' }}>
                         <CurrencyInput value={item.closingValue || 0} onChange={n => updateDsItem(item.id, 'closingValue', n)} />
-                        <span className="text-[10px] text-muted-foreground">Val. Fechamento</span>
+                        <span className="text-[10px] text-muted-foreground">Valor enviado na cotação</span>
                       </div>
                       <div style={{ gridColumn: 'span 3' }}>
                         <Input readOnly className="bg-[#F4F7FB] border-[#E2E8F1] font-semibold" value={toBRL(lineFinal)} />
@@ -630,9 +630,9 @@ export function QuoteModal({ open, onClose, quote, onSave, onDelete, nextIndex }
               <div className="grid gap-2 px-2 text-[10px] uppercase tracking-wide text-muted-foreground font-semibold" style={{ gridTemplateColumns: 'repeat(17, minmax(0, 1fr))' }}>
                 <span style={{ gridColumn: 'span 3' }}>Nome</span>
                 <span style={{ gridColumn: 'span 2' }}>Qtd</span>
-                <span style={{ gridColumn: 'span 2' }}>Valor Cotação</span>
+                <span style={{ gridColumn: 'span 2' }}>Custo do produto</span>
                 <span style={{ gridColumn: 'span 2' }}>Valor</span>
-                <span style={{ gridColumn: 'span 2' }}>Valor Fechamento</span>
+                <span style={{ gridColumn: 'span 2' }}>Valor enviado na cotação</span>
                 <span style={{ gridColumn: 'span 2' }}>Valor Final</span>
                 <span style={{ gridColumn: 'span 3' }}>Fornecedor</span>
               </div>

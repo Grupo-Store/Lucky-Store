@@ -8,14 +8,15 @@ Validates:
   - ProdutoUpdate accepts sub_compras as an arbitrary JSON list
   - ProdutoUpdate.status validation rejects values not in PRODUTO_STATUSES
   - The 3 item-purchase statuses (To Buy, Bought, In Stock) are valid PRODUTO_STATUSES
+  - auto_delayed: pedidos com data_entrega no passado e status não-final viram "Delayed"
 """
 import pytest
 from decimal import Decimal
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timezone, timedelta
 from uuid import uuid4
 from pydantic import ValidationError
 
-from app.schemas.pedido import PedidoListItemResponse, PedidoListResponse
+from app.schemas.pedido import PedidoListItemResponse, PedidoListResponse, PedidoResponse
 from app.schemas.produto import ProdutoResponse, ProdutoUpdate
 from app.models.produto import PRODUTO_STATUSES
 
@@ -115,6 +116,88 @@ class TestPedidoListResponse:
         resp = PedidoListResponse(items=[item], total=1, page=1, limit=20, pages=1)
         assert resp.total == 1
         assert len(resp.items) == 1
+
+
+# ── auto_delayed ─────────────────────────────────────────────────────────────
+
+YESTERDAY = date.today() - timedelta(days=1)
+TOMORROW = date.today() + timedelta(days=1)
+
+
+class TestAutoDelayed:
+
+    def test_overdue_order_becomes_delayed(self):
+        item = _make_pedido_list_item(status="To Buy", data_entrega=YESTERDAY)
+        assert item.status == "Delayed"
+
+    def test_overdue_order_any_non_final_status_becomes_delayed(self):
+        for status in ("To Buy", "Bought", "Received", "To Invoice", "To Pack", "Out for Delivery"):
+            item = _make_pedido_list_item(status=status, data_entrega=YESTERDAY)
+            assert item.status == "Delayed", f"esperado Delayed para status={status}"
+
+    def test_delivered_order_stays_delivered_even_if_overdue(self):
+        item = _make_pedido_list_item(status="Delivered", data_entrega=YESTERDAY)
+        assert item.status == "Delivered"
+
+    def test_cancelled_order_stays_cancelled_even_if_overdue(self):
+        item = _make_pedido_list_item(status="Cancelled", data_entrega=YESTERDAY)
+        assert item.status == "Cancelled"
+
+    def test_already_delayed_stays_delayed(self):
+        item = _make_pedido_list_item(status="Delayed", data_entrega=YESTERDAY)
+        assert item.status == "Delayed"
+
+    def test_future_order_status_unchanged(self):
+        item = _make_pedido_list_item(status="To Buy", data_entrega=TOMORROW)
+        assert item.status == "To Buy"
+
+    def test_order_due_today_not_delayed(self):
+        item = _make_pedido_list_item(status="To Buy", data_entrega=date.today())
+        assert item.status == "To Buy"
+
+
+class TestAutoDelayedPedidoResponse:
+
+    def _make_pedido_response(self, **overrides):
+        base = dict(
+            id=uuid4(),
+            id_loja=uuid4(),
+            id_vendedor=uuid4(),
+            id_cliente=uuid4(),
+            numero_os="OS-001",
+            numero_nf=None,
+            numero_oc=None,
+            data_pedido=date.today(),
+            data_entrega=date.today(),
+            status="To Buy",
+            is_rma=False,
+            is_cancelled=False,
+            is_direct_billing=False,
+            valor_venda=None,
+            parcelas=None,
+            observacao=None,
+            fornecedor_principal=None,
+            nota_fiscal_fornecedor=None,
+            created_by=uuid4(),
+            created_at=datetime.now(timezone.utc),
+            updated_at=datetime.now(timezone.utc),
+            formas_pagamento=[],
+            custo=None,
+        )
+        base.update(overrides)
+        return PedidoResponse(**base)
+
+    def test_overdue_order_becomes_delayed(self):
+        resp = self._make_pedido_response(status="To Buy", data_entrega=YESTERDAY)
+        assert resp.status == "Delayed"
+
+    def test_delivered_stays_delivered(self):
+        resp = self._make_pedido_response(status="Delivered", data_entrega=YESTERDAY)
+        assert resp.status == "Delivered"
+
+    def test_future_order_unchanged(self):
+        resp = self._make_pedido_response(status="To Buy", data_entrega=TOMORROW)
+        assert resp.status == "To Buy"
 
 
 # ── ProdutoUpdate sub_compras ─────────────────────────────────────────────────
