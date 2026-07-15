@@ -668,9 +668,14 @@ def get_projections(
     media_diaria = round(receita / dias_decorridos, 2) if dias_decorridos > 0 else 0.0
     projecao_mes = round(media_diaria * (dias_decorridos + dias_restantes), 2)
 
-    # Metas do período (faturamento e lucro)
-    goal_fat = None
-    goal_lucro = None
+    # Metas do período (faturamento e lucro).
+    # Sem id_loja (visualização geral de empresas), agrega as metas de TODAS as
+    # empresas somando target/floor por tipo — assim os cards batem com os KPIs,
+    # que também são agregados. Com id_loja, há no máximo uma meta por tipo.
+    meta_target = None
+    meta_floor = None
+    meta_lucro_target = None
+    meta_lucro_floor = None
     if not (data_inicio or data_fim):
         m = mes or today.month
         y = ano or today.year
@@ -679,12 +684,13 @@ def get_projections(
             q = q.filter(DashboardGoal.id_loja == id_loja)
         for g in q.all():
             if g.tipo == "lucro":
-                goal_lucro = g
+                meta_lucro_target = (meta_lucro_target or 0.0) + float(g.target)
+                if g.floor:
+                    meta_lucro_floor = (meta_lucro_floor or 0.0) + float(g.floor)
             else:
-                goal_fat = g
-
-    meta_target = float(goal_fat.target) if goal_fat else None
-    meta_floor  = float(goal_fat.floor)  if goal_fat and goal_fat.floor else None
+                meta_target = (meta_target or 0.0) + float(g.target)
+                if g.floor:
+                    meta_floor = (meta_floor or 0.0) + float(g.floor)
 
     gap_target = max(meta_target - receita, 0.0) if meta_target is not None else None
     gap_floor  = max(meta_floor  - receita, 0.0) if meta_floor  is not None else None
@@ -694,10 +700,7 @@ def get_projections(
     if gap_floor is not None and dias_restantes > 0:
         meta_diaria_dinamica = round(gap_floor / dias_restantes, 2)
 
-    # Projeções de lucro líquido
-    meta_lucro_target = float(goal_lucro.target) if goal_lucro else None
-    meta_lucro_floor  = float(goal_lucro.floor)  if goal_lucro and goal_lucro.floor else None
-
+    # Projeções de lucro líquido (metas de lucro já agregadas acima)
     gap_lucro_target = max(meta_lucro_target - lucro_liquido, 0.0) if meta_lucro_target is not None else None
     gap_lucro_floor  = max(meta_lucro_floor  - lucro_liquido, 0.0) if meta_lucro_floor  is not None else None
     pct_meta_lucro   = round(lucro_liquido / meta_lucro_target, 4)  if meta_lucro_target else None

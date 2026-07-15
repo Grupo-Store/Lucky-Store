@@ -6,6 +6,7 @@ const BRL = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', curren
 
 interface SellerCardProps {
   item: SellerBreakdownItem;
+  metaTipo?: 'faturamento' | 'lucro';
   metaDiaria?: number | null;
   gapMeta?: number | null;
   projecaoMes?: number;
@@ -28,6 +29,7 @@ function StatRow({ label, value }: RowProps) {
 
 export function SellerCard({
   item,
+  metaTipo = 'faturamento',
   metaDiaria = null,
   gapMeta = null,
   projecaoMes = 0,
@@ -35,11 +37,25 @@ export function SellerCard({
 }: SellerCardProps) {
   const gapColor =
     gapMeta == null ? 'text-orange-500' : gapMeta > 0 ? 'text-orange-500' : 'text-green-700';
+  const isLucro = metaTipo === 'lucro';
+  const projecaoLabel = isLucro ? 'Projeção Lucro' : 'Projeção Faturamento';
 
   return (
     <Card>
       <CardContent className="pt-5 pb-4">
-        <h3 className="text-xl font-bold text-secondary mb-4">{item.nome}</h3>
+        <div className="flex items-center justify-between gap-2 mb-4">
+          <h3 className="text-xl font-bold text-secondary">{item.nome}</h3>
+          {hasGoal && (
+            <span
+              className={cn(
+                'text-[10px] font-semibold px-2 py-0.5 rounded-full whitespace-nowrap',
+                isLucro ? 'bg-blue-100 text-blue-700' : 'bg-green-100 text-green-700'
+              )}
+            >
+              Meta: {isLucro ? 'Lucro' : 'Faturamento'}
+            </span>
+          )}
+        </div>
 
         <div className="grid grid-cols-2 gap-x-6 gap-y-3 mb-4">
           <StatRow
@@ -72,7 +88,7 @@ export function SellerCard({
               )
             }
           />
-          <StatRow label="Projeção Mês" value={BRL(projecaoMes)} />
+          <StatRow label={projecaoLabel} value={BRL(projecaoMes)} />
         </div>
 
         <div className="border-t pt-3 grid grid-cols-3 gap-3">

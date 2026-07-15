@@ -9,7 +9,7 @@ import { Calendar } from '@/components/ui/calendar';
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table';
-import { Target, Pencil, CalendarIcon, Building2, User, ChevronLeft, ChevronRight, SlidersHorizontal } from 'lucide-react';
+import { Target, Pencil, CalendarIcon, Building2, User, ChevronLeft, ChevronRight, SlidersHorizontal, TrendingUp, PiggyBank } from 'lucide-react';
 import { ptBR } from 'date-fns/locale';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
@@ -390,6 +390,8 @@ export default function Dashboard() {
   const [dateTab, setDateTab] = useState<'data' | 'periodo'>('data');
   const [showFatMeta, setShowFatMeta]     = useState(true);
   const [showLucroMeta, setShowLucroMeta] = useState(true);
+  // Tela de vendedor: alterna a visualização entre metas de faturamento e de lucro
+  const [sellerMetaView, setSellerMetaView] = useState<'faturamento' | 'lucro'>('faturamento');
 
   const params = useMemo(
     () => toApiParams(globalFilters, company),
@@ -465,23 +467,29 @@ export default function Dashboard() {
     );
   }, [bySeller?.items]);
 
+  // Metas do período filtradas pelo tipo em visualização (faturamento ou lucro)
+  const vendorGoalsView = useMemo(
+    () => vendorGoalsForPeriod.filter(g => g.tipo === sellerMetaView),
+    [vendorGoalsForPeriod, sellerMetaView]
+  );
+
   // Per-seller vendor goal lookup keyed by id_vendedor
   const vendorGoalByVendedor = useMemo(() => {
     const map: Record<string, typeof vendorGoalsForPeriod[number]> = {};
-    for (const g of vendorGoalsForPeriod) {
+    for (const g of vendorGoalsView) {
       map[g.id_vendedor] = g;
     }
     return map;
-  }, [vendorGoalsForPeriod]);
+  }, [vendorGoalsView]);
 
   // Goals shaped for SellerGoalChart
   const sellerGoalChartData = useMemo(() => {
     const result: Record<string, { alvo: number; piso: number }> = {};
-    for (const g of vendorGoalsForPeriod) {
+    for (const g of vendorGoalsView) {
       result[g.id_vendedor] = { alvo: Number(g.target), piso: Number(g.floor ?? 0) };
     }
     return result;
-  }, [vendorGoalsForPeriod]);
+  }, [vendorGoalsView]);
 
   // ─── Date picker (shared) ──────────────────────────────────────────────────
   const datePicker = (
@@ -946,7 +954,38 @@ export default function Dashboard() {
         <div className="space-y-4">
           {/* Seller filter row */}
           <div style={{ background: '#fff', border: '1px solid #E2E8F1', borderRadius: 16, padding: '12px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', boxShadow: '0 4px 16px -8px rgba(13,33,66,.08)' }}>
-            {datePicker}
+            <div className="flex items-center gap-3 flex-wrap">
+              {datePicker}
+              {/* Alterna a visualização entre metas de faturamento e de lucro */}
+              <div className="inline-flex gap-2" role="group" aria-label="Tipo de meta">
+                <button
+                  onClick={() => setSellerMetaView('faturamento')}
+                  aria-pressed={sellerMetaView === 'faturamento'}
+                  title="Visualizar metas de faturamento"
+                  className={cn(
+                    'flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold transition-all border',
+                    sellerMetaView === 'faturamento'
+                      ? 'bg-green-600 text-white border-green-600'
+                      : 'text-muted-foreground border-border hover:text-foreground'
+                  )}
+                >
+                  <TrendingUp className="h-4 w-4" /> Faturamento
+                </button>
+                <button
+                  onClick={() => setSellerMetaView('lucro')}
+                  aria-pressed={sellerMetaView === 'lucro'}
+                  title="Visualizar metas de lucro"
+                  className={cn(
+                    'flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold transition-all border',
+                    sellerMetaView === 'lucro'
+                      ? 'bg-blue-600 text-white border-blue-600'
+                      : 'text-muted-foreground border-border hover:text-foreground'
+                  )}
+                >
+                  <PiggyBank className="h-4 w-4" /> Lucro
+                </button>
+              </div>
+            </div>
             <Button
               onClick={() => setGoalsOpen(true)}
               className="gap-1.5 shrink-0"
@@ -970,15 +1009,18 @@ export default function Dashboard() {
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
               {sellerItems.map(item => {
                 const goal = vendorGoalByVendedor[item.id_vendedor];
+                // Métrica realizada conforme a visualização: lucro ou faturamento (receita)
+                const realizado = sellerMetaView === 'lucro' ? item.lucro : item.receita;
                 const projecao = diasDecorridos > 0
-                  ? (item.receita / diasDecorridos) * diasNoMes
-                  : item.receita;
+                  ? (realizado / diasDecorridos) * diasNoMes
+                  : realizado;
                 return (
                   <SellerCard
                     key={item.id_vendedor || item.nome}
                     item={item}
+                    metaTipo={sellerMetaView}
                     metaDiaria={goal ? Number(goal.target) / diasNoMes : null}
-                    gapMeta={goal ? Number(goal.target) - item.receita : null}
+                    gapMeta={goal ? Number(goal.target) - realizado : null}
                     projecaoMes={projecao}
                     hasGoal={goal != null}
                   />
@@ -987,8 +1029,8 @@ export default function Dashboard() {
             </div>
           )}
 
-          {/* Vendas vs Meta por Vendedor */}
-          <SellerGoalChart items={sellerItems} goals={sellerGoalChartData} />
+          {/* Realizado vs Meta por Vendedor */}
+          <SellerGoalChart items={sellerItems} goals={sellerGoalChartData} metaTipo={sellerMetaView} />
         </div>
       )}
 
