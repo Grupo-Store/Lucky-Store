@@ -351,7 +351,7 @@ export function ProductModal({ open, onClose, order, item, onSave }: Props) {
                       </SelectContent>
                     </Select>
                   </div>
-                  {sp.paymentMethod === 'Credit Card' && (
+                  {(sp.paymentMethod === 'Credit Card' || sp.paymentMethod === 'Boleto') && (
                     <div>
                       <Label>Parcelas</Label>
                       <Input type="number" min={1} max={24} className="bg-[#FBFCFE] border-[#E2E8F1]"

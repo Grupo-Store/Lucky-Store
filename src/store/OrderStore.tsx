@@ -104,9 +104,7 @@ export interface SubPurchase {
   receiptDate?: string;
   purchaseValue: number;
   paymentMethod: PaymentMethod | '';
-  /** Number of installments — only meaningful when paymentMethod === 'Credit Card' */
   installments?: number;
-  /** Card used for this purchase (free text — identifies which card) */
   card?: string;
   status: ItemStatus;
 }
