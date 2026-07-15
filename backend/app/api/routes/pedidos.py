@@ -1,11 +1,15 @@
+from decimal import Decimal
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy.orm import Session
+from sqlalchemy import func
 from typing import Optional, List
 from uuid import UUID
 from app.database import get_db
 from app.models.user import User
 from app.models.audit_log import AuditLog
 from app.models.status_history import StatusHistory, EntityType
+from app.models.rma import Rma
+from app.models.item_rma import ItemRma
 from app.schemas.pedido import (
     FretePagoUpdate,
     PedidoCreate, PedidoUpdate, PedidoResponse,
@@ -27,6 +31,16 @@ class OrderHistoryResponse(BaseModel):
     order_id: UUID
     status_history: List[StatusHistoryResponse]
     audit_logs: List[AuditLogResponse]
+
+
+def _total_estornado(db: Session, pedido_id: UUID) -> Decimal:
+    total = (
+        db.query(func.coalesce(func.sum(ItemRma.valor_estornado), 0))
+        .join(Rma, ItemRma.id_rma == Rma.id)
+        .filter(Rma.id_pedido_origem == pedido_id)
+        .scalar()
+    )
+    return Decimal(str(total))
 
 
 router = APIRouter(prefix="/pedidos", tags=["pedidos"])
@@ -101,6 +115,7 @@ def list_pedidos(
             num_parcelas_efetivas=p.num_parcelas_efetivas,
             plano_parcelas=p.plano_parcelas,
             plano_parcelas_pedido=p.plano_parcelas_pedido,
+            valor_total_estornado=_total_estornado(db, p.id),
         )
         for p in items
     ]

@@ -53,6 +53,7 @@ export interface PedidoListItem {
   num_parcelas_efetivas: number | null
   plano_parcelas: { date: string; value: number }[] | null
   plano_parcelas_pedido: { date: string; value: number }[] | null
+  valor_total_estornado: string | null
 }
 
 export interface PedidoListResponse {

@@ -1089,6 +1089,12 @@ export function OrderModal({ open, onClose, order, onSave, nextOS, prefill }: Pr
               <h3>Resumo de Valores</h3>
               <div className="opm-sumbody">
                 <div className="opm-line"><span className="k">Valor de Venda</span><span className="v">{toBRL(form.salesValue || 0)}</span></div>
+                {(form.refundTotal ?? 0) > 0 && (
+                  <div className="opm-line"><span className="k" style={{ color: '#d24545' }}>Valor Estornado</span><span className="v" style={{ color: '#d24545' }}>-{toBRL(form.refundTotal!)}</span></div>
+                )}
+                {(form.refundTotal ?? 0) > 0 && (
+                  <div className="opm-line"><span className="k" style={{ fontWeight: 700 }}>Saldo do Pedido</span><span className="v" style={{ fontWeight: 700 }}>{toBRL((form.salesValue || 0) - (form.refundTotal || 0))}</span></div>
+                )}
                 <div className="opm-line"><span className="k">Custo parcial</span><span className="v">{toBRL(partialCost)}</span></div>
                 <div className="opm-line"><span className="k">Custo final</span><span className="v">{toBRL(finalCost)}</span></div>
                 <div className="opm-result">

@@ -344,6 +344,9 @@ export interface ItemRma {
   quantidade: number;
   status: ItemRmaStatus;
   consertado_por: string | null;
+  valor_estornado: string | null;
+  data_estorno: string | null;
+  motivo_estorno: string | null;
 }
 
 export interface RmaResponse {

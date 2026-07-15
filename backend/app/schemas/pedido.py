@@ -247,6 +247,7 @@ class PedidoListItemResponse(BaseModel):
     num_parcelas_efetivas: Optional[int] = None
     plano_parcelas: Optional[List[Any]] = None
     plano_parcelas_pedido: Optional[List[Any]] = None
+    valor_total_estornado: Optional[Decimal] = None
 
     class Config:
         from_attributes = True
