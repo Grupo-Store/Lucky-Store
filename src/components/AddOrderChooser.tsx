@@ -39,6 +39,8 @@ function getCotacaoPhase(c: CotacaoResponse) {
 }
 
 export interface OrderPrefill {
+  /** Cotação de origem, quando o pedido é criado a partir de uma cotação */
+  sourceQuoteId?: string;
   customer: string;
   customerCompany?: string;
   cnpj: string;
@@ -127,8 +129,8 @@ export function AddOrderChooser({ open, onClose, onChooseNew, onChooseFromQuote 
     const dsItems = chosen.filter(i => i.is_direct_supply);
     const hasDirect = picked.itens?.some(i => i.is_direct_supply) ?? false;
     const prefill: OrderPrefill = {
-      customer: picked.cliente,
-      customerCompany: picked.b2b_company?.trim() || undefined,
+      sourceQuoteId: picked.id,
+      customer: (picked.b2b_company?.trim()) ? picked.b2b_company : picked.cliente,
       cnpj: picked.cnpj_cliente ?? '',
       company: (LOJA_BY_ID[picked.id_loja] ?? '') as Quote['company'],
       seller: (VENDEDOR_BY_ID[picked.id_vendedor] ?? '') as Quote['seller'],

@@ -51,6 +51,7 @@ class ConversaoCotacaoService:
             id_loja=cotacao.id_loja,
             id_vendedor=cotacao.id_vendedor,
             id_cliente=cliente.id,
+            id_cotacao=cotacao.id,
             numero_os=numero_os,
             numero_nf=None,
             data_pedido=date.today(),

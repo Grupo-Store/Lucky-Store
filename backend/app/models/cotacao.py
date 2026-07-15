@@ -44,6 +44,14 @@ class Cotacao(Base):
     pct_imposto_lucky = Column(Numeric(5, 2), nullable=True)
     pct_imposto_btech = Column(Numeric(5, 2), nullable=True)
 
+    # Envio de cotação
+    data_entrega = Column(Date, nullable=True)
+    previsao_entrega = Column(Date, nullable=True)
+    forma_pagamento = Column(String(50), nullable=True)
+    detalhes_pagamento = Column(Text, nullable=True)
+    prazo_pagamento = Column(Date, nullable=True)
+    garantia = Column(Text, nullable=True)
+
     created_by = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
     updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc), nullable=False)

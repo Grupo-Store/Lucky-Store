@@ -4,7 +4,7 @@ from decimal import Decimal
 from typing import Optional
 from uuid import UUID
 from sqlalchemy.orm import Session
-from sqlalchemy import asc, desc, text
+from sqlalchemy import asc, desc, text, func
 
 from app.models.cotacao import Cotacao
 from app.models.item_cotacao import ItemCotacao
@@ -65,9 +65,19 @@ def _calc_item_totals(item: ItemCotacao) -> ItemCotacao:
     return item
 
 
-def _hydrate_cotacao(cotacao: Cotacao) -> Cotacao:
+def _hydrate_cotacao(db: Session, cotacao: Cotacao) -> Cotacao:
     for item in cotacao.itens:
         _calc_item_totals(item)
+    # Número da cotação dentro da própria loja (posição por ordem de criação)
+    if cotacao.numero is None:
+        cotacao.numero_loja = None
+    else:
+        cotacao.numero_loja = db.query(func.count(Cotacao.id)).filter(
+            Cotacao.id_loja == cotacao.id_loja,
+            Cotacao.deleted_at.is_(None),
+            Cotacao.numero.isnot(None),
+            Cotacao.numero <= cotacao.numero,
+        ).scalar()
     return cotacao
 
 
@@ -93,6 +103,12 @@ class CotacaoService:
             observacao=data.observacao,
             pct_imposto_lucky=data.pct_imposto_lucky,
             pct_imposto_btech=data.pct_imposto_btech,
+            data_entrega=data.data_entrega,
+            previsao_entrega=data.previsao_entrega,
+            forma_pagamento=data.forma_pagamento,
+            detalhes_pagamento=data.detalhes_pagamento,
+            prazo_pagamento=data.prazo_pagamento,
+            garantia=data.garantia,
             created_by=current_user_id,
         )
         db.add(cotacao)
@@ -125,7 +141,7 @@ class CotacaoService:
 
         db.commit()
         db.refresh(cotacao)
-        return _hydrate_cotacao(cotacao)
+        return _hydrate_cotacao(db, cotacao)
 
     @staticmethod
     def list(
@@ -167,7 +183,7 @@ class CotacaoService:
         items = q.offset((page - 1) * limit).limit(limit).all()
 
         for cotacao in items:
-            _hydrate_cotacao(cotacao)
+            _hydrate_cotacao(db, cotacao)
 
         return items, total, math.ceil(total / limit) if total else 0
 
@@ -179,7 +195,7 @@ class CotacaoService:
         ).first()
         if not cotacao:
             raise NotFoundException(f"Cotação {cotacao_id} não encontrada")
-        return _hydrate_cotacao(cotacao)
+        return _hydrate_cotacao(db, cotacao)
 
     @staticmethod
     def update(db: Session, cotacao_id: UUID, data: CotacaoUpdate, current_user_id: UUID) -> Cotacao:
@@ -205,7 +221,7 @@ class CotacaoService:
 
         db.commit()
         db.refresh(cotacao)
-        return _hydrate_cotacao(cotacao)
+        return _hydrate_cotacao(db, cotacao)
 
     @staticmethod
     def update_phase(db: Session, cotacao_id: UUID, data: PhaseUpdate, current_user_id: UUID) -> Cotacao:
@@ -244,7 +260,7 @@ class CotacaoService:
 
         db.commit()
         db.refresh(cotacao)
-        return _hydrate_cotacao(cotacao)
+        return _hydrate_cotacao(db, cotacao)
 
     @staticmethod
     def soft_delete(db: Session, cotacao_id: UUID, current_user_id: UUID) -> None:

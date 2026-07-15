@@ -114,7 +114,7 @@ function BrandPanel() {
           background: 'linear-gradient(135deg, #2F6BFF 0%, #7AA6FF 100%)',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
         }}>
-          <span style={{ color: '#fff', fontFamily: SG, fontWeight: 700, fontSize: 15, letterSpacing: '.02em' }}>GL</span>
+          <span style={{ color: '#fff', fontFamily: SG, fontWeight: 700, fontSize: 15, letterSpacing: '.02em' }}>GS</span>
         </div>
         <span style={{ color: '#A9BCD9', fontFamily: SG, fontSize: 13.5, fontWeight: 500 }}>
           Grupo Store · Portal

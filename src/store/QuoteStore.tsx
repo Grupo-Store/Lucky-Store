@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useCallback } from 'react';
-import { Company, Seller } from './OrderStore';
+import { Company, Seller, PaymentMethod } from './OrderStore';
 
 export type QuotePhaseKey = 'sent' | 'forClosing' | 'closed' | 'dropped';
 
@@ -53,6 +53,8 @@ export interface DirectSupplyQuoteItem {
 export interface Quote {
   id: string;
   index: string;
+  /** Número da cotação dentro da própria loja (1º, 2º... daquela empresa) */
+  storeIndex?: number;
   createdAt: number;
   b2bCompany?: string;
   customer: string;
@@ -70,6 +72,13 @@ export interface Quote {
   phases: QuotePhases;
   taxLucky?: number;
   taxBTech?: number;
+  // Envio de cotação
+  deliveryDate?: string;
+  deliveryForecast?: string;
+  paymentMethod?: PaymentMethod | '';
+  paymentDetails?: string;
+  paymentDeadline?: string;
+  warranty?: string;
 }
 
 export const emptyPhases = (): QuotePhases => ({

@@ -96,6 +96,13 @@ class CotacaoCreate(BaseModel):
     observacao: Optional[str] = None
     pct_imposto_lucky: Optional[Decimal] = None
     pct_imposto_btech: Optional[Decimal] = None
+    # Envio de cotação
+    data_entrega: Optional[date] = None
+    previsao_entrega: Optional[date] = None
+    forma_pagamento: Optional[str] = None
+    detalhes_pagamento: Optional[str] = None
+    prazo_pagamento: Optional[date] = None
+    garantia: Optional[str] = None
     itens: List[ItemCotacaoCreate] = []
 
 
@@ -114,6 +121,13 @@ class CotacaoUpdate(BaseModel):
     observacao: Optional[str] = None
     pct_imposto_lucky: Optional[Decimal] = None
     pct_imposto_btech: Optional[Decimal] = None
+    # Envio de cotação
+    data_entrega: Optional[date] = None
+    previsao_entrega: Optional[date] = None
+    forma_pagamento: Optional[str] = None
+    detalhes_pagamento: Optional[str] = None
+    prazo_pagamento: Optional[date] = None
+    garantia: Optional[str] = None
 
 
 class CotacaoResponse(BaseModel):
@@ -121,6 +135,7 @@ class CotacaoResponse(BaseModel):
     id_loja: UUID
     id_vendedor: UUID
     numero: Optional[int] = None
+    numero_loja: Optional[int] = None
     numero_requisicao: Optional[str]
     b2b_company: Optional[str]
     cliente: str
@@ -144,6 +159,13 @@ class CotacaoResponse(BaseModel):
     observacao: Optional[str]
     pct_imposto_lucky: Optional[Decimal]
     pct_imposto_btech: Optional[Decimal]
+    # Envio de cotação
+    data_entrega: Optional[date] = None
+    previsao_entrega: Optional[date] = None
+    forma_pagamento: Optional[str] = None
+    detalhes_pagamento: Optional[str] = None
+    prazo_pagamento: Optional[date] = None
+    garantia: Optional[str] = None
     # Audit
     created_by: UUID
     created_at: datetime
