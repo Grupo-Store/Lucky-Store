@@ -168,6 +168,8 @@ export interface Order {
   createdAt: number;
   orderDate: string;
   customer: string;
+  /** Client's company/enterprise name (b2b). When set, this is the primary identifier shown. */
+  customerCompany?: string;
   cnpj: string;
   company: Company;
   seller: Seller;
@@ -337,6 +339,22 @@ export function calcProfit(o: Partial<Order>): number {
 /** Backwards-compat: the table's "Valor" column shows the Sales Value */
 export function calcTotal(o: Partial<Order>): number {
   return o.salesValue || 0;
+}
+
+/**
+ * Valor de Venda do pedido = soma do valor projetado de cada produto × quantidade
+ * (itens normais + fornecimento direto).
+ *
+ * Fonte ÚNICA usada tanto pelos modais (OrderModal/ProductModal) quanto pela lista
+ * de pedidos, para que os valores correspondentes fiquem sempre consistentes.
+ * Aceita qualquer objeto com { projectedValue, quantity } — inclusive itens vindos
+ * da API mapeados a partir de valor_projetado / quantidade.
+ */
+type ValuedItem = { projectedValue?: number; quantity?: number };
+export function calcOrderSalesValue(items?: ValuedItem[], directSupplyItems?: ValuedItem[]): number {
+  const sum = (arr?: ValuedItem[]) =>
+    (arr || []).reduce((s, i) => s + (i.projectedValue || 0) * (i.quantity || 0), 0);
+  return sum(items) + sum(directSupplyItems);
 }
 
 const baseOrder = (over: Partial<Order>): Order => ({
