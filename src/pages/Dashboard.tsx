@@ -9,7 +9,7 @@ import { Calendar } from '@/components/ui/calendar';
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table';
-import { Target, Pencil, CalendarIcon, Building2, User, ChevronLeft, ChevronRight, SlidersHorizontal } from 'lucide-react';
+import { Target, Pencil, CalendarIcon, Building2, User, ChevronLeft, ChevronRight, SlidersHorizontal, TrendingUp, PiggyBank } from 'lucide-react';
 import { ptBR } from 'date-fns/locale';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
@@ -72,7 +72,8 @@ const VENDOR_COLORS = ['bg-purple-500', 'bg-amber-500', 'bg-cyan-500', 'bg-rose-
 function GoalsModal({ open, onClose, year, month }: {
   open: boolean; onClose: () => void; year: number; month: number;
 }) {
-  const [goalTab, setGoalTab] = useState<'empresa' | 'vendedor'>('empresa');
+  const [goalTab, setGoalTab]   = useState<'empresa' | 'vendedor'>('empresa');
+  const [goalType, setGoalType] = useState<'faturamento' | 'lucro'>('faturamento');
   const [ano, setAno] = useState(year);
   const [mes, setMes] = useState(month + 1);
   const [companyName, setCompanyName]   = useState('Lucky Store');
@@ -109,13 +110,13 @@ function GoalsModal({ open, onClose, year, month }: {
       const id_loja = LOJA_IDS[companyName];
       if (!id_loja) { toast.error('ID da loja não configurado'); return; }
       upsertCompany.mutate(
-        { ano, mes, id_loja, target, floor: floor || null },
+        { ano, mes, id_loja, tipo: goalType, target, floor: floor || null },
         { onSuccess: resetForm, onError: () => toast.error('Erro ao salvar meta') },
       );
     } else {
       if (!vendedorId) { toast.error('Selecione um vendedor'); return; }
       upsertVendor.mutate(
-        { ano, mes, id_vendedor: vendedorId, target, floor: floor || null },
+        { ano, mes, id_vendedor: vendedorId, tipo: goalType, target, floor: floor || null },
         { onSuccess: resetForm, onError: () => toast.error('Erro ao salvar meta') },
       );
     }
@@ -124,6 +125,7 @@ function GoalsModal({ open, onClose, year, month }: {
   const loadCompanyGoal = (g: ApiGoal) => {
     setAno(g.ano); setMes(g.mes);
     setCompanyName(g.nome_loja ?? 'Lucky Store');
+    setGoalType(g.tipo as 'faturamento' | 'lucro');
     setTarget(Number(g.target)); setFloor(Number(g.floor ?? 0));
     setEditingId(g.id);
   };
@@ -131,6 +133,7 @@ function GoalsModal({ open, onClose, year, month }: {
   const loadVendorGoal = (g: ApiVendorGoal) => {
     setAno(g.ano); setMes(g.mes);
     setVendedorId(g.id_vendedor);
+    setGoalType(g.tipo as 'faturamento' | 'lucro');
     setTarget(Number(g.target)); setFloor(Number(g.floor ?? 0));
     setEditingId(g.id);
   };
@@ -139,8 +142,17 @@ function GoalsModal({ open, onClose, year, month }: {
 
   const switchTab = (tab: 'empresa' | 'vendedor') => {
     setGoalTab(tab);
+    setGoalType('faturamento');
     resetForm();
   };
+
+  const switchType = (type: 'faturamento' | 'lucro') => {
+    setGoalType(type);
+    resetForm();
+  };
+
+  const visibleCompanyGoals = companyGoals.filter(g => g.tipo === goalType);
+  const visibleVendorGoals  = vendorGoals.filter(g => g.tipo === goalType);
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
@@ -149,12 +161,12 @@ function GoalsModal({ open, onClose, year, month }: {
           <DialogTitle className="text-2xl font-bold">Configurar Metas</DialogTitle>
           <p className="text-sm text-muted-foreground mt-0.5">
             {goalTab === 'empresa'
-              ? 'Defina a meta de faturamento por empresa.'
-              : 'Defina a meta de faturamento por vendedor.'}
+              ? goalType === 'faturamento' ? 'Defina a meta de faturamento por empresa.' : 'Defina a meta de lucro líquido por empresa.'
+              : goalType === 'faturamento' ? 'Defina a meta de faturamento por vendedor.' : 'Defina a meta de lucro líquido por vendedor.'}
           </p>
         </DialogHeader>
 
-        {/* Tab toggle */}
+        {/* Nível 1: Empresa / Vendedor */}
         <div className="inline-flex gap-2">
           <button
             onClick={() => switchTab('empresa')}
@@ -177,6 +189,32 @@ function GoalsModal({ open, onClose, year, month }: {
             )}
           >
             <User className="h-4 w-4" /> Vendedor
+          </button>
+        </div>
+
+        {/* Nível 2: Faturamento / Lucro */}
+        <div className="inline-flex gap-2">
+          <button
+            onClick={() => switchType('faturamento')}
+            className={cn(
+              'flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold transition-all border',
+              goalType === 'faturamento'
+                ? 'bg-green-600 text-white border-green-600'
+                : 'text-muted-foreground border-border hover:text-foreground'
+            )}
+          >
+            Faturamento
+          </button>
+          <button
+            onClick={() => switchType('lucro')}
+            className={cn(
+              'flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold transition-all border',
+              goalType === 'lucro'
+                ? 'bg-blue-600 text-white border-blue-600'
+                : 'text-muted-foreground border-border hover:text-foreground'
+            )}
+          >
+            Lucro Líquido
           </button>
         </div>
 
@@ -246,7 +284,7 @@ function GoalsModal({ open, onClose, year, month }: {
             {goalTab === 'empresa' ? (
               goalsLoading ? (
                 <p className="text-sm text-muted-foreground">Carregando...</p>
-              ) : companyGoals.length === 0 ? (
+              ) : visibleCompanyGoals.length === 0 ? (
                 <p className="text-sm text-muted-foreground">Nenhuma meta cadastrada.</p>
               ) : (
                 <Table>
@@ -260,7 +298,7 @@ function GoalsModal({ open, onClose, year, month }: {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {companyGoals.map(g => (
+                    {visibleCompanyGoals.map(g => (
                       <TableRow key={g.id} className={cn(editingId === g.id && 'bg-secondary/10')}>
                         <TableCell>{MONTHS[g.mes - 1]}/{g.ano}</TableCell>
                         <TableCell>
@@ -290,7 +328,7 @@ function GoalsModal({ open, onClose, year, month }: {
             ) : (
               vendorGoalsLoading ? (
                 <p className="text-sm text-muted-foreground">Carregando...</p>
-              ) : vendorGoals.length === 0 ? (
+              ) : visibleVendorGoals.length === 0 ? (
                 <p className="text-sm text-muted-foreground">Nenhuma meta cadastrada.</p>
               ) : (
                 <Table>
@@ -304,7 +342,7 @@ function GoalsModal({ open, onClose, year, month }: {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {vendorGoals.map((g, idx) => (
+                    {visibleVendorGoals.map((g, idx) => (
                       <TableRow key={g.id} className={cn(editingId === g.id && 'bg-secondary/10')}>
                         <TableCell>{MONTHS[g.mes - 1]}/{g.ano}</TableCell>
                         <TableCell>
@@ -350,6 +388,10 @@ export default function Dashboard() {
   const [goalsOpen, setGoalsOpen] = useState(false);
   const [dateOpen, setDateOpen] = useState(false);
   const [dateTab, setDateTab] = useState<'data' | 'periodo'>('data');
+  const [showFatMeta, setShowFatMeta]     = useState(true);
+  const [showLucroMeta, setShowLucroMeta] = useState(true);
+  // Tela de vendedor: alterna a visualização entre metas de faturamento e de lucro
+  const [sellerMetaView, setSellerMetaView] = useState<'faturamento' | 'lucro'>('faturamento');
 
   const params = useMemo(
     () => toApiParams(globalFilters, company),
@@ -425,23 +467,29 @@ export default function Dashboard() {
     );
   }, [bySeller?.items]);
 
+  // Metas do período filtradas pelo tipo em visualização (faturamento ou lucro)
+  const vendorGoalsView = useMemo(
+    () => vendorGoalsForPeriod.filter(g => g.tipo === sellerMetaView),
+    [vendorGoalsForPeriod, sellerMetaView]
+  );
+
   // Per-seller vendor goal lookup keyed by id_vendedor
   const vendorGoalByVendedor = useMemo(() => {
     const map: Record<string, typeof vendorGoalsForPeriod[number]> = {};
-    for (const g of vendorGoalsForPeriod) {
+    for (const g of vendorGoalsView) {
       map[g.id_vendedor] = g;
     }
     return map;
-  }, [vendorGoalsForPeriod]);
+  }, [vendorGoalsView]);
 
   // Goals shaped for SellerGoalChart
   const sellerGoalChartData = useMemo(() => {
     const result: Record<string, { alvo: number; piso: number }> = {};
-    for (const g of vendorGoalsForPeriod) {
+    for (const g of vendorGoalsView) {
       result[g.id_vendedor] = { alvo: Number(g.target), piso: Number(g.floor ?? 0) };
     }
     return result;
-  }, [vendorGoalsForPeriod]);
+  }, [vendorGoalsView]);
 
   // ─── Date picker (shared) ──────────────────────────────────────────────────
   const datePicker = (
@@ -754,57 +802,144 @@ export default function Dashboard() {
                   {/* ── META ── */}
                   {section === 'meta' && (
                     <div className="space-y-3">
-                      {/* Row 1: metas cadastradas */}
-                      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                        <KpiCard
-                          label="Meta (Alvo)"
-                          value={proj?.meta_target != null ? BRL(proj.meta_target) : '—'}
-                          sub="Target cadastrado"
-                          accent="text-green-700"
-                          borderAccent="border-l-4 border-l-green-500"
-                        />
-                        <KpiCard
-                          label="Meta (Piso)"
-                          value={proj?.meta_floor != null ? BRL(proj.meta_floor) : '—'}
-                          sub="Floor cadastrado"
-                          accent="text-amber-600"
-                          borderAccent="border-l-4 border-l-amber-500"
-                        />
-                        <KpiCard
-                          label="% da Meta"
-                          value={proj?.pct_meta != null ? PCT(proj.pct_meta) : '—'}
-                          sub={`Faturamento: ${BRL(kpis?.receita ?? 0)}`}
-                          accent={(proj?.pct_meta ?? 0) >= 1 ? 'text-green-700' : 'text-orange-600'}
-                          borderAccent={(proj?.pct_meta ?? 0) >= 1 ? 'border-l-4 border-l-green-500' : 'border-l-4 border-l-orange-400'}
-                        />
-                        <KpiCard
-                          label="Gap para Alvo"
-                          value={proj?.gap_target != null ? BRL(proj.gap_target) : '—'}
-                          sub={proj?.gap_target === 0 ? 'Meta atingida!' : undefined}
-                          accent={proj?.gap_target === 0 ? 'text-green-700' : 'text-orange-600'}
-                        />
+                      {/* Filtros de tipo */}
+                      <div className="flex items-center gap-4">
+                        <label className="flex items-center gap-2 text-sm font-medium cursor-pointer select-none">
+                          <input
+                            type="checkbox"
+                            checked={showFatMeta}
+                            onChange={e => setShowFatMeta(e.target.checked)}
+                            className="w-4 h-4 accent-green-600"
+                          />
+                          <span className="text-green-700">Faturamento</span>
+                        </label>
+                        <label className="flex items-center gap-2 text-sm font-medium cursor-pointer select-none">
+                          <input
+                            type="checkbox"
+                            checked={showLucroMeta}
+                            onChange={e => setShowLucroMeta(e.target.checked)}
+                            className="w-4 h-4 accent-blue-600"
+                          />
+                          <span className="text-blue-700">Lucro Líquido</span>
+                        </label>
                       </div>
-                      {/* Row 2: projeção e meta dinâmica */}
-                      <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                        <KpiCard
-                          label="Projeção do Mês"
-                          value={BRL(proj?.projecao_mes ?? 0)}
-                          sub={`Média/dia: ${BRL(proj?.media_diaria ?? 0)}`}
-                          accent="text-[#2F6BFF]"
-                        />
-                        <KpiCard
-                          label="Gap para Piso"
-                          value={proj?.gap_floor != null ? BRL(proj.gap_floor) : '—'}
-                          sub={proj?.gap_floor === 0 ? 'Piso atingido!' : undefined}
-                          accent={proj?.gap_floor === 0 ? 'text-green-700' : 'text-orange-500'}
-                        />
-                        <KpiCard
-                          label="Meta Diária Dinâmica"
-                          value={proj?.meta_diaria_dinamica != null ? BRL(proj.meta_diaria_dinamica) : '—'}
-                          sub={`${proj?.dias_uteis_restantes ?? 0} dia(s) úteis restantes`}
-                          accent="text-blue-700"
-                        />
-                      </div>
+
+                      {!showFatMeta && !showLucroMeta ? (
+                        <p className="text-sm text-muted-foreground py-4 text-center">Selecione ao menos um tipo de meta para visualizar.</p>
+                      ) : (
+                        <>
+                          {/* Bloco Faturamento */}
+                          {showFatMeta && (
+                            <div className="space-y-3">
+                              <p className="text-xs font-bold uppercase tracking-widest text-green-700">Meta de Faturamento</p>
+                              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                                <KpiCard
+                                  label="Meta (Alvo)"
+                                  value={proj?.meta_target != null ? BRL(proj.meta_target) : '—'}
+                                  sub="Target cadastrado"
+                                  accent="text-green-700"
+                                  borderAccent="border-l-4 border-l-green-500"
+                                />
+                                <KpiCard
+                                  label="Meta (Piso)"
+                                  value={proj?.meta_floor != null ? BRL(proj.meta_floor) : '—'}
+                                  sub="Floor cadastrado"
+                                  accent="text-amber-600"
+                                  borderAccent="border-l-4 border-l-amber-500"
+                                />
+                                <KpiCard
+                                  label="% da Meta"
+                                  value={proj?.pct_meta != null ? PCT(proj.pct_meta) : '—'}
+                                  sub={`Faturamento: ${BRL(kpis?.receita ?? 0)}`}
+                                  accent={(proj?.pct_meta ?? 0) >= 1 ? 'text-green-700' : 'text-orange-600'}
+                                  borderAccent={(proj?.pct_meta ?? 0) >= 1 ? 'border-l-4 border-l-green-500' : 'border-l-4 border-l-orange-400'}
+                                />
+                                <KpiCard
+                                  label="Gap para Alvo"
+                                  value={proj?.gap_target != null ? BRL(proj.gap_target) : '—'}
+                                  sub={proj?.gap_target === 0 ? 'Meta atingida!' : undefined}
+                                  accent={proj?.gap_target === 0 ? 'text-green-700' : 'text-orange-600'}
+                                />
+                              </div>
+                              <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                                <KpiCard
+                                  label="Projeção do Mês"
+                                  value={BRL(proj?.projecao_mes ?? 0)}
+                                  sub={`Média/dia: ${BRL(proj?.media_diaria ?? 0)}`}
+                                  accent="text-[#2F6BFF]"
+                                />
+                                <KpiCard
+                                  label="Gap para Piso"
+                                  value={proj?.gap_floor != null ? BRL(proj.gap_floor) : '—'}
+                                  sub={proj?.gap_floor === 0 ? 'Piso atingido!' : undefined}
+                                  accent={proj?.gap_floor === 0 ? 'text-green-700' : 'text-orange-500'}
+                                />
+                                <KpiCard
+                                  label="Meta Diária Dinâmica"
+                                  value={proj?.meta_diaria_dinamica != null ? BRL(proj.meta_diaria_dinamica) : '—'}
+                                  sub={`${proj?.dias_uteis_restantes ?? 0} dia(s) úteis restantes`}
+                                  accent="text-blue-700"
+                                />
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Bloco Lucro Líquido */}
+                          {showLucroMeta && (
+                            <div className="space-y-3">
+                              <p className="text-xs font-bold uppercase tracking-widest text-blue-700">Meta de Lucro Líquido</p>
+                              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                                <KpiCard
+                                  label="Meta Lucro (Alvo)"
+                                  value={proj?.meta_lucro_target != null ? BRL(proj.meta_lucro_target) : '—'}
+                                  sub="Target cadastrado"
+                                  accent="text-blue-700"
+                                  borderAccent="border-l-4 border-l-blue-500"
+                                />
+                                <KpiCard
+                                  label="Meta Lucro (Piso)"
+                                  value={proj?.meta_lucro_floor != null ? BRL(proj.meta_lucro_floor) : '—'}
+                                  sub="Floor cadastrado"
+                                  accent="text-indigo-600"
+                                  borderAccent="border-l-4 border-l-indigo-400"
+                                />
+                                <KpiCard
+                                  label="% da Meta Lucro"
+                                  value={proj?.pct_meta_lucro != null ? PCT(proj.pct_meta_lucro) : '—'}
+                                  sub={`Lucro líquido: ${BRL(lucroLiquido)}`}
+                                  accent={(proj?.pct_meta_lucro ?? 0) >= 1 ? 'text-green-700' : 'text-orange-600'}
+                                  borderAccent={(proj?.pct_meta_lucro ?? 0) >= 1 ? 'border-l-4 border-l-green-500' : 'border-l-4 border-l-orange-400'}
+                                />
+                                <KpiCard
+                                  label="Gap Lucro p/ Alvo"
+                                  value={proj?.gap_lucro_target != null ? BRL(proj.gap_lucro_target) : '—'}
+                                  sub={proj?.gap_lucro_target === 0 ? 'Meta atingida!' : undefined}
+                                  accent={proj?.gap_lucro_target === 0 ? 'text-green-700' : 'text-orange-600'}
+                                />
+                              </div>
+                              <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                                <KpiCard
+                                  label="Lucro Líquido Atual"
+                                  value={BRL(lucroLiquido)}
+                                  accent={lucroLiquido >= 0 ? 'text-blue-700' : 'text-red-600'}
+                                />
+                                <KpiCard
+                                  label="Gap Lucro p/ Piso"
+                                  value={proj?.gap_lucro_floor != null ? BRL(proj.gap_lucro_floor) : '—'}
+                                  sub={proj?.gap_lucro_floor === 0 ? 'Piso atingido!' : undefined}
+                                  accent={proj?.gap_lucro_floor === 0 ? 'text-green-700' : 'text-orange-500'}
+                                />
+                                <KpiCard
+                                  label="Meta Lucro Diária"
+                                  value={proj?.meta_lucro_diaria_dinamica != null ? BRL(proj.meta_lucro_diaria_dinamica) : '—'}
+                                  sub={`${proj?.dias_uteis_restantes ?? 0} dia(s) úteis restantes`}
+                                  accent="text-blue-700"
+                                />
+                              </div>
+                            </div>
+                          )}
+                        </>
+                      )}
                     </div>
                   )}
                 </>
@@ -819,7 +954,38 @@ export default function Dashboard() {
         <div className="space-y-4">
           {/* Seller filter row */}
           <div style={{ background: '#fff', border: '1px solid #E2E8F1', borderRadius: 16, padding: '12px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', boxShadow: '0 4px 16px -8px rgba(13,33,66,.08)' }}>
-            {datePicker}
+            <div className="flex items-center gap-3 flex-wrap">
+              {datePicker}
+              {/* Alterna a visualização entre metas de faturamento e de lucro */}
+              <div className="inline-flex gap-2" role="group" aria-label="Tipo de meta">
+                <button
+                  onClick={() => setSellerMetaView('faturamento')}
+                  aria-pressed={sellerMetaView === 'faturamento'}
+                  title="Visualizar metas de faturamento"
+                  className={cn(
+                    'flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold transition-all border',
+                    sellerMetaView === 'faturamento'
+                      ? 'bg-green-600 text-white border-green-600'
+                      : 'text-muted-foreground border-border hover:text-foreground'
+                  )}
+                >
+                  <TrendingUp className="h-4 w-4" /> Faturamento
+                </button>
+                <button
+                  onClick={() => setSellerMetaView('lucro')}
+                  aria-pressed={sellerMetaView === 'lucro'}
+                  title="Visualizar metas de lucro"
+                  className={cn(
+                    'flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold transition-all border',
+                    sellerMetaView === 'lucro'
+                      ? 'bg-blue-600 text-white border-blue-600'
+                      : 'text-muted-foreground border-border hover:text-foreground'
+                  )}
+                >
+                  <PiggyBank className="h-4 w-4" /> Lucro
+                </button>
+              </div>
+            </div>
             <Button
               onClick={() => setGoalsOpen(true)}
               className="gap-1.5 shrink-0"
@@ -843,15 +1009,18 @@ export default function Dashboard() {
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
               {sellerItems.map(item => {
                 const goal = vendorGoalByVendedor[item.id_vendedor];
+                // Métrica realizada conforme a visualização: lucro ou faturamento (receita)
+                const realizado = sellerMetaView === 'lucro' ? item.lucro : item.receita;
                 const projecao = diasDecorridos > 0
-                  ? (item.receita / diasDecorridos) * diasNoMes
-                  : item.receita;
+                  ? (realizado / diasDecorridos) * diasNoMes
+                  : realizado;
                 return (
                   <SellerCard
                     key={item.id_vendedor || item.nome}
                     item={item}
+                    metaTipo={sellerMetaView}
                     metaDiaria={goal ? Number(goal.target) / diasNoMes : null}
-                    gapMeta={goal ? Number(goal.target) - item.receita : null}
+                    gapMeta={goal ? Number(goal.target) - realizado : null}
                     projecaoMes={projecao}
                     hasGoal={goal != null}
                   />
@@ -860,8 +1029,8 @@ export default function Dashboard() {
             </div>
           )}
 
-          {/* Vendas vs Meta por Vendedor */}
-          <SellerGoalChart items={sellerItems} goals={sellerGoalChartData} />
+          {/* Realizado vs Meta por Vendedor */}
+          <SellerGoalChart items={sellerItems} goals={sellerGoalChartData} metaTipo={sellerMetaView} />
         </div>
       )}
 

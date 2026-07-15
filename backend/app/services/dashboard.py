@@ -398,6 +398,7 @@ def _goal_to_response(goal: DashboardGoal, nome_loja: Optional[str] = None) -> G
         mes=goal.mes,
         id_loja=goal.id_loja,
         nome_loja=nome_loja,
+        tipo=goal.tipo,
         target=goal.target,
         floor=goal.floor,
     )
@@ -426,6 +427,7 @@ def upsert_goal(db: Session, data: GoalCreate) -> GoalResponse:
         DashboardGoal.ano == data.ano,
         DashboardGoal.mes == data.mes,
         DashboardGoal.id_loja == data.id_loja,
+        DashboardGoal.tipo == data.tipo,
     ).first()
 
     if existing:
@@ -439,6 +441,7 @@ def upsert_goal(db: Session, data: GoalCreate) -> GoalResponse:
             ano=data.ano,
             mes=data.mes,
             id_loja=data.id_loja,
+            tipo=data.tipo,
             target=data.target,
             floor=data.floor,
         )
@@ -467,6 +470,7 @@ def _vendor_goal_to_response(meta: MetaVendedor, nome_vendedor: Optional[str] = 
         mes=meta.ano_mes.month,
         id_vendedor=meta.id_vendedor,
         nome_vendedor=nome_vendedor,
+        tipo=meta.tipo,
         target=meta.alvo_individual or Decimal(0),
         floor=meta.piso,
     )
@@ -496,6 +500,7 @@ def upsert_vendor_goal(db: Session, data: VendorGoalCreate) -> VendorGoalRespons
     existing = db.query(MetaVendedor).filter(
         MetaVendedor.id_vendedor == data.id_vendedor,
         MetaVendedor.ano_mes == ano_mes,
+        MetaVendedor.tipo == data.tipo,
     ).first()
 
     if existing:
@@ -508,6 +513,7 @@ def upsert_vendor_goal(db: Session, data: VendorGoalCreate) -> VendorGoalRespons
         meta = MetaVendedor(
             id_vendedor=data.id_vendedor,
             ano_mes=ano_mes,
+            tipo=data.tipo,
             alvo_individual=data.target,
             piso=data.floor,
         )
@@ -677,23 +683,34 @@ def get_projections(
     # KPIs do período
     kpis = get_kpis(db, mes, ano, data_inicio, data_fim, id_loja)
     receita = kpis.receita
+    lucro_liquido = float(kpis.lucro) - float(kpis.outros_custos)
 
     media_diaria = round(receita / dias_decorridos, 2) if dias_decorridos > 0 else 0.0
     projecao_mes = round(media_diaria * (dias_decorridos + dias_restantes), 2)
 
-    # Meta do período
-    goal = None
+    # Metas do período (faturamento e lucro).
+    # Sem id_loja (visualização geral de empresas), agrega as metas de TODAS as
+    # empresas somando target/floor por tipo — assim os cards batem com os KPIs,
+    # que também são agregados. Com id_loja, há no máximo uma meta por tipo.
+    meta_target = None
+    meta_floor = None
+    meta_lucro_target = None
+    meta_lucro_floor = None
     if not (data_inicio or data_fim):
         m = mes or today.month
         y = ano or today.year
-        goal_loja = id_loja
         q = db.query(DashboardGoal).filter(DashboardGoal.ano == y, DashboardGoal.mes == m)
-        if goal_loja:
-            q = q.filter(DashboardGoal.id_loja == goal_loja)
-        goal = q.first()
-
-    meta_target = float(goal.target) if goal else None
-    meta_floor  = float(goal.floor)  if goal and goal.floor else None
+        if id_loja:
+            q = q.filter(DashboardGoal.id_loja == id_loja)
+        for g in q.all():
+            if g.tipo == "lucro":
+                meta_lucro_target = (meta_lucro_target or 0.0) + float(g.target)
+                if g.floor:
+                    meta_lucro_floor = (meta_lucro_floor or 0.0) + float(g.floor)
+            else:
+                meta_target = (meta_target or 0.0) + float(g.target)
+                if g.floor:
+                    meta_floor = (meta_floor or 0.0) + float(g.floor)
 
     gap_target = max(meta_target - receita, 0.0) if meta_target is not None else None
     gap_floor  = max(meta_floor  - receita, 0.0) if meta_floor  is not None else None
@@ -702,6 +719,15 @@ def get_projections(
     meta_diaria_dinamica = None
     if gap_floor is not None and dias_restantes > 0:
         meta_diaria_dinamica = round(gap_floor / dias_restantes, 2)
+
+    # Projeções de lucro líquido (metas de lucro já agregadas acima)
+    gap_lucro_target = max(meta_lucro_target - lucro_liquido, 0.0) if meta_lucro_target is not None else None
+    gap_lucro_floor  = max(meta_lucro_floor  - lucro_liquido, 0.0) if meta_lucro_floor  is not None else None
+    pct_meta_lucro   = round(lucro_liquido / meta_lucro_target, 4)  if meta_lucro_target else None
+
+    meta_lucro_diaria_dinamica = None
+    if gap_lucro_floor is not None and dias_restantes > 0:
+        meta_lucro_diaria_dinamica = round(gap_lucro_floor / dias_restantes, 2)
 
     return ProjectionsResponse(
         periodo_inicio=inicio,
@@ -716,6 +742,12 @@ def get_projections(
         gap_floor=gap_floor,
         meta_diaria_dinamica=meta_diaria_dinamica,
         pct_meta=pct_meta,
+        meta_lucro_target=meta_lucro_target,
+        meta_lucro_floor=meta_lucro_floor,
+        gap_lucro_target=gap_lucro_target,
+        gap_lucro_floor=gap_lucro_floor,
+        pct_meta_lucro=pct_meta_lucro,
+        meta_lucro_diaria_dinamica=meta_lucro_diaria_dinamica,
     )
 
 
