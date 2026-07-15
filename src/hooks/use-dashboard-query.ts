@@ -13,6 +13,7 @@ export interface DashboardKpis {
   periodo_inicio: string
   periodo_fim: string
   receita: number
+  estornos: number
   custo: number
   lucro: number
   margem: number

@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime, timezone
-from sqlalchemy import Column, String, Text, Boolean, Date, DateTime, ForeignKey, UniqueConstraint
+from sqlalchemy import Column, String, Text, Boolean, Date, DateTime, ForeignKey, UniqueConstraint, Integer
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.types import Numeric
 from sqlalchemy.orm import relationship
@@ -13,6 +13,9 @@ class Cotacao(Base):
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     id_loja = Column(UUID(as_uuid=True), ForeignKey("lojas.id"), nullable=False)
     id_vendedor = Column(UUID(as_uuid=True), ForeignKey("vendedores.id"), nullable=False)
+
+    # Número sequencial de registro (1, 2, 3, ...) — atribuído via sequence na criação
+    numero = Column(Integer, nullable=True)
 
     numero_requisicao = Column(String(50), nullable=True)
     b2b_company = Column(String(255), nullable=True)

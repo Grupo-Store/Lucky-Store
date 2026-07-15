@@ -4,7 +4,7 @@ from decimal import Decimal
 from typing import Optional
 from uuid import UUID
 from sqlalchemy.orm import Session
-from sqlalchemy import asc, desc
+from sqlalchemy import asc, desc, text
 
 from app.models.cotacao import Cotacao
 from app.models.item_cotacao import ItemCotacao
@@ -13,6 +13,10 @@ from app.models.audit_log import AuditLog, AuditAction
 from app.models.status_history import StatusHistory, EntityType
 from app.schemas.cotacao import CotacaoCreate, CotacaoUpdate, PhaseUpdate
 from app.utils.errors import NotFoundException
+
+
+def _generate_numero(db: Session) -> int:
+    return db.execute(text("SELECT nextval('cotacao_numero_seq')")).scalar()
 
 
 def _get_quote_phase(cotacao: Cotacao) -> str | None:
@@ -76,6 +80,7 @@ class CotacaoService:
         cotacao = Cotacao(
             id_loja=data.id_loja,
             id_vendedor=data.id_vendedor,
+            numero=_generate_numero(db),
             numero_requisicao=data.numero_requisicao,
             b2b_company=data.b2b_company,
             cliente=data.cliente,

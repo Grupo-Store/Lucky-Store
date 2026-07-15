@@ -120,6 +120,7 @@ class CotacaoResponse(BaseModel):
     id: UUID
     id_loja: UUID
     id_vendedor: UUID
+    numero: Optional[int] = None
     numero_requisicao: Optional[str]
     b2b_company: Optional[str]
     cliente: str

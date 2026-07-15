@@ -41,10 +41,10 @@ export interface CalendarEntry {
   id: string;
   date: string;
   value: number;
-  type: 'MULTA' | 'JUROS' | 'PREVISAO' | 'PAGO' | 'ORDER' | 'FRETE';
+  type: 'MULTA' | 'JUROS' | 'PREVISAO' | 'PAGO' | 'ORDER' | 'FRETE' | 'ESTORNO';
   title: string;
   refId: string;
-  refKind: 'expense' | 'order' | 'order-penalty' | 'order-interest' | 'order-frete';
+  refKind: 'expense' | 'order' | 'order-penalty' | 'order-interest' | 'order-frete' | 'rma-estorno';
   /** Optional sub-index for installments */
   subIndex?: number;
 }
@@ -128,7 +128,7 @@ export function expandOrderFinancial(o: Order): CalendarEntry[] {
           date: p.date,
           value: +share(multa, p).toFixed(2),
           type: 'MULTA',
-          title: `OS ${o.os} (${i + 1}ª)`,
+          title: `${o.os} (${i + 1}ª)`,
           refId: o.id,
           refKind: 'order-penalty',
           subIndex: i,
@@ -140,7 +140,7 @@ export function expandOrderFinancial(o: Order): CalendarEntry[] {
           date: p.date,
           value: +share(juros, p).toFixed(2),
           type: 'JUROS',
-          title: `OS ${o.os} (${i + 1}ª)`,
+          title: `${o.os} (${i + 1}ª)`,
           refId: o.id,
           refKind: 'order-interest',
           subIndex: i,
@@ -157,7 +157,7 @@ export function expandOrderFinancial(o: Order): CalendarEntry[] {
       date: payDate,
       value: multa,
       type: 'MULTA',
-      title: `OS ${o.os}`,
+      title: `${o.os}`,
       refId: o.id,
       refKind: 'order-penalty',
     });
@@ -168,13 +168,38 @@ export function expandOrderFinancial(o: Order): CalendarEntry[] {
       date: payDate,
       value: juros,
       type: 'JUROS',
-      title: `OS ${o.os}`,
+      title: `${o.os}`,
       refId: o.id,
       refKind: 'order-interest',
     });
   }
 
   return out;
+}
+
+/**
+ * Deriva entradas de ESTORNO (saída/despesa) a partir dos itens devolvidos de um RMA.
+ * Uma entrada por item com valor_estornado > 0, na data do estorno
+ * (fallback: data de registro do RMA).
+ */
+export function expandRmaEstorno(rma: {
+  id: string;
+  numero_os_origem?: string | null;
+  data_registro: string;
+  itens?: { id: string; descricao: string; valor_estornado?: string | number | null; data_estorno?: string | null }[];
+}): CalendarEntry[] {
+  return (rma.itens ?? [])
+    .map(it => ({ it, val: Number(it.valor_estornado) || 0 }))
+    .filter(({ val }) => val > 0)
+    .map(({ it, val }) => ({
+      id: `est-${it.id}`,
+      date: it.data_estorno || rma.data_registro,
+      value: val,
+      type: 'ESTORNO' as const,
+      title: `Estorno ${rma.numero_os_origem || '—'} — ${it.descricao}`,
+      refId: rma.id,
+      refKind: 'rma-estorno' as const,
+    }));
 }
 
 /** Derive FRETE calendar entries from an Order's freight cards. */

@@ -21,6 +21,7 @@ class DashboardKpisResponse(BaseModel):
     periodo_inicio: date
     periodo_fim: date
     receita: float
+    estornos: float = 0
     custo: float
     lucro: float
     margem: float

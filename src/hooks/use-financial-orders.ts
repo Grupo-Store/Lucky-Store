@@ -66,6 +66,7 @@ export function adaptPedidoToOrder(p: PedidoListItem): Order {
     paymentDate: p.data_pagamento ?? undefined,
     penaltyValue: Number(p.multa) || 0,
     interestValue: Number(p.juros) || 0,
+    refundTotal: Number(p.valor_total_estornado) || 0,
     paymentMethod: p.forma_pagamento_efetiva
       ? (FORMA_TO_PAYMENT[p.forma_pagamento_efetiva] ?? (p.forma_pagamento_efetiva as PaymentMethod))
       : undefined,

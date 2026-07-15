@@ -648,7 +648,7 @@ export default function Dashboard() {
                     <KpiCard
                       label="Faturamento Total"
                       value={BRL(kpis?.receita ?? 0)}
-                      sub="Receita bruta do período"
+                      sub={(kpis?.estornos ?? 0) > 0 ? `Líquido · estornos ${BRL(kpis?.estornos ?? 0)}` : 'Receita do período'}
                       accent="text-green-700"
                     />
                     <KpiCard

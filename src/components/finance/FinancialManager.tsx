@@ -29,17 +29,20 @@ import { Calendar } from '@/components/ui/calendar';
 import { CalendarIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import {
-  useFinance, expandExpense, expandOrderFinancial, expandOrderFretes, isCreditOrder, CalendarEntry, Expense,
+  useFinance, expandExpense, expandOrderFinancial, expandOrderFretes, expandRmaEstorno, isCreditOrder, CalendarEntry, Expense,
 } from '@/store/FinanceStore';
 import { useOrders, calcTotal, Order } from '@/store/OrderStore';
 import { useFinancialOrders } from '@/hooks/use-financial-orders';
+import { useRmas } from '@/api/hooks/useRma';
 import { useToggleFretePago, useFretesSummary, useFretesDetail } from '@/hooks/useFretes';
 import { ExpenseModal } from './ExpenseModal';
 import { OrderModal } from '@/components/OrderModal';
+import { RmaEditModal } from '@/components/RmaEditModal';
+import type { RmaResponse } from '@/types/api';
 
 type ViewMode = 'gains' | 'expenses' | 'all';
 type Layout = 'calendar' | 'table';
-type TypeFilter = 'all' | 'MULTA' | 'JUROS' | 'PREVISAO' | 'PAGO' | 'ORDER' | 'FRETE';
+type TypeFilter = 'all' | 'MULTA' | 'JUROS' | 'PREVISAO' | 'PAGO' | 'ORDER' | 'FRETE' | 'ESTORNO';
 
 const BRL = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
@@ -50,6 +53,7 @@ const TYPE_STYLES: Record<CalendarEntry['type'], string> = {
   PAGO: 'bg-red-500 text-white',
   ORDER: 'bg-[#2F6BFF] text-white',
   FRETE: 'bg-purple-500 text-white',
+  ESTORNO: 'bg-rose-600 text-white',
 };
 
 const TYPE_LABELS: Record<CalendarEntry['type'], string> = {
@@ -59,6 +63,7 @@ const TYPE_LABELS: Record<CalendarEntry['type'], string> = {
   PAGO: 'Pago',
   ORDER: 'Pedido',
   FRETE: 'Frete',
+  ESTORNO: 'Estorno',
 };
 
 const fmtDate = (iso: string) => format(new Date(iso + 'T12:00:00'), 'dd/MM/yyyy');
@@ -66,6 +71,8 @@ const fmtDate = (iso: string) => format(new Date(iso + 'T12:00:00'), 'dd/MM/yyyy
 export function FinancialManager() {
   const { expenses, addExpense, updateExpense, deleteExpense } = useFinance();
   const { data: orders = [] } = useFinancialOrders();
+  const { data: rmasData } = useRmas({ limit: 500 });
+  const rmas = rmasData?.items ?? [];
   const { updateOrder, deleteOrder, nextOS } = useOrders();
   const qc = useQueryClient();
   const { mutate: togglePago } = useToggleFretePago();
@@ -75,6 +82,7 @@ export function FinancialManager() {
   const [cursor, setCursor] = useState<Date>(new Date());
   const [expModal, setExpModal] = useState<{ open: boolean; expense: Expense | null }>({ open: false, expense: null });
   const [orderModal, setOrderModal] = useState<{ open: boolean; order: Order | null }>({ open: false, order: null });
+  const [rmaModal, setRmaModal] = useState<{ open: boolean; rma: RmaResponse | null }>({ open: false, rma: null });
 
   // Macro tabs
   const [macroTab, setMacroTab] = useState<'finances' | 'fretes'>('finances');
@@ -100,6 +108,7 @@ export function FinancialManager() {
       out.push(...expandOrderFretes(o));
     });
     expenses.forEach(e => out.push(...expandExpense(e)));
+    rmas.forEach(r => out.push(...expandRmaEstorno(r)));
     // Visão geral: display sales orders.
     // Cartão de crédito com plano de parcelas → um bloco por parcela (valor + data).
     // Demais → entrada única na data de pagamento (ou data do pedido).
@@ -131,12 +140,12 @@ export function FinancialManager() {
       }
     });
     return out;
-  }, [expenses, orders]);
+  }, [expenses, orders, rmas]);
 
   const entries = useMemo(() => {
     return allEntries.filter(e => {
       if (view === 'gains' && !(e.type === 'MULTA' || e.type === 'JUROS')) return false;
-      if (view === 'expenses' && !(e.type === 'PREVISAO' || e.type === 'PAGO')) return false;
+      if (view === 'expenses' && !(e.type === 'PREVISAO' || e.type === 'PAGO' || e.type === 'ESTORNO')) return false;
       // 'all' includes ORDER and FRETE types
       if (view !== 'all' && (e.type === 'ORDER' || e.type === 'FRETE')) return false;
       if (typeFilter !== 'all' && e.type !== typeFilter) return false;
@@ -166,7 +175,7 @@ export function FinancialManager() {
       const d = new Date(e.date + 'T12:00:00');
       if (!isSameMonth(d, cursor)) return;
       if (e.type === 'MULTA' || e.type === 'JUROS' || e.type === 'ORDER') receitas += e.value;
-      else if (e.type === 'PAGO' || e.type === 'PREVISAO' || e.type === 'FRETE') despesas += e.value;
+      else if (e.type === 'PAGO' || e.type === 'PREVISAO' || e.type === 'FRETE' || e.type === 'ESTORNO') despesas += e.value;
     });
     return { receitas, despesas, lucro: receitas - despesas };
   }, [entries, cursor]);
@@ -188,6 +197,9 @@ export function FinancialManager() {
     } else if (e.refKind === 'order' || e.refKind === 'order-penalty' || e.refKind === 'order-interest') {
       const o = orders.find(x => x.id === e.refId);
       if (o) setOrderModal({ open: true, order: o });
+    } else if (e.refKind === 'rma-estorno') {
+      const r = rmas.find(x => x.id === e.refId);
+      if (r) setRmaModal({ open: true, rma: r });
     }
   };
 
@@ -462,7 +474,7 @@ export function FinancialManager() {
 
                 <div className="flex items-center gap-3 flex-wrap">
                   <span className="text-sm font-medium">Filtrar tipo:</span>
-                  {(['all', 'ORDER', 'FRETE', 'MULTA', 'JUROS', 'PREVISAO', 'PAGO'] as TypeFilter[]).map(t => (
+                  {(['all', 'ORDER', 'FRETE', 'MULTA', 'JUROS', 'PREVISAO', 'PAGO', 'ESTORNO'] as TypeFilter[]).map(t => (
                     <button
                       key={t}
                       onClick={() => setTypeFilter(t)}
@@ -756,6 +768,11 @@ export function FinancialManager() {
         onSave={o => { updateOrder(o); qc.invalidateQueries({ queryKey: ['financial-orders'] }); }}
         onDelete={id => { deleteOrder(id); qc.invalidateQueries({ queryKey: ['financial-orders'] }); }}
         nextOS={nextOS}
+      />
+      <RmaEditModal
+        open={rmaModal.open}
+        rma={rmaModal.rma}
+        onClose={() => setRmaModal({ open: false, rma: null })}
       />
     </div>
   );

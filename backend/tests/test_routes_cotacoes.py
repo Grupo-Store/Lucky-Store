@@ -28,6 +28,7 @@ def _fake_cotacao(cotacao_id=None):
     c.id = cotacao_id or uuid.uuid4()
     c.id_loja = uuid.uuid4()
     c.id_vendedor = uuid.uuid4()
+    c.numero = 1
     c.numero_requisicao = "REQ-001"
     c.b2b_company = None
     c.cliente = "Empresa Teste"

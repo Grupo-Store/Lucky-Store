@@ -223,6 +223,7 @@ export interface CotacaoResponse {
   id: string;
   id_loja: string;
   id_vendedor: string;
+  numero: number | null;
   cliente: string;
   cnpj_cliente: string | null;
   numero_requisicao: string | null;

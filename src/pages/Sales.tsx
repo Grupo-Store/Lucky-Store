@@ -23,7 +23,7 @@ import {
   RMA_STATUS_LABELS, RMA_STATUS_COLORS, PaymentInstallment, PaymentMethod,
 } from '@/store/OrderStore';
 import {
-  useQuotes as useLocalQuotes, Quote, DirectSupplyQuoteItem, QuotePhaseKey, QUOTE_PHASE_LABELS, QUOTE_PHASE_COLORS,
+  Quote, DirectSupplyQuoteItem, QuotePhaseKey, QUOTE_PHASE_LABELS, QUOTE_PHASE_COLORS,
   getHighestPhase, getPhaseDate, getDisplayValue, emptyPhases,
 } from '@/store/QuoteStore';
 import { LOJA_IDS, VENDEDOR_IDS, FORMA_PAGAMENTO_MAP } from '@/api/storeConfig';
@@ -93,7 +93,7 @@ function cotacaoToQuote(c: CotacaoResponse): Quote {
   const hasDirect = allItems.some(i => i.is_direct_supply);
   return {
     id: c.id,
-    index: '',
+    index: c.numero != null ? String(c.numero) : '',
     createdAt: new Date(c.created_at).getTime(),
     customer: cleanStr(c.cliente),
     cnpj: cleanStr(c.cnpj_cliente),
@@ -320,8 +320,7 @@ function isInRange(iso: string, range: DateRange): boolean {
 
 
 export default function Sales() {
-  const { orders, addOrder, updateOrder, deleteOrder, updateItemStatus, nextOS, nextRmaNumber } = useOrders();
-  const { nextIndex } = useLocalQuotes();
+  const { orders, addOrder, updateOrder, deleteOrder, updateItemStatus, nextRmaNumber } = useOrders();
   const { mutate: deleteQuoteMutation } = useDeleteQuote();
   const [tab, setTab] = useState('orders');
   const [modalOpen, setModalOpen] = useState(false);
@@ -345,6 +344,17 @@ export default function Sales() {
     page: 1, limit: 20, sort_by: 'data_pedido', sort_dir: 'desc',
   });
   const { data, isLoading, isError, refetch } = useOrdersQuery(filters);
+
+  // Próxima OS (preview) no formato real "OS-0XX", a partir dos pedidos carregados.
+  // O número definitivo é gerado pelo backend (sequence) ao salvar.
+  const nextOSReal = useMemo(() => {
+    const max = (data?.items ?? []).reduce((m, it) => {
+      const n = parseInt(String(it.numero_os).replace(/\D/g, ''), 10);
+      return Number.isFinite(n) && n > m ? n : m;
+    }, 0);
+    const next = `OS-${String(max + 1).padStart(3, '0')}`;
+    return () => next;
+  }, [data]);
 
   /* ---------- Products-specific API query (no pagination, loads all) ---------- */
   const prodApiFilters = useMemo<OrderFilters>(
@@ -400,6 +410,14 @@ export default function Sales() {
   });
   const { data: quotesData, isLoading: quotesLoading, isError: quotesError, refetch: quotesRefetch } =
     useQuotesAPI(quoteApiFilters);
+
+  // Próximo índice (preview) da cotação: sequencial 1..N a partir das cotações carregadas.
+  // O número definitivo é gerado pelo backend (sequence) ao salvar.
+  const nextIndexReal = useMemo(() => {
+    const max = (quotesData?.items ?? []).reduce((m, c) => (c.numero != null && c.numero > m ? c.numero : m), 0);
+    const next = String(max + 1);
+    return () => next;
+  }, [quotesData]);
 
   /* ---------- RMA tab state ---------- */
   const [rmaSearch, setRmaSearch] = useState('');
@@ -1248,7 +1266,7 @@ export default function Sales() {
           order={editOrder}
           onSave={o => editOrder ? updateOrder(o) : addOrder(o)}
           onDelete={deleteOrder}
-          nextOS={nextOS}
+          nextOS={nextOSReal}
           prefill={orderPrefill}
         />
         <ProductModal
@@ -1264,7 +1282,7 @@ export default function Sales() {
           quote={editQuote}
           onSave={() => {}}
           onDelete={id => deleteQuoteMutation(id)}
-          nextIndex={nextIndex}
+          nextIndex={nextIndexReal}
         />
         <RmaModal
           open={rmaModalOpen}

@@ -9,6 +9,8 @@ from sqlalchemy.orm import Session
 from app.models.pedido import Pedido, CustoPedido, Frete
 from app.models.produto import Produto
 from app.models.despesa import Despesa
+from app.models.rma import Rma
+from app.models.item_rma import ItemRma
 from app.models.loja import Loja
 from app.models.vendedor import Vendedor
 from app.models.dashboard_goal import DashboardGoal
@@ -154,12 +156,29 @@ def get_kpis(
     inicio, fim = _resolve_period(mes, ano, data_inicio, data_fim)
     row = _aggregate(db, inicio, fim, id_loja)
 
-    receita = Decimal(str(row.receita or 0))
+    receita_bruta = Decimal(str(row.receita or 0))
     custo_produto = Decimal(str(row.custo_produto or 0))
     custo_servico = Decimal(str(row.custo_servico or 0))
     imposto_compra = Decimal(str(row.imposto_compra or 0))
     imposto_venda = Decimal(str(row.imposto_venda or 0))
     custo = custo_produto + custo_servico
+
+    # Estornos (devoluções de RMA) abatem o faturamento no período — por data do estorno
+    # (fallback: data de registro do RMA quando o estorno não tem data preenchida)
+    estornos_q = (
+        db.query(func.coalesce(func.sum(ItemRma.valor_estornado), 0))
+        .join(Rma, ItemRma.id_rma == Rma.id)
+        .filter(
+            Rma.deleted_at.is_(None),
+            func.coalesce(ItemRma.data_estorno, Rma.data_registro) >= inicio,
+            func.coalesce(ItemRma.data_estorno, Rma.data_registro) <= fim,
+        )
+    )
+    if id_loja:
+        estornos_q = estornos_q.filter(Rma.id_loja == id_loja)
+    estornos = Decimal(str(estornos_q.scalar() or 0))
+
+    receita = receita_bruta - estornos
     lucro = receita - custo
     margem = (lucro / receita).quantize(Decimal("0.0001")) if receita > 0 else Decimal("0")
     gastos_fixos_q = (
@@ -218,6 +237,7 @@ def get_kpis(
         periodo_inicio=inicio,
         periodo_fim=fim,
         receita=receita,
+        estornos=estornos,
         custo=custo,
         lucro=lucro,
         margem=margem,
