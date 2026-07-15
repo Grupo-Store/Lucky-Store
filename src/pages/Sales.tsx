@@ -1,4 +1,5 @@
-import { useState, useMemo, memo } from 'react';
+import { useState, useMemo, memo, useEffect } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useOrdersQuery, OrderFilters, PedidoListItem, FreteApiItem } from '@/hooks/use-orders-query';
@@ -318,10 +319,28 @@ function isInRange(iso: string, range: DateRange): boolean {
   return d >= from && d <= to;
 }
 
+// Situação coarse do RMA (client-side)
+const RMA_DELIVERED_STATUSES: RmaStatus[] = ['Delivered', 'Completed'];
+const RMA_CLOSED_STATUSES: RmaStatus[] = ['Delivered', 'Completed', 'Cancelled'];
+
+/** Intenção de navegação vinda dos cards do dashboard de Vendas. */
+interface SalesNav {
+  tab: 'orders' | 'products' | 'quotes';
+  orderView?: 'all' | 'open' | 'rma';
+  orderStatus?: PedidoStatus;
+  quoteStatus?: string;
+  prodStatus?: string;
+  prodView?: 'all' | 'open';
+  rmaStatus?: 'all' | 'open' | 'delivered';
+  idLoja?: string;
+}
+
 
 export default function Sales() {
   const { orders, addOrder, updateOrder, deleteOrder, updateItemStatus, nextRmaNumber } = useOrders();
   const { mutate: deleteQuoteMutation } = useDeleteQuote();
+  const location = useLocation();
+  const navigate = useNavigate();
   const [tab, setTab] = useState('orders');
   const [modalOpen, setModalOpen] = useState(false);
   const [editOrder, setEditOrder] = useState<Order | null>(null);
@@ -422,6 +441,8 @@ export default function Sales() {
   /* ---------- RMA tab state ---------- */
   const [rmaSearch, setRmaSearch] = useState('');
   const [rmaDateRange, setRmaDateRange] = useState<DateRange>({});
+  // Filtro de situação do RMA (client-side): todos, em aberto ou entregues
+  const [rmaStatusFilter, setRmaStatusFilter] = useState<'all' | 'open' | 'delivered'>('all');
   const [rmaEditModalOpen, setRmaEditModalOpen] = useState(false);
   const [editingRma, setEditingRma] = useState<RmaResponse | null>(null);
   const [rmaApiFilters, setRmaApiFilters] = useState<RmaFilters>({
@@ -429,6 +450,34 @@ export default function Sales() {
   });
   const { data: rmasData, isLoading: rmasLoading, isError: rmasError, refetch: rmasRefetch } =
     useRmas(rmaApiFilters);
+
+  /* ---------- Deep-link vindo dos cards do dashboard (location.state.salesNav) ---------- */
+  useEffect(() => {
+    const nav = (location.state as { salesNav?: SalesNav } | null)?.salesNav;
+    if (!nav) return;
+
+    const idLoja = nav.idLoja;
+    if (nav.tab) setTab(nav.tab);
+
+    if (nav.tab === 'orders') {
+      setOrderView(nav.orderView ?? 'all');
+      setFilters(f => ({ ...f, status: nav.orderStatus, id_loja: idLoja, page: 1 }));
+      if (nav.orderView === 'rma') {
+        setRmaStatusFilter(nav.rmaStatus ?? 'all');
+        setRmaApiFilters(f => ({ ...f, id_loja: idLoja, page: 1 }));
+      }
+    } else if (nav.tab === 'quotes') {
+      setQuoteStatusFilter(nav.quoteStatus ?? 'all');
+      setQuoteApiFilters(f => ({ ...f, id_loja: idLoja, page: 1 }));
+    } else if (nav.tab === 'products') {
+      setProdView(nav.prodView ?? 'all');
+      setProdStatusFilter(nav.prodStatus ?? 'all');
+    }
+
+    // Limpa o state para não reaplicar em re-render / ao voltar
+    navigate('.', { replace: true, state: null });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.state]);
 
   const toggleSort = (field: string) => {
     setFilters(f => ({
@@ -445,7 +494,10 @@ export default function Sales() {
     const q = quoteSearch.toLowerCase().trim();
     return items.filter(qt => {
       const highest = getCotacaoPhase(qt);
-      if (quoteStatusFilter !== 'all' && highest !== quoteStatusFilter) return false;
+      if (quoteStatusFilter === 'open') {
+        // "Em aberto" = ainda não fechada e não caída
+        if (highest === 'closed' || highest === 'dropped') return false;
+      } else if (quoteStatusFilter !== 'all' && highest !== quoteStatusFilter) return false;
       if (q && !(
         qt.cliente.toLowerCase().includes(q) ||
         (qt.numero_requisicao ?? '').toLowerCase().includes(q) ||
@@ -460,17 +512,21 @@ export default function Sales() {
     });
   }, [quotesData, quoteSearch, quoteStatusFilter, quoteRange, quoteDateField]);
 
-  /* ---------- RMAs (client-side search on top of API data) ---------- */
+  /* ---------- RMAs (client-side search + situação on top of API data) ---------- */
   const filteredRmas = useMemo(() => {
     const items = rmasData?.items ?? [];
     const q = rmaSearch.toLowerCase().trim();
-    if (!q) return items;
-    return items.filter(r =>
-      r.numero_rma.toLowerCase().includes(q) ||
-      r.id_pedido_origem.toLowerCase().includes(q) ||
-      (RMA_FULL_STATUS_LABELS[r.status] ?? r.status).toLowerCase().includes(q)
-    );
-  }, [rmasData, rmaSearch]);
+    return items.filter(r => {
+      if (rmaStatusFilter === 'open' && RMA_CLOSED_STATUSES.includes(r.status)) return false;
+      if (rmaStatusFilter === 'delivered' && !RMA_DELIVERED_STATUSES.includes(r.status)) return false;
+      if (q && !(
+        r.numero_rma.toLowerCase().includes(q) ||
+        r.id_pedido_origem.toLowerCase().includes(q) ||
+        (RMA_FULL_STATUS_LABELS[r.status] ?? r.status).toLowerCase().includes(q)
+      )) return false;
+      return true;
+    });
+  }, [rmasData, rmaSearch, rmaStatusFilter]);
 
   /* ---------- Products (from API) ---------- */
   const products = useMemo(() => {
@@ -625,6 +681,7 @@ export default function Sales() {
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="all">Todos os Status</SelectItem>
+                      <SelectItem value="open">Em aberto</SelectItem>
                       {(Object.keys(QUOTE_PHASE_LABELS) as QuotePhaseKey[]).map(k => (
                         <SelectItem key={k} value={k}>
                           <span className={cn('px-2 py-0.5 rounded text-xs font-medium', QUOTE_PHASE_COLORS[k])}>{QUOTE_PHASE_LABELS[k]}</span>
@@ -791,6 +848,20 @@ export default function Sales() {
                     className="flex-1 min-w-[160px]"
                   />
 
+                  {/* Situação (RMA only) — filtro coarse: em aberto / entregues */}
+                  {orderView === 'rma' && (
+                    <Select value={rmaStatusFilter} onValueChange={v => setRmaStatusFilter(v as 'all' | 'open' | 'delivered')}>
+                      <SelectTrigger style={{ width: 150, background: '#FBFCFE', borderColor: '#E2E8F1', borderRadius: 10, flexShrink: 0 }}>
+                        <SelectValue placeholder="Situação" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">Todas as situações</SelectItem>
+                        <SelectItem value="open">Em aberto</SelectItem>
+                        <SelectItem value="delivered">Entregues</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  )}
+
                   {/* Status select */}
                   {orderView !== 'rma' ? (
                     <Select value={filters.status ?? 'all'} onValueChange={v => setFilters(f => ({ ...f, status: v === 'all' ? undefined : v, page: 1 }))}>
@@ -880,12 +951,12 @@ export default function Sales() {
 
                   {/* Clear */}
                   {(orderView === 'rma'
-                    ? (rmaSearch || rmaApiFilters.status || rmaDateRange.from)
+                    ? (rmaSearch || rmaApiFilters.status || rmaDateRange.from || rmaStatusFilter !== 'all')
                     : (orderSearch || orderRange.from || orderAlertsOnly || filters.status)
                   ) && (
                     <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={() => {
                       if (orderView === 'rma') {
-                        setRmaSearch(''); setRmaDateRange({});
+                        setRmaSearch(''); setRmaDateRange({}); setRmaStatusFilter('all');
                         setRmaApiFilters(f => ({ ...f, status: undefined, data_inicio: undefined, data_fim: undefined, page: 1 }));
                       } else {
                         setOrderSearch(''); setOrderRange({}); setOrderAlertsOnly(false);

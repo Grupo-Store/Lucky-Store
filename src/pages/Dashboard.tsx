@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -29,6 +30,7 @@ import {
   useDashboardBreakdownByCompany,
   useDashboardBreakdownBySeller,
   useDashboardCardSpend,
+  useDashboardCounts,
   useDashboardGoals,
   useUpsertGoal,
   useDeleteGoal,
@@ -383,6 +385,7 @@ function GoalsModal({ open, onClose, year, month }: {
 
 export default function Dashboard() {
   const { filters: globalFilters, setFilters: setGlobalFilters, mode, section } = useDashboardFilters();
+  const navigate = useNavigate();
 
   const [company, setCompany] = useState<CompanyKey>('all');
   const [goalsOpen, setGoalsOpen] = useState(false);
@@ -412,6 +415,12 @@ export default function Dashboard() {
   const { data: byCompany, isLoading: byCompanyLoading, isError: byCompanyError } = useDashboardBreakdownByCompany(params);
   const { data: bySeller,  isLoading: bySellerLoading,  isError: bySellerError }  = useDashboardBreakdownBySeller(params);
   const { data: cardSpend } = useDashboardCardSpend(params);
+  const { data: counts } = useDashboardCounts(params);
+
+  // Navega para a tela de Vendas (rota "/") já com o filtro da categoria aplicado.
+  // A empresa selecionada no dashboard é repassada como id_loja.
+  const goToSales = (nav: Record<string, unknown>) =>
+    navigate('/', { state: { salesNav: { idLoja: params.id_loja, ...nav } } });
 
   useEffect(() => {
     if (kpisError || projError || byCompanyError || bySellerError) {
@@ -779,6 +788,72 @@ export default function Dashboard() {
                           accent="text-red-600"
                         />
                       </div>
+
+                      {/* Situação atual — cards clicáveis que abrem a lista filtrada */}
+                      <div className="space-y-2">
+                        <p style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.15em', textTransform: 'uppercase', color: '#5B6B82' }}>
+                          Situação Atual
+                        </p>
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                          <KpiCard
+                            label="Pedidos em Aberto"
+                            value={String(counts?.pedidos_abertos ?? 0)}
+                            sub="Ver pedidos abertos"
+                            accent="text-[#2F6BFF]"
+                            borderAccent="border-l-4 border-l-blue-500"
+                            onClick={() => goToSales({ tab: 'orders', orderView: 'open' })}
+                          />
+                          <KpiCard
+                            label="Pedidos Entregues"
+                            value={String(counts?.pedidos_entregues ?? 0)}
+                            sub="Ver pedidos entregues"
+                            accent="text-green-700"
+                            borderAccent="border-l-4 border-l-green-500"
+                            onClick={() => goToSales({ tab: 'orders', orderView: 'all', orderStatus: 'Delivered' })}
+                          />
+                          <KpiCard
+                            label="Cotações em Aberto"
+                            value={String(counts?.cotacoes_abertas ?? 0)}
+                            sub="Ver cotações abertas"
+                            accent="text-[#2F6BFF]"
+                            borderAccent="border-l-4 border-l-blue-500"
+                            onClick={() => goToSales({ tab: 'quotes', quoteStatus: 'open' })}
+                          />
+                          <KpiCard
+                            label="Cotações Fechadas"
+                            value={String(counts?.cotacoes_fechadas ?? 0)}
+                            sub="Ver cotações fechadas"
+                            accent="text-green-700"
+                            borderAccent="border-l-4 border-l-green-500"
+                            onClick={() => goToSales({ tab: 'quotes', quoteStatus: 'closed' })}
+                          />
+                          <KpiCard
+                            label="RMAs em Aberto"
+                            value={String(counts?.rmas_abertos ?? 0)}
+                            sub="Ver RMAs abertos"
+                            accent="text-orange-500"
+                            borderAccent="border-l-4 border-l-amber-500"
+                            onClick={() => goToSales({ tab: 'orders', orderView: 'rma', rmaStatus: 'open' })}
+                          />
+                          <KpiCard
+                            label="RMAs Entregues"
+                            value={String(counts?.rmas_entregues ?? 0)}
+                            sub="Ver RMAs entregues"
+                            accent="text-green-700"
+                            borderAccent="border-l-4 border-l-green-500"
+                            onClick={() => goToSales({ tab: 'orders', orderView: 'rma', rmaStatus: 'delivered' })}
+                          />
+                          <KpiCard
+                            label="Produtos para Comprar"
+                            value={String(counts?.produtos_para_comprar ?? 0)}
+                            sub="Ver produtos a comprar"
+                            accent="text-[#2F6BFF]"
+                            borderAccent="border-l-4 border-l-blue-500"
+                            onClick={() => goToSales({ tab: 'products', prodStatus: 'To Buy', prodView: 'all' })}
+                          />
+                        </div>
+                      </div>
+
                       <CardSpendChart items={cardSpend?.items ?? []} />
                     </div>
                   )}

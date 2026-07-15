@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.models.pedido import Pedido, CustoPedido, Frete
 from app.models.produto import Produto
+from app.models.cotacao import Cotacao
 from app.models.despesa import Despesa
 from app.models.rma import Rma
 from app.models.item_rma import ItemRma
@@ -32,6 +33,7 @@ from app.schemas.dashboard import (
     ProjectionsResponse,
     CardSpendItem,
     CardSpendResponse,
+    DashboardCountsResponse,
 )
 from app.utils.errors import NotFoundException
 
@@ -800,3 +802,90 @@ def get_card_spend(
         for card, total in sorted(totals.items(), key=lambda kv: kv[1], reverse=True)
     ]
     return CardSpendResponse(items=items)
+
+
+# ─── Contagens operacionais ────────────────────────────────────────────────────
+
+# Status terminais por entidade (usados para separar "em aberto" de "entregue")
+_PEDIDO_ENTREGUE = "Delivered"
+_RMA_ENTREGUE = ("Delivered", "Completed")
+_RMA_FORA_DE_ABERTO = ("Delivered", "Completed", "Cancelled")
+
+
+def get_counts(
+    db: Session,
+    mes: Optional[int] = None,
+    ano: Optional[int] = None,
+    data_inicio: Optional[date] = None,
+    data_fim: Optional[date] = None,
+    id_loja: Optional[UUID] = None,
+) -> DashboardCountsResponse:
+    """Contagens de estado atual (snapshot) para o dashboard de Vendas.
+
+    São métricas de "quantos estão em cada estado agora" — por isso NÃO são
+    filtradas por período; apenas, opcionalmente, por loja (id_loja).
+    """
+    # ── Pedidos ──
+    ped_base = db.query(func.count(Pedido.id)).filter(
+        Pedido.deleted_at.is_(None),
+        Pedido.is_rma.isnot(True),
+    )
+    if id_loja:
+        ped_base = ped_base.filter(Pedido.id_loja == id_loja)
+
+    pedidos_abertos = ped_base.filter(
+        Pedido.is_cancelled.isnot(True),
+        Pedido.status != _PEDIDO_ENTREGUE,
+    ).scalar() or 0
+    pedidos_entregues = ped_base.filter(
+        Pedido.status == _PEDIDO_ENTREGUE,
+    ).scalar() or 0
+
+    # ── Cotações ──
+    cot_base = db.query(func.count(Cotacao.id)).filter(Cotacao.deleted_at.is_(None))
+    if id_loja:
+        cot_base = cot_base.filter(Cotacao.id_loja == id_loja)
+
+    cotacoes_abertas = cot_base.filter(
+        Cotacao.status_fechada.isnot(True),
+        Cotacao.status_caida.isnot(True),
+    ).scalar() or 0
+    cotacoes_fechadas = cot_base.filter(
+        Cotacao.status_fechada.is_(True),
+    ).scalar() or 0
+
+    # ── RMAs ──
+    rma_base = db.query(func.count(Rma.id)).filter(Rma.deleted_at.is_(None))
+    if id_loja:
+        rma_base = rma_base.filter(Rma.id_loja == id_loja)
+
+    rmas_abertos = rma_base.filter(
+        Rma.status.notin_(_RMA_FORA_DE_ABERTO),
+    ).scalar() or 0
+    rmas_entregues = rma_base.filter(
+        Rma.status.in_(_RMA_ENTREGUE),
+    ).scalar() or 0
+
+    # ── Produtos para comprar (status "To Buy") ──
+    prod_q = (
+        db.query(func.count(Produto.id))
+        .join(Pedido, Pedido.id == Produto.id_pedido)
+        .filter(
+            Pedido.deleted_at.is_(None),
+            Pedido.is_cancelled.isnot(True),
+            Produto.status == "To Buy",
+        )
+    )
+    if id_loja:
+        prod_q = prod_q.filter(Pedido.id_loja == id_loja)
+    produtos_para_comprar = prod_q.scalar() or 0
+
+    return DashboardCountsResponse(
+        pedidos_abertos=pedidos_abertos,
+        pedidos_entregues=pedidos_entregues,
+        cotacoes_abertas=cotacoes_abertas,
+        cotacoes_fechadas=cotacoes_fechadas,
+        rmas_abertos=rmas_abertos,
+        rmas_entregues=rmas_entregues,
+        produtos_para_comprar=produtos_para_comprar,
+    )

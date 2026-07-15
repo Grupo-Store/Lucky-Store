@@ -121,6 +121,29 @@ export function useDashboardCardSpend(params: DashboardQueryParams) {
   })
 }
 
+// ─── Contagens operacionais (snapshot) ─────────────────────────────────────────
+
+export interface DashboardCounts {
+  pedidos_abertos: number
+  pedidos_entregues: number
+  cotacoes_abertas: number
+  cotacoes_fechadas: number
+  rmas_abertos: number
+  rmas_entregues: number
+  produtos_para_comprar: number
+}
+
+export function useDashboardCounts(params: DashboardQueryParams) {
+  // Contagens de estado atual — só a loja importa (o backend ignora o período).
+  const p = { id_loja: params.id_loja }
+  return useQuery<DashboardCounts>({
+    queryKey: ['dashboard', 'counts', p],
+    queryFn: () => apiFetch('/dashboard/counts', { params: { ...p } }),
+    staleTime: 30_000,
+    refetchOnWindowFocus: true,
+  })
+}
+
 // ─── Goals ────────────────────────────────────────────────────────────────────
 
 export interface ApiGoal {

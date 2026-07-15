@@ -200,3 +200,15 @@ class CardSpendItem(BaseModel):
 
 class CardSpendResponse(BaseModel):
     items: List[CardSpendItem]
+
+
+# ─── Contagens operacionais (snapshot do estado atual) ─────────────────────────
+
+class DashboardCountsResponse(BaseModel):
+    pedidos_abertos: int
+    pedidos_entregues: int
+    cotacoes_abertas: int
+    cotacoes_fechadas: int
+    rmas_abertos: int
+    rmas_entregues: int
+    produtos_para_comprar: int
