@@ -32,6 +32,9 @@ def _fake_item(status: ItemRmaStatus):
     item.quantidade = 1
     item.status = status
     item.consertado_por = None
+    item.valor_estornado = None
+    item.data_estorno = None
+    item.motivo_estorno = None
     item.created_at = datetime.now(timezone.utc)
     item.updated_at = datetime.now(timezone.utc)
     return item

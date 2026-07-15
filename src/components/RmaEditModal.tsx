@@ -219,9 +219,9 @@ export function RmaEditModal({ open, onClose, rma }: Props) {
           await apiClient.patch(`/rma/${rma.id}/items/${item.id}/status`, {
             new_status: item.status,
             consertado_por: item.consertado_por || undefined,
-            valor_estornado: item.valor_estornado || undefined,
-            data_estorno: item.data_estorno || undefined,
-            motivo_estorno: item.motivo_estorno || undefined,
+            valor_estornado: item.valor_estornado || null,
+            data_estorno: item.data_estorno || null,
+            motivo_estorno: item.motivo_estorno || null,
           });
         }
       }
