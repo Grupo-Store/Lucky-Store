@@ -150,6 +150,12 @@ function CurrencyInput({ value, onChange, className }: {
 export function QuoteModal({ open, onClose, quote, onSave, onDelete, nextIndex }: Props) {
   const [form, setForm] = useState<Quote>(() => emptyQuote(nextIndex()));
   const [datePopover, setDatePopover] = useState<string | null>(null);
+  // Edição dos campos de imposto: preserva o texto digitado (inclusive decimais)
+  // e mostra vazio quando o valor é 0 (sem "0" pré-escrito).
+  const [taxEditing, setTaxEditing] = useState<'taxLucky' | 'taxBTech' | null>(null);
+  const [taxRaw, setTaxRaw] = useState('');
+  const taxFieldValue = (key: 'taxLucky' | 'taxBTech') =>
+    taxEditing === key ? taxRaw : (form[key] ? String(form[key]) : '');
   const isEdit = !!quote;
 
   const { data: vendedoresData } = useVendedores();
@@ -213,6 +219,8 @@ export function QuoteModal({ open, onClose, quote, onSave, onDelete, nextIndex }
   const taxBTech = form.taxBTech || 0;
   const allCost = totalCost + dsTotalCost;
   const allRevenue = totalRevenue + dsTotalRevenue;
+  // Custo Parcial = somatório do custo de cada produto × quantidade (itens normais + fornecimento direto)
+  const custoParcial = allCost;
   const margin = allCost > 0 ? ((allRevenue / allCost) - 1) * 100 : 0;
   // grossProfit = lucro interno de itens diretos + margem bruta de itens normais
   const regularGrossProfit = totalRevenue - totalCost;
@@ -235,6 +243,15 @@ export function QuoteModal({ open, onClose, quote, onSave, onDelete, nextIndex }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [totalRevenue]);
+
+  // Valor (Informações Gerais) = somatório dos valores finais dos itens (closingValue × qtd),
+  // itens normais + fornecimento direto. Persistido como valor_total.
+  useEffect(() => {
+    if ((form.value || 0) !== allRevenue) {
+      setForm(prev => ({ ...prev, value: allRevenue }));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [allRevenue]);
 
   const buildPhasePayload = (q: Quote): UpdateCotacaoFasePayload => ({
     status_enviada: q.phases.sent.active,
@@ -276,14 +293,14 @@ export function QuoteModal({ open, onClose, quote, onSave, onDelete, nextIndex }
             const allNewItems = [
               ...(q.items || []).map(i => ({
                 descricao: i.name,
-                quantidade: i.quantity,
+                quantidade: i.quantity || 1,
                 valor_unitario: String(i.quoteValue ?? 0),
                 valor_fechamento: i.closingValue != null ? String(i.closingValue) : undefined,
                 fornecedor: i.supplier || undefined,
               })),
               ...(q.directSupplyItems || []).map(i => ({
                 descricao: i.name,
-                quantidade: i.quantity,
+                quantidade: i.quantity || 1,
                 valor_unitario: String(i.quoteValue ?? 0),
                 valor_fechamento: i.closingValue != null ? String(i.closingValue) : undefined,
                 fornecedor: i.supplier || undefined,
@@ -321,14 +338,14 @@ export function QuoteModal({ open, onClose, quote, onSave, onDelete, nextIndex }
         itens: [
           ...(q.items || []).map(i => ({
             descricao: i.name,
-            quantidade: i.quantity,
+            quantidade: i.quantity || 1,
             valor_unitario: String(i.quoteValue ?? 0),
             valor_fechamento: i.closingValue != null ? String(i.closingValue) : undefined,
             fornecedor: i.supplier || undefined,
           })),
           ...(q.directSupplyItems || []).map(i => ({
             descricao: i.name,
-            quantidade: i.quantity,
+            quantidade: i.quantity || 1,
             valor_unitario: String(i.quoteValue ?? 0),
             valor_fechamento: i.closingValue != null ? String(i.closingValue) : undefined,
             fornecedor: i.supplier || undefined,
@@ -486,8 +503,8 @@ export function QuoteModal({ open, onClose, quote, onSave, onDelete, nextIndex }
               </Select>
             </div>
             <div>
-              <Label>Valor (R$)</Label>
-              <CurrencyInput value={form.value || 0} onChange={n => set('value', n)} />
+              <Label>Valor (R$) <span className="text-xs text-muted-foreground">(soma dos valores finais)</span></Label>
+              <Input readOnly value={toBRL(allRevenue)} className="bg-[#F4F7FB] border-[#E7EBF0] font-semibold" />
             </div>
             <div className="flex items-end">
               <label className="flex items-center gap-2 cursor-pointer pb-2">
@@ -526,7 +543,7 @@ export function QuoteModal({ open, onClose, quote, onSave, onDelete, nextIndex }
                       </div>
                       <div style={{ gridColumn: 'span 2' }}>
                         <Input type="number" min={1} placeholder="Qtd" className="bg-[#FBFCFE] border-[#E2E8F1] qm-noarrows"
-                          value={item.quantity} onChange={e => updateDsItem(item.id, 'quantity', parseInt(e.target.value) || 1)} onKeyDown={handleEnterBlur} />
+                          value={item.quantity || ''} onChange={e => updateDsItem(item.id, 'quantity', e.target.value === '' ? 0 : parseInt(e.target.value) || 0)} onBlur={() => { if (!item.quantity) updateDsItem(item.id, 'quantity', 1); }} onKeyDown={handleEnterBlur} />
                         <span className="text-[10px] text-muted-foreground">Qtd</span>
                       </div>
                       <div style={{ gridColumn: 'span 3' }}>
@@ -602,7 +619,7 @@ export function QuoteModal({ open, onClose, quote, onSave, onDelete, nextIndex }
                   <Input placeholder="Nome do Item" className="bg-[#FBFCFE] border-[#E2E8F1]" style={{ gridColumn: 'span 3' }}
                     value={item.name || ''} onChange={e => updateItem(item.id, 'name', e.target.value)} onKeyDown={handleEnterBlur} />
                   <Input type="number" min={1} placeholder="Qtd" className="bg-[#FBFCFE] border-[#E2E8F1] qm-noarrows" style={{ gridColumn: 'span 2' }}
-                    value={item.quantity} onChange={e => updateItem(item.id, 'quantity', parseInt(e.target.value) || 1)} onKeyDown={handleEnterBlur} />
+                    value={item.quantity || ''} onChange={e => updateItem(item.id, 'quantity', e.target.value === '' ? 0 : parseInt(e.target.value) || 0)} onBlur={() => { if (!item.quantity) updateItem(item.id, 'quantity', 1); }} onKeyDown={handleEnterBlur} />
                   <div style={{ gridColumn: 'span 2' }}>
                     <CurrencyInput value={item.quoteValue || 0} onChange={n => updateItem(item.id, 'quoteValue', n)} />
                   </div>
@@ -632,7 +649,7 @@ export function QuoteModal({ open, onClose, quote, onSave, onDelete, nextIndex }
                 <span style={{ gridColumn: 'span 2' }}>Qtd</span>
                 <span style={{ gridColumn: 'span 2' }}>Custo do produto</span>
                 <span style={{ gridColumn: 'span 2' }}>Valor</span>
-                <span style={{ gridColumn: 'span 2' }}>Valor enviado na cotação</span>
+                <span style={{ gridColumn: 'span 2' }}>Valor de cotação</span>
                 <span style={{ gridColumn: 'span 2' }}>Valor Final</span>
                 <span style={{ gridColumn: 'span 3' }}>Fornecedor</span>
               </div>
@@ -677,16 +694,10 @@ export function QuoteModal({ open, onClose, quote, onSave, onDelete, nextIndex }
               </div>
             ))}
             {phaseCard('closed', (
-              <div className="space-y-2">
-                <div>
-                  <Label className="text-xs">Data de Fechamento</Label>
-                  <DateField phaseKey="closed" value={form.phases.closed.date}
-                    onChange={d => setPhase('closed', { date: d })} />
-                </div>
-                <div>
-                  <Label className="text-xs">Valor (R$) — auto</Label>
-                  <Input readOnly className="bg-[#F4F7FB] border-[#E2E8F1] font-semibold" value={toBRL(totalRevenue)} />
-                </div>
+              <div>
+                <Label className="text-xs">Data de Fechamento</Label>
+                <DateField phaseKey="closed" value={form.phases.closed.date}
+                  onChange={d => setPhase('closed', { date: d })} />
               </div>
             ))}
             {phaseCard('dropped', (
@@ -708,15 +719,19 @@ export function QuoteModal({ open, onClose, quote, onSave, onDelete, nextIndex }
             <div>
               <Label>Imposto Lucky Store (%)</Label>
               <Input type="number" step="0.01" min={0} className="bg-[#FBFCFE] border-[#E2E8F1]"
-                value={form.taxLucky ?? 0}
-                onChange={e => set('taxLucky', parseFloat(e.target.value) || 0)}
+                value={taxFieldValue('taxLucky')}
+                onFocus={() => { setTaxEditing('taxLucky'); setTaxRaw(form.taxLucky ? String(form.taxLucky) : ''); }}
+                onChange={e => { setTaxRaw(e.target.value); set('taxLucky', parseFloat(e.target.value) || 0); }}
+                onBlur={() => setTaxEditing(null)}
                 onKeyDown={handleEnterBlur} />
             </div>
             <div>
               <Label>Imposto BTech (%)</Label>
               <Input type="number" step="0.01" min={0} className="bg-[#FBFCFE] border-[#E2E8F1]"
-                value={form.taxBTech ?? 0}
-                onChange={e => set('taxBTech', parseFloat(e.target.value) || 0)}
+                value={taxFieldValue('taxBTech')}
+                onFocus={() => { setTaxEditing('taxBTech'); setTaxRaw(form.taxBTech ? String(form.taxBTech) : ''); }}
+                onChange={e => { setTaxRaw(e.target.value); set('taxBTech', parseFloat(e.target.value) || 0); }}
+                onBlur={() => setTaxEditing(null)}
                 onKeyDown={handleEnterBlur} />
             </div>
           </div>
@@ -736,7 +751,7 @@ export function QuoteModal({ open, onClose, quote, onSave, onDelete, nextIndex }
               <h3>Resumo de Lucratividade</h3>
               <div className="qm-sumbody">
                 <div className="qm-line"><span className="k">Valor Final</span><span className="v">{toBRL(allRevenue)}</span></div>
-                <div className="qm-line"><span className="k">Valor cotado</span><span className="v">{toBRL(allCost)}</span></div>
+                <div className="qm-line"><span className="k">Custo Parcial</span><span className="v">{toBRL(custoParcial)}</span></div>
                 <div className="qm-result">
                   <div className="lk">Lucro Bruto</div>
                   <div className="lv" style={{ color: grossProfit >= 0 ? '#eafaf6' : '#ffd2d2' }}>{toBRL(grossProfit)}</div>

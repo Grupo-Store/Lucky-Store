@@ -1106,6 +1106,7 @@ export default function Sales() {
                             ))
                           ) : displayedOrders.map(item => {
                             const effectiveStatus = getEffectiveStatus(item.status, item.is_cancelled ?? false, item.data_entrega);
+                            const orderValue = item.valor_venda ?? 0;
                             const warn = WARN_STATUSES.includes(item.status as OrderStatus) &&
                               differenceInCalendarDays(new Date(item.data_entrega + 'T12:00:00'), new Date()) <= 3;
                             const lojaDot: Record<string, string> = { 'Lucky Store': '#2F6BFF', 'BTech': '#19A974', 'AJJ': '#9B6BFF' };
@@ -1170,9 +1171,9 @@ export default function Sales() {
                                   </Select>
                                 </TableCell>
                                 <TableCell className="text-right font-semibold" style={{ padding: '15px 18px', fontVariantNumeric: 'tabular-nums' }}>
-                                  {item.is_rma || item.valor_venda == null
+                                  {item.is_rma
                                     ? <span className="text-muted-foreground">—</span>
-                                    : formatBRL(item.valor_venda)}
+                                    : formatBRL(orderValue)}
                                 </TableCell>
                               </TableRow>
                             );

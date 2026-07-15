@@ -40,6 +40,7 @@ function getCotacaoPhase(c: CotacaoResponse) {
 
 export interface OrderPrefill {
   customer: string;
+  customerCompany?: string;
   cnpj: string;
   company: Quote['company'];
   seller: Quote['seller'];
@@ -126,7 +127,8 @@ export function AddOrderChooser({ open, onClose, onChooseNew, onChooseFromQuote 
     const dsItems = chosen.filter(i => i.is_direct_supply);
     const hasDirect = picked.itens?.some(i => i.is_direct_supply) ?? false;
     const prefill: OrderPrefill = {
-      customer: (picked.b2b_company?.trim()) ? picked.b2b_company : picked.cliente,
+      customer: picked.cliente,
+      customerCompany: picked.b2b_company?.trim() || undefined,
       cnpj: picked.cnpj_cliente ?? '',
       company: (LOJA_BY_ID[picked.id_loja] ?? '') as Quote['company'],
       seller: (VENDEDOR_BY_ID[picked.id_vendedor] ?? '') as Quote['seller'],
@@ -138,18 +140,21 @@ export function AddOrderChooser({ open, onClose, onChooseNew, onChooseFromQuote 
         quantity: i.quantidade,
         projectedValue: parseFloat(i.valor_unitario) || 0,
       })),
-      directSupplyItems: dsItems.map(i => ({
-        id: crypto.randomUUID(),
-        name: i.descricao,
-        quantity: i.quantidade,
-        projectedValue: parseFloat(i.valor_unitario) || 0,
-        purchaseValue: 0,
-        closingValue: i.valor_fechamento ? parseFloat(i.valor_fechamento) : parseFloat(i.valor_unitario) || 0,
-        supplier: i.fornecedor || '',
-        supplierPct: parseFloat(i.porcentagem_fornecedor ?? '0') || 0,
-        supplierFreight: parseFloat(i.frete_fornecedor ?? '0') || 0,
-        supplierInvoice: '',
-      })),
+      directSupplyItems: dsItems.map(i => {
+        const closingVal = i.valor_fechamento ? (parseFloat(i.valor_fechamento) || 0) : (parseFloat(i.valor_unitario) || 0);
+        return {
+          id: crypto.randomUUID(),
+          name: i.descricao,
+          quantity: i.quantidade,
+          projectedValue: parseFloat(i.valor_unitario) || 0,
+          purchaseValue: 0,
+          closingValue: closingVal,
+          supplier: i.fornecedor || '',
+          supplierPct: parseFloat(i.porcentagem_fornecedor ?? '0') || 0,
+          supplierFreight: parseFloat(i.frete_fornecedor ?? '0') || 0,
+          supplierInvoice: '',
+        };
+      }),
     };
     onChooseFromQuote(prefill);
     handleOpenChange(false);
