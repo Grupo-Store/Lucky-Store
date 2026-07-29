@@ -28,6 +28,7 @@ const ITEM_STATUS_OPTIONS: { value: ItemRmaStatus; label: string; color: string 
   { value: 'Ready for Delivery',    label: 'Pronto p/ Entrega',     color: 'bg-indigo-50 text-indigo-700 border-indigo-300' },
   { value: 'Out for Delivery',      label: 'Em Entrega',            color: 'bg-amber-50 text-amber-700 border-amber-300' },
   { value: 'Delivered',             label: 'Entregue',              color: 'bg-green-100 text-green-800 border-green-400' },
+  { value: 'Estorno',               label: 'Estorno',               color: 'bg-red-50 text-red-700 border-red-300' },
 ];
 
 const itemStatusColor = (s: string) =>
@@ -45,6 +46,7 @@ const STATUS_HEX: Record<string, [string, string, string]> = {
   'Ready for Delivery':    ['#4f46e5', '#eef2ff', '#c7d2fe'],
   'Out for Delivery':      ['#d68a16', '#fff6e8', '#f4dcb0'],
   'Delivered':             ['#137a42', '#e8f6ee', '#c7e8d3'],
+  'Estorno':               ['#b91c1c', '#fef2f2', '#fecaca'],
 };
 const statusLabel = (s: string) => ITEM_STATUS_OPTIONS.find(o => o.value === s)?.label ?? s;
 
@@ -122,6 +124,7 @@ interface LocalItem {
   quantidade: number;
   status: ItemRmaStatus;
   consertado_por: string;
+  fornecedor: string;
   valor_estornado: number;
   data_estorno: string;
   motivo_estorno: string;
@@ -165,6 +168,7 @@ export function RmaEditModal({ open, onClose, rma }: Props) {
         quantidade: i.quantidade,
         status: i.status,
         consertado_por: i.consertado_por ?? '',
+        fornecedor: i.fornecedor ?? '',
         valor_estornado: parseFloat(i.valor_estornado ?? '0') || 0,
         data_estorno: i.data_estorno ?? '',
         motivo_estorno: i.motivo_estorno ?? '',
@@ -211,6 +215,7 @@ export function RmaEditModal({ open, onClose, rma }: Props) {
         const changed = orig && (
           item.status !== orig.status ||
           item.consertado_por !== (orig.consertado_por ?? '') ||
+          item.fornecedor !== (orig.fornecedor ?? '') ||
           item.valor_estornado !== origEstornado ||
           item.data_estorno !== (orig.data_estorno ?? '') ||
           item.motivo_estorno !== (orig.motivo_estorno ?? '')
@@ -219,6 +224,7 @@ export function RmaEditModal({ open, onClose, rma }: Props) {
           await apiClient.patch(`/rma/${rma.id}/items/${item.id}/status`, {
             new_status: item.status,
             consertado_por: item.consertado_por || undefined,
+            fornecedor: item.fornecedor || null,
             valor_estornado: item.valor_estornado || null,
             data_estorno: item.data_estorno || null,
             motivo_estorno: item.motivo_estorno || null,
@@ -359,6 +365,16 @@ export function RmaEditModal({ open, onClose, rma }: Props) {
                           placeholder="Fornecedor / técnico"
                         />
                       </div>
+                      <div>
+                        <Label>Fornecedor</Label>
+                        <Input
+                          className="bg-[#FBFCFE] border-[#E2E8F1]"
+                          value={item.fornecedor}
+                          onChange={e => updateItem(item.id, 'fornecedor', e.target.value)}
+                          onKeyDown={handleEnterBlur}
+                          placeholder="Fornecedor de origem"
+                        />
+                      </div>
                     </div>
                   </div>
                 ))}
@@ -377,7 +393,11 @@ export function RmaEditModal({ open, onClose, rma }: Props) {
                     <div className="rm-itemhead">
                       <span className="t">{item.descricao} (Qtd: {item.quantidade})</span>
                     </div>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3 items-end">
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-3 items-end">
+                      <div>
+                        <Label>Fornecedor</Label>
+                        <Input readOnly value={item.fornecedor || '—'} className="bg-[#F4F7FB] border-[#E2E8F1]" />
+                      </div>
                       <div>
                         <Label>Valor Estornado (R$)</Label>
                         <Input

@@ -32,7 +32,7 @@ export interface PedidoListItem {
   is_rma: boolean | null
   is_cancelled: boolean | null
   is_direct_billing: boolean | null
-  valor_venda: number | null
+  valor_venda: string | null
   parcelas: number | null
   nome_cliente: string | null
   cnpj_cliente: string | null

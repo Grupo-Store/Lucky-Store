@@ -11,26 +11,105 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { ArrowLeft, CalendarIcon, Search, ChevronRight, Plus, Trash2, Printer } from 'lucide-react';
+import {
+  ArrowLeft, CalendarIcon, Search, ChevronRight, Plus, Trash2,
+  Printer, RotateCcw, ClipboardList, Wrench, Truck,
+} from 'lucide-react';
 import { format, addDays } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import {
-  Order, OrderItem, ItemStatus, RmaItem, RmaItemStatus, FreightCard,
-  Company, Seller,
-  RMA_ITEM_STATUSES, RMA_STATUS_LABELS, RMA_STATUS_COLORS,
-  calcFreightTotal,
+  Order, ItemStatus, RmaItem, RmaItemStatus, FreightCard,
+  Company, Seller, calcFreightTotal,
 } from '@/store/OrderStore';
 import { useCreateRma } from '@/api/hooks/useRma';
 import { useVendedores } from '@/hooks/useVendedores';
 import { getApiError } from '@/api/client';
-import type { CreateRmaPayload } from '@/types/api';
+import type { CreateRmaPayload, ItemRmaStatus } from '@/types/api';
 import { useOrdersQuery, PedidoListItem } from '@/hooks/use-orders-query';
 
+/* ---------- Item status options (shared visual definition) ---------- */
+const ITEM_STATUS_OPTIONS: { value: ItemRmaStatus; label: string; color: string }[] = [
+  { value: 'Not Received',          label: 'Não Recebido',          color: 'bg-slate-50 text-slate-600 border-slate-300' },
+  { value: 'Received',              label: 'Recebido',              color: 'bg-blue-50 text-blue-700 border-blue-300' },
+  { value: 'Sent for Repair',       label: 'Enviado para Reparo',   color: 'bg-yellow-50 text-yellow-700 border-yellow-300' },
+  { value: 'In Repair',             label: 'Em Reparo',             color: 'bg-orange-50 text-orange-700 border-orange-300' },
+  { value: 'Repaired Not Received', label: 'Reparado Não Recebido', color: 'bg-purple-50 text-purple-700 border-purple-300' },
+  { value: 'Repaired Received',     label: 'Reparado Recebido',     color: 'bg-teal-50 text-teal-700 border-teal-300' },
+  { value: 'To Pack',               label: 'A Embalar',             color: 'bg-cyan-50 text-cyan-700 border-cyan-300' },
+  { value: 'Ready for Delivery',    label: 'Pronto p/ Entrega',     color: 'bg-indigo-50 text-indigo-700 border-indigo-300' },
+  { value: 'Out for Delivery',      label: 'Em Entrega',            color: 'bg-amber-50 text-amber-700 border-amber-300' },
+  { value: 'Delivered',             label: 'Entregue',              color: 'bg-green-100 text-green-800 border-green-400' },
+  { value: 'Estorno',               label: 'Estorno',               color: 'bg-red-50 text-red-700 border-red-300' },
+];
+
+const itemStatusColor = (s: string) =>
+  ITEM_STATUS_OPTIONS.find(o => o.value === s)?.color ?? 'bg-muted text-muted-foreground border-border';
+
+/* ---------- CSS injected into the form-step dialog ---------- */
+const RMA_MODAL_CSS = `
+  .rm-root{font-family:'Sora','Inter',system-ui,sans-serif}
+  .rm-head{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:8px;padding-right:8px}
+  .rm-head h1{font-size:22px;font-weight:700;display:flex;align-items:center;gap:12px;color:#16273f;font-family:'Space Grotesk',sans-serif;margin:0}
+  .rm-oschip{font-size:12px;font-weight:700;color:#15807c;background:#e6f3f1;border:1px solid #cfe8e3;padding:5px 11px;border-radius:8px;letter-spacing:.02em}
+  .rm-meta{display:flex;gap:18px;color:#6b7787;font-size:13px;flex-wrap:wrap}
+  .rm-meta b{color:#16273f;font-weight:600}
+
+  .rm-editor{display:grid;grid-template-columns:1fr 320px;gap:20px;align-items:start}
+  .rm-formcol{display:flex;flex-direction:column;gap:20px;min-width:0}
+
+  .rm-card{background:#fff;border:1px solid #e7ebf0;border-radius:18px;box-shadow:0 1px 2px rgba(20,35,55,.05),0 10px 28px -14px rgba(20,35,55,.18);overflow:hidden;scroll-margin-top:14px}
+  .rm-card>h2{font-size:14px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:#15807c;padding:18px 22px;border-bottom:1px solid #e7ebf0;display:flex;align-items:center;gap:11px;background:#fcfdfe;margin:0}
+  .rm-card>h2 .rm-count{color:#6b7787;font-weight:600;letter-spacing:0;text-transform:none}
+  .rm-card>h2 .rm-h2-action{margin-left:auto}
+  .rm-card .rm-body{padding:22px}
+
+  .rm-ditem{border:1px solid #e7ebf0;border-radius:14px;padding:18px;background:#fcfdfe}
+  .rm-ditem+.rm-ditem{margin-top:14px}
+  .rm-itemhead{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
+  .rm-itemhead .t{font-size:12px;font-weight:700;letter-spacing:.06em;color:#15807c;text-transform:uppercase}
+  .rm-empty{text-align:center;color:#6b7787;padding:22px;font-size:13.5px;background:#f7f9fb;border-radius:12px;border:1px dashed #e7ebf0}
+  .rm-fretetotal{text-align:right;font-weight:700;color:#15807c;margin-top:14px;font-size:14px;font-variant-numeric:tabular-nums}
+
+  .rm-root input:focus-visible,
+  .rm-root textarea:focus-visible,
+  .rm-root [role="combobox"]:focus-visible{
+    border-color:#16807c !important;
+    box-shadow:0 0 0 3px rgba(22,128,124,.14) !important;
+    outline:none !important;
+  }
+
+  .rm-aside{position:sticky;top:0;display:flex;flex-direction:column;gap:14px}
+  .rm-sum{background:#fff;border:1px solid #e7ebf0;border-radius:18px;box-shadow:0 1px 2px rgba(20,35,55,.05),0 10px 28px -14px rgba(20,35,55,.18);overflow:hidden}
+  .rm-sum>h3{font-size:12px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:#6b7787;padding:16px 20px 4px;margin:0}
+  .rm-sumbody{padding:8px 20px 18px}
+  .rm-line{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:9px 0;font-size:13.5px;border-bottom:1px dashed #e7ebf0}
+  .rm-line:last-child{border-bottom:0}
+  .rm-line .k{color:#6b7787}
+  .rm-line .v{font-weight:600;color:#16273f;text-align:right;font-variant-numeric:tabular-nums}
+  .rm-jump{background:#fff;border:1px solid #e7ebf0;border-radius:18px;box-shadow:0 1px 2px rgba(20,35,55,.05),0 10px 28px -14px rgba(20,35,55,.18);padding:8px}
+  .rm-jump a{display:block;padding:9px 12px;border-radius:9px;font-size:13px;font-weight:600;color:#6b7787;text-decoration:none;transition:.15s}
+  .rm-jump a:hover{background:#f7f9fb;color:#16273f}
+
+  @media (max-width:920px){
+    .rm-editor{grid-template-columns:1fr}
+    .rm-aside{position:static;order:-1}
+    .rm-jump{display:none}
+  }
+
+  @media print{
+    .rm-actions,.rm-jump,.rm-del,.rm-h2-action{display:none !important}
+    .rm-editor{grid-template-columns:1fr !important;gap:14px}
+    .rm-aside{position:static !important;order:2}
+    .rm-card,.rm-sum,.rm-ditem{box-shadow:none !important;break-inside:avoid}
+  }
+`;
+
+/* ---------- Utilities ---------- */
 function toBRL(v: number) { return v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }); }
 function parseBRL(s: string): number { return parseFloat(s.replace(/[R$\s.]/g, '').replace(',', '.')) || 0; }
-function fmtDate(iso?: string) {
+function fmtDate(iso?: string | null) {
   if (!iso) return 'Selecionar';
   return format(new Date(iso + 'T12:00:00'), 'dd/MM/yyyy');
 }
@@ -55,6 +134,7 @@ interface LocalParentItem {
   status: ItemStatus;
   projectedValue: number;
   purchaseValue: number;
+  supplier: string;
   subPurchases: LocalSubPurchase[];
 }
 
@@ -178,6 +258,7 @@ export function RmaModal({ open, onClose, orders, rma, onSave, nextRmaNumber }: 
       status: p.status as ItemStatus,
       projectedValue: parseFloat(String(p.valor_projetado)) || 0,
       purchaseValue: parseFloat(String(p.valor_compra ?? '0')) || 0,
+      supplier: p.fornecedor ?? '',
       subPurchases: (p.sub_compras ?? []).map(sc => ({
         id: sc.id,
         supplier: sc.supplier,
@@ -226,6 +307,7 @@ export function RmaModal({ open, onClose, orders, rma, onSave, nextRmaNumber }: 
           name: i.name + suffix,
           quantity: sub ? sub.quantity : i.quantity,
           repairedBy: '',
+          supplier: sub ? sub.supplier : i.supplier,
           status: 'Not Received',
         };
       }));
@@ -248,6 +330,7 @@ export function RmaModal({ open, onClose, orders, rma, onSave, nextRmaNumber }: 
     name: '',
     quantity: 1,
     repairedBy: '',
+    supplier: '',
     status: 'Not Received' as RmaItemStatus,
   }]);
   const removeRmaItem = (id: string) => setRmaItems(prev => prev.filter(i => i.id !== id));
@@ -313,7 +396,7 @@ export function RmaModal({ open, onClose, orders, rma, onSave, nextRmaNumber }: 
     const payload: CreateRmaPayload = {
       id_pedido_origem: parent.id,
       prazo_entrega: deliveryDate || undefined,
-      itens: rmaItems.map(i => ({ descricao: i.name, quantidade: i.quantity })),
+      itens: rmaItems.map(i => ({ descricao: i.name, quantidade: i.quantity, fornecedor: i.supplier || undefined })),
     };
 
     createRma(payload, {
@@ -326,22 +409,34 @@ export function RmaModal({ open, onClose, orders, rma, onSave, nextRmaNumber }: 
     });
   };
 
+  const isFormStep = step === 'form';
+
   return (
     <Dialog open={open} onOpenChange={v => !v && onClose()}>
-      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto bg-card">
-        <DialogHeader>
-          <DialogTitle className="text-xl font-bold text-[#16273F] flex items-center gap-2" style={{ fontFamily: "'Space Grotesk', sans-serif" }}>
-            {!isEdit && step !== 'pick-order' && (
-              <Button variant="ghost" size="icon" className="h-7 w-7" onClick={goBack}>
-                <ArrowLeft className="h-4 w-4" />
-              </Button>
-            )}
-            {step === 'pick-order' && 'Novo RMA — Selecionar Pedido Entregue'}
-            {step === 'pick-items' && `RMA — Selecionar Itens (Pedido #${parent?.os})`}
-            {step === 'pick-sub-purchase' && `RMA — Especificar Compra (Pedido #${parent?.os})`}
-            {step === 'form' && (isEdit ? `Editar RMA — ${rmaNumberDisplay}` : `Novo RMA — ${rmaNumberDisplay}`)}
-          </DialogTitle>
-        </DialogHeader>
+      <DialogContent className={cn(
+        'overflow-y-auto',
+        isFormStep
+          ? 'w-[90vw] max-w-[90vw] h-[90vh] max-h-[90vh] bg-[#eef1f5] rm-root print:max-w-full print:max-h-none'
+          : 'max-w-4xl max-h-[90vh] bg-card',
+      )}>
+        {isFormStep ? (
+          <DialogHeader className="sr-only">
+            <DialogTitle>{isEdit ? `Editar RMA — ${rmaNumberDisplay}` : `Novo RMA — ${rmaNumberDisplay}`}</DialogTitle>
+          </DialogHeader>
+        ) : (
+          <DialogHeader>
+            <DialogTitle className="text-xl font-bold text-[#16273F] flex items-center gap-2" style={{ fontFamily: "'Space Grotesk', sans-serif" }}>
+              {!isEdit && step !== 'pick-order' && (
+                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={goBack}>
+                  <ArrowLeft className="h-4 w-4" />
+                </Button>
+              )}
+              {step === 'pick-order' && 'Novo RMA — Selecionar Pedido Entregue'}
+              {step === 'pick-items' && `RMA — Selecionar Itens (Pedido #${parent?.os})`}
+              {step === 'pick-sub-purchase' && `RMA — Especificar Compra (Pedido #${parent?.os})`}
+            </DialogTitle>
+          </DialogHeader>
+        )}
 
         {/* ===== STEP 1: pick order ===== */}
         {step === 'pick-order' && (
@@ -529,200 +624,300 @@ export function RmaModal({ open, onClose, orders, rma, onSave, nextRmaNumber }: 
           </>
         )}
 
-        {/* ===== STEP 3: form ===== */}
+        {/* ===== STEP 3: form (two-column design matching RmaEditModal) ===== */}
         {step === 'form' && parent && (
           <>
-            <section className="border border-[#E2E8F1] rounded-xl p-4">
-              <h3 className="text-xs font-bold text-[#5B6B82] uppercase tracking-widest mb-3">Informações Gerais</h3>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <div>
-                  <Label>Nº RMA (auto)</Label>
-                  <Input readOnly className="bg-[#F4F7FB] border-[#E2E8F1] font-semibold" value={rmaNumberDisplay} />
-                </div>
-                <div><Label>Cliente</Label><Input readOnly value={parent.customer} className="bg-[#F4F7FB] border-[#E2E8F1]" /></div>
-                <div><Label>CPF/CNPJ</Label><Input readOnly value={parent.cnpj || '—'} className="bg-[#F4F7FB] border-[#E2E8F1]" /></div>
-                <div>
-                  <Label>Data de Registro *</Label>
-                  <Popover open={regDateOpen} onOpenChange={setRegDateOpen}>
-                    <PopoverTrigger asChild>
-                      <Button variant="outline" className="w-full justify-start text-left font-normal bg-white">
-                        <CalendarIcon className="mr-2 h-4 w-4" />{fmtDate(registrationDate)}
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-auto p-0">
-                      <Calendar mode="single"
-                        selected={registrationDate ? new Date(registrationDate + 'T12:00:00') : undefined}
-                        onSelect={d => { if (d) setRegistrationDate(format(d, 'yyyy-MM-dd')); setRegDateOpen(false); }}
-                        locale={ptBR} className="p-3 pointer-events-auto" />
-                    </PopoverContent>
-                  </Popover>
-                </div>
-                <div>
-                  <Label>Empresa *</Label>
-                  <Select value={company || ''} onValueChange={v => setCompany(v as Company)}>
-                    <SelectTrigger className="bg-[#FBFCFE] border-[#E2E8F1]"><SelectValue placeholder="Selecionar" /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="Lucky Store">Lucky Store</SelectItem>
-                      <SelectItem value="BTech">BTech</SelectItem>
-                      <SelectItem value="AJJ">AJJ</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <Label>Vendedor *</Label>
-                  <Select value={seller || ''} onValueChange={v => setSeller(v as Seller)}>
-                    <SelectTrigger className="bg-[#FBFCFE] border-[#E2E8F1]"><SelectValue placeholder="Selecionar" /></SelectTrigger>
-                    <SelectContent>
-                      {vendedores.map(v => <SelectItem key={v.id} value={v.nome}>{v.nome}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <Label>Prazo de Entrega *</Label>
-                  <Popover open={delDateOpen} onOpenChange={setDelDateOpen}>
-                    <PopoverTrigger asChild>
-                      <Button variant="outline" className="w-full justify-start text-left font-normal bg-white">
-                        <CalendarIcon className="mr-2 h-4 w-4" />{fmtDate(deliveryDate)}
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-auto p-0">
-                      <Calendar mode="single"
-                        selected={deliveryDate ? new Date(deliveryDate + 'T12:00:00') : undefined}
-                        onSelect={d => { if (d) setDeliveryDate(format(d, 'yyyy-MM-dd')); setDelDateOpen(false); }}
-                        locale={ptBR} className="p-3 pointer-events-auto" />
-                    </PopoverContent>
-                  </Popover>
-                </div>
-                <div>
-                  <Label>Data de Entrega Real</Label>
-                  <Popover open={actualDelDateOpen} onOpenChange={setActualDelDateOpen}>
-                    <PopoverTrigger asChild>
-                      <Button variant="outline" className="w-full justify-start text-left font-normal bg-white">
-                        <CalendarIcon className="mr-2 h-4 w-4" />{actualDeliveryDate ? fmtDate(actualDeliveryDate) : 'Selecionar'}
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-auto p-0">
-                      <Calendar mode="single"
-                        selected={actualDeliveryDate ? new Date(actualDeliveryDate + 'T12:00:00') : undefined}
-                        onSelect={d => { setActualDeliveryDate(d ? format(d, 'yyyy-MM-dd') : ''); setActualDelDateOpen(false); }}
-                        locale={ptBR} className="p-3 pointer-events-auto" />
-                    </PopoverContent>
-                  </Popover>
-                </div>
-                <div>
-                  <Label>Frete <span className="text-xs text-muted-foreground">(soma)</span></Label>
-                  <Input readOnly value={toBRL(freightTotal)} className="bg-[#F4F7FB] border-[#E2E8F1] font-semibold" />
-                </div>
-              </div>
-            </section>
+            <style>{RMA_MODAL_CSS}</style>
 
-            <section className="border border-[#E2E8F1] rounded-xl p-4">
-              <div className="flex justify-between items-center mb-3">
-                <h3 className="text-xs font-bold text-[#5B6B82] uppercase tracking-widest">Produtos do RMA</h3>
-                <Button size="sm" onClick={addRmaItem} className="bg-[#2F6BFF] hover:bg-[#1E4FD8] text-white">
-                  <Plus className="h-4 w-4 mr-1" /> Adicionar Item
-                </Button>
+            {/* Page header */}
+            <div className="rm-head">
+              <h1>
+                <span className="rm-oschip">{rmaNumberDisplay}</span>
+                {isEdit ? 'Editar RMA' : 'Novo RMA'}
+              </h1>
+              <div className="rm-meta">
+                <span>Pedido origem <b>{parent.os}</b></span>
+                <span>Cliente <b>{parent.customer || '—'}</b></span>
               </div>
-              <div className="space-y-3">
-                {rmaItems.map(it => (
-                  <div key={it.id} className="border border-[#E2E8F1] rounded-lg p-3 bg-[#F8FAFD] grid grid-cols-1 md:grid-cols-4 gap-3 items-end">
-                    <div>
-                      <Label>Produto</Label>
-                      <Input className="bg-[#FBFCFE] border-[#E2E8F1]" value={it.name}
-                        onChange={e => updateRmaItem(it.id, 'name', e.target.value)} onKeyDown={handleEnterBlur} />
-                    </div>
-                    <div>
-                      <Label>Quantidade</Label>
-                      <Input type="number" min={1} className="bg-[#FBFCFE] border-[#E2E8F1]" value={it.quantity}
-                        onChange={e => updateRmaItem(it.id, 'quantity', parseInt(e.target.value) || 1)} onKeyDown={handleEnterBlur} />
-                    </div>
-                    <div>
-                      <Label>Reparado por</Label>
-                      <Input
-                        className="bg-[#FBFCFE] border-[#E2E8F1]"
-                        value={it.repairedBy || ''}
-                        onChange={e => updateRmaItem(it.id, 'repairedBy', e.target.value)}
-                        onKeyDown={handleEnterBlur}
-                        placeholder="Fornecedor / técnico"
-                      />
-                    </div>
-                    <div className="flex gap-2 items-end">
-                      <div className="flex-1">
-                        <Label>Status</Label>
-                        <Select value={it.status} onValueChange={v => updateRmaItem(it.id, 'status', v as RmaItemStatus)}>
-                          <SelectTrigger className={cn('border', RMA_STATUS_COLORS[it.status])}>
-                            <SelectValue />
-                          </SelectTrigger>
+              <Button
+                variant="outline" size="icon"
+                onClick={() => window.print()}
+                className="ml-auto"
+                style={{ borderColor: '#e7ebf0', borderRadius: 11, width: 40, height: 40, color: '#6b7787' }}
+                title="Imprimir"
+              >
+                <Printer className="h-4 w-4" />
+              </Button>
+            </div>
+
+            {/* 2-column editor */}
+            <div className="rm-editor">
+              <div className="rm-formcol">
+
+                {/* Informações Gerais */}
+                <section className="rm-card" id="sec-geral">
+                  <h2><ClipboardList className="h-4 w-4" /> Informações Gerais</h2>
+                  <div className="rm-body">
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                      <div>
+                        <Label>Nº RMA (auto)</Label>
+                        <Input readOnly className="bg-[#F4F7FB] border-[#E2E8F1] font-semibold" value={rmaNumberDisplay} />
+                      </div>
+                      <div>
+                        <Label>Pedido Origem</Label>
+                        <Input readOnly value={parent.os} className="bg-[#F4F7FB] border-[#E2E8F1]" />
+                      </div>
+                      <div>
+                        <Label>Cliente</Label>
+                        <Input readOnly value={parent.customer} className="bg-[#F4F7FB] border-[#E2E8F1]" />
+                      </div>
+                      <div>
+                        <Label>CPF/CNPJ</Label>
+                        <Input readOnly value={parent.cnpj || '—'} className="bg-[#F4F7FB] border-[#E2E8F1]" />
+                      </div>
+                      <div>
+                        <Label>Data de Registro *</Label>
+                        <Popover open={regDateOpen} onOpenChange={setRegDateOpen}>
+                          <PopoverTrigger asChild>
+                            <Button variant="outline" className="w-full justify-start text-left font-normal bg-white">
+                              <CalendarIcon className="mr-2 h-4 w-4" />{fmtDate(registrationDate)}
+                            </Button>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-auto p-0">
+                            <Calendar mode="single"
+                              selected={registrationDate ? new Date(registrationDate + 'T12:00:00') : undefined}
+                              onSelect={d => { if (d) setRegistrationDate(format(d, 'yyyy-MM-dd')); setRegDateOpen(false); }}
+                              locale={ptBR} className="p-3 pointer-events-auto" />
+                          </PopoverContent>
+                        </Popover>
+                      </div>
+                      <div>
+                        <Label>Empresa *</Label>
+                        <Select value={company || ''} onValueChange={v => setCompany(v as Company)}>
+                          <SelectTrigger className="bg-[#FBFCFE] border-[#E2E8F1]"><SelectValue placeholder="Selecionar" /></SelectTrigger>
                           <SelectContent>
-                            {RMA_ITEM_STATUSES.map(s => (
-                              <SelectItem key={s} value={s}>
-                                <span className={cn('px-2 py-0.5 rounded text-xs font-medium', RMA_STATUS_COLORS[s])}>
-                                  {RMA_STATUS_LABELS[s]}
-                                </span>
-                              </SelectItem>
-                            ))}
+                            <SelectItem value="Lucky Store">Lucky Store</SelectItem>
+                            <SelectItem value="BTech">BTech</SelectItem>
+                            <SelectItem value="AJJ">AJJ</SelectItem>
                           </SelectContent>
                         </Select>
                       </div>
-                      <Button variant="ghost" size="icon" onClick={() => removeRmaItem(it.id)}>
-                        <Trash2 className="h-4 w-4 text-destructive" />
-                      </Button>
+                      <div>
+                        <Label>Vendedor *</Label>
+                        <Select value={seller || ''} onValueChange={v => setSeller(v as Seller)}>
+                          <SelectTrigger className="bg-[#FBFCFE] border-[#E2E8F1]"><SelectValue placeholder="Selecionar" /></SelectTrigger>
+                          <SelectContent>
+                            {vendedores.map(v => <SelectItem key={v.id} value={v.nome}>{v.nome}</SelectItem>)}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div>
+                        <Label>Prazo de Entrega *</Label>
+                        <Popover open={delDateOpen} onOpenChange={setDelDateOpen}>
+                          <PopoverTrigger asChild>
+                            <Button variant="outline" className="w-full justify-start text-left font-normal bg-white">
+                              <CalendarIcon className="mr-2 h-4 w-4" />{fmtDate(deliveryDate)}
+                            </Button>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-auto p-0">
+                            <Calendar mode="single"
+                              selected={deliveryDate ? new Date(deliveryDate + 'T12:00:00') : undefined}
+                              onSelect={d => { if (d) setDeliveryDate(format(d, 'yyyy-MM-dd')); setDelDateOpen(false); }}
+                              locale={ptBR} className="p-3 pointer-events-auto" />
+                          </PopoverContent>
+                        </Popover>
+                      </div>
+                      <div>
+                        <Label>Data de Entrega Real</Label>
+                        <Popover open={actualDelDateOpen} onOpenChange={setActualDelDateOpen}>
+                          <PopoverTrigger asChild>
+                            <Button variant="outline" className="w-full justify-start text-left font-normal bg-white">
+                              <CalendarIcon className="mr-2 h-4 w-4" />
+                              {actualDeliveryDate ? fmtDate(actualDeliveryDate) : 'Selecionar'}
+                            </Button>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-auto p-0">
+                            <Calendar mode="single"
+                              selected={actualDeliveryDate ? new Date(actualDeliveryDate + 'T12:00:00') : undefined}
+                              onSelect={d => { setActualDeliveryDate(d ? format(d, 'yyyy-MM-dd') : ''); setActualDelDateOpen(false); }}
+                              locale={ptBR} className="p-3 pointer-events-auto" />
+                          </PopoverContent>
+                        </Popover>
+                      </div>
                     </div>
                   </div>
-                ))}
-                {rmaItems.length === 0 && (
-                  <p className="text-sm text-muted-foreground text-center py-4">
-                    Nenhum item adicionado. Clique em "Adicionar Item" para inserir produtos.
-                  </p>
-                )}
-              </div>
-            </section>
+                </section>
 
-            <section className="border border-[#E2E8F1] rounded-xl p-4">
-              <div className="flex justify-between items-center mb-3">
-                <h3 className="text-xs font-bold text-[#5B6B82] uppercase tracking-widest">Frete</h3>
-                <Button size="sm" onClick={addFreight} className="bg-[#2F6BFF] hover:bg-[#1E4FD8] text-white">
-                  <Plus className="h-4 w-4 mr-1" /> Adicionar Frete
-                </Button>
-              </div>
-              <div className="space-y-2">
-                {freight.map((f, idx) => (
-                  <RmaFreightRow key={f.id} idx={idx} card={f}
-                    onChange={(k, v) => updateFreight(f.id, k, v)}
-                    onRemove={() => removeFreight(f.id)} />
-                ))}
-                {freight.length === 0 && (
-                  <p className="text-sm text-muted-foreground text-center py-3">Nenhum frete adicionado</p>
-                )}
-              </div>
-              <div className="mt-3 text-right text-sm font-semibold text-[#2F6BFF]">
-                Total: {toBRL(freightTotal)}
-              </div>
-            </section>
+                {/* Itens do RMA */}
+                <section className="rm-card" id="sec-itens">
+                  <h2>
+                    <Wrench className="h-4 w-4" /> Itens do RMA
+                    <span className="rm-count">({rmaItems.length})</span>
+                    <Button size="sm" onClick={addRmaItem} className="rm-h2-action bg-[#15807c] hover:bg-[#0f5d5b] text-white">
+                      <Plus className="h-4 w-4 mr-1" /> Adicionar Item
+                    </Button>
+                  </h2>
+                  <div className="rm-body">
+                    {rmaItems.length === 0 && (
+                      <div className="rm-empty">Nenhum item adicionado. Clique em "Adicionar Item" para inserir produtos.</div>
+                    )}
+                    {rmaItems.map((it, idx) => (
+                      <div key={it.id} className="rm-ditem">
+                        <div className="rm-itemhead">
+                          <span className="t">Item #{idx + 1}</span>
+                          <Button variant="ghost" size="icon" className="rm-del" onClick={() => removeRmaItem(it.id)}>
+                            <Trash2 className="h-4 w-4 text-destructive" />
+                          </Button>
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-4 gap-3 items-end">
+                          <div className="md:col-span-2">
+                            <Label>Produto</Label>
+                            <Input className="bg-[#FBFCFE] border-[#E2E8F1]" value={it.name}
+                              onChange={e => updateRmaItem(it.id, 'name', e.target.value)} onKeyDown={handleEnterBlur} />
+                          </div>
+                          <div>
+                            <Label>Quantidade</Label>
+                            <Input type="number" min={1} className="bg-[#FBFCFE] border-[#E2E8F1]" value={it.quantity}
+                              onChange={e => updateRmaItem(it.id, 'quantity', parseInt(e.target.value) || 1)} onKeyDown={handleEnterBlur} />
+                          </div>
+                          <div>
+                            <Label>Status</Label>
+                            <Select value={it.status} onValueChange={v => updateRmaItem(it.id, 'status', v as RmaItemStatus)}>
+                              <SelectTrigger className={cn('border', itemStatusColor(it.status))}>
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {ITEM_STATUS_OPTIONS.map(opt => (
+                                  <SelectItem key={opt.value} value={opt.value}>
+                                    <span className={cn('px-2 py-0.5 rounded text-xs font-medium', opt.color)}>{opt.label}</span>
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div className="md:col-span-2">
+                            <Label>Reparado por</Label>
+                            <Input
+                              className="bg-[#FBFCFE] border-[#E2E8F1]"
+                              value={it.repairedBy || ''}
+                              onChange={e => updateRmaItem(it.id, 'repairedBy', e.target.value)}
+                              onKeyDown={handleEnterBlur}
+                              placeholder="Fornecedor / técnico"
+                            />
+                          </div>
+                          <div>
+                            <Label>Fornecedor</Label>
+                            <Input
+                              className="bg-[#FBFCFE] border-[#E2E8F1]"
+                              value={it.supplier || ''}
+                              onChange={e => updateRmaItem(it.id, 'supplier', e.target.value)}
+                              onKeyDown={handleEnterBlur}
+                              placeholder="Fornecedor de origem"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </section>
 
-            <section className="border border-[#E2E8F1] rounded-xl p-4">
-              <h3 className="text-xs font-bold text-[#5B6B82] uppercase tracking-widest mb-3">Observações</h3>
-              <Textarea
-                className="bg-[#FBFCFE] border-[#E2E8F1] min-h-24"
-                value={observations}
-                onChange={e => setObservations(e.target.value)}
-                placeholder="Anotações sobre este RMA..."
-              />
-            </section>
+                {/* Devoluções / Estorno (info only on creation) */}
+                <section className="rm-card" id="sec-devolucao">
+                  <h2><RotateCcw className="h-4 w-4" /> Devoluções / Estorno</h2>
+                  <div className="rm-body">
+                    <div className="rm-empty">
+                      Os dados de estorno (valor, data e motivo) devem ser preenchidos após a criação do RMA, ao editar cada item individualmente.
+                    </div>
+                  </div>
+                </section>
 
-            <div className="flex justify-end gap-2">
-              <Button variant="outline" onClick={onClose}>Cancelar</Button>
-              <Button variant="outline" onClick={() => window.print()} className="gap-1.5">
-                <Printer className="h-4 w-4" /> Imprimir
-              </Button>
-              <Button
-                onClick={handleSave}
-                disabled={isPending || rmaItems.length === 0}
-                className="bg-[#2F6BFF] hover:bg-[#1E4FD8] text-white"
-              >
-                {isPending ? 'Salvando...' : (isEdit ? 'Salvar Alterações' : 'Criar RMA')}
-              </Button>
-            </div>
+                {/* Fretes */}
+                <section className="rm-card" id="sec-fretes">
+                  <h2>
+                    <Truck className="h-4 w-4" /> Fretes
+                    <span className="rm-count">({freight.length})</span>
+                    <Button size="sm" onClick={addFreight} className="rm-h2-action bg-[#15807c] hover:bg-[#0f5d5b] text-white">
+                      <Plus className="h-4 w-4 mr-1" /> Adicionar Frete
+                    </Button>
+                  </h2>
+                  <div className="rm-body">
+                    {freight.length === 0 && (
+                      <div className="rm-empty">Nenhum frete adicionado</div>
+                    )}
+                    <div className="space-y-2">
+                      {freight.map((f, idx) => (
+                        <RmaFreightRow key={f.id} idx={idx} card={f}
+                          onChange={(k, v) => updateFreight(f.id, k, v)}
+                          onRemove={() => removeFreight(f.id)} />
+                      ))}
+                    </div>
+                    {freight.length > 0 && (
+                      <div className="rm-fretetotal">Total: {toBRL(freightTotal)}</div>
+                    )}
+                  </div>
+                </section>
+
+                {/* Observações */}
+                <section className="rm-card" id="sec-obs">
+                  <h2>Observações</h2>
+                  <div className="rm-body">
+                    <Textarea
+                      className="bg-[#FBFCFE] border-[#E2E8F1] min-h-24"
+                      value={observations}
+                      onChange={e => setObservations(e.target.value)}
+                      placeholder="Anotações sobre este RMA..."
+                    />
+                  </div>
+                </section>
+
+              </div>{/* /rm-formcol */}
+
+              {/* Sticky summary aside */}
+              <aside className="rm-aside">
+                <div className="rm-sum">
+                  <h3>Resumo do RMA</h3>
+                  <div className="rm-sumbody">
+                    <div className="rm-line"><span className="k">Nº RMA</span><span className="v">{rmaNumberDisplay || '—'}</span></div>
+                    <div className="rm-line"><span className="k">Pedido origem</span><span className="v">{parent.os}</span></div>
+                    <div className="rm-line"><span className="k">Cliente</span><span className="v">{parent.customer || '—'}</span></div>
+                    {company && <div className="rm-line"><span className="k">Empresa</span><span className="v">{company}</span></div>}
+                    {seller && <div className="rm-line"><span className="k">Vendedor</span><span className="v">{seller}</span></div>}
+                    <div className="rm-line"><span className="k">Prazo</span><span className="v">{deliveryDate ? fmtDate(deliveryDate) : '—'}</span></div>
+                    <div className="rm-line"><span className="k">Itens</span><span className="v">{rmaItems.length}</span></div>
+                    {freightTotal > 0 && (
+                      <div className="rm-line"><span className="k">Total Fretes</span><span className="v">{toBRL(freightTotal)}</span></div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="rm-actions flex flex-col gap-2.5 print:hidden">
+                  <Button
+                    onClick={handleSave}
+                    disabled={isPending || rmaItems.length === 0}
+                    className="w-full h-12 text-[15px] font-bold text-white border-0"
+                    style={{ background: 'linear-gradient(135deg,#1f7a6f,#0f5d5b)', boxShadow: '0 12px 26px -12px rgba(15,93,91,.8)', borderRadius: 13 }}
+                  >
+                    {isPending ? 'Salvando...' : (isEdit ? 'Salvar Alterações' : 'Criar RMA')}
+                  </Button>
+                  <Button variant="outline" onClick={() => window.print()}
+                    className="w-full h-11" style={{ border: '1.5px solid #15807c', color: '#15807c', borderRadius: 13 }}>
+                    <Printer className="h-4 w-4 mr-1.5" /> Imprimir
+                  </Button>
+                  <Button variant="outline" onClick={onClose} className="w-full h-11" style={{ borderColor: '#e7ebf0', borderRadius: 13 }}>
+                    Cancelar
+                  </Button>
+                </div>
+
+                <nav className="rm-jump">
+                  <a href="#sec-geral">Informações Gerais</a>
+                  <a href="#sec-itens">Itens do RMA</a>
+                  <a href="#sec-devolucao">Devoluções / Estorno</a>
+                  <a href="#sec-fretes">Fretes</a>
+                  <a href="#sec-obs">Observações</a>
+                </nav>
+              </aside>
+
+            </div>{/* /rm-editor */}
           </>
         )}
       </DialogContent>
@@ -740,8 +935,8 @@ function RmaFreightRow({ idx, card, onChange, onRemove }: {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState('');
   return (
-    <div className="grid grid-cols-12 gap-2 items-center border border-[#E2E8F1] rounded-lg p-2 bg-[#F8FAFD]">
-      <span className="col-span-1 text-xs font-bold text-[#5B6B82]">#{idx + 1}</span>
+    <div className="grid grid-cols-12 gap-2 items-center rm-ditem" style={{ padding: 12 }}>
+      <span className="col-span-1 text-xs font-bold" style={{ color: '#15807c' }}>#{idx + 1}</span>
       <Input placeholder="Entregador" className="col-span-4 bg-[#FBFCFE] border-[#E2E8F1]"
         value={card.deliveryPerson} onChange={e => onChange('deliveryPerson', e.target.value)} onKeyDown={handleEnterBlur} />
       <div className="col-span-3">
@@ -768,7 +963,7 @@ function RmaFreightRow({ idx, card, onChange, onRemove }: {
           </PopoverContent>
         </Popover>
       </div>
-      <Button variant="ghost" size="icon" className="col-span-1" onClick={onRemove}>
+      <Button variant="ghost" size="icon" className="col-span-1 rm-del" onClick={onRemove}>
         <Trash2 className="h-4 w-4 text-destructive" />
       </Button>
     </div>

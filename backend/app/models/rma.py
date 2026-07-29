@@ -18,6 +18,7 @@ class RmaStatus(str, enum.Enum):
     DELIVERED = "Delivered"
     CANCELLED = "Cancelled"
     COMPLETED = "Completed"
+    REEMBOLSO = "Reembolso"
 
 
 class Rma(Base):

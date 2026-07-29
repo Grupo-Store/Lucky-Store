@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import asc, desc, text
 from app.models.pedido import Pedido, PedidoFormaPagamento, CustoPedido
 from app.models.cliente import Cliente
+from app.models.produto import Produto
 from app.models.rma import Rma
 from app.models.status_history import StatusHistory, EntityType
 from app.models.audit_log import AuditLog, AuditAction
@@ -146,7 +147,8 @@ class PedidoService:
 
         total = db.query(Pedido).filter(*base_filters).count()
 
-        sort_col = getattr(Pedido, sort_by, Pedido.data_pedido)
+        _SORT_WHITELIST = {"data_pedido", "data_entrega", "status", "numero_os", "created_at", "updated_at"}
+        sort_col = getattr(Pedido, sort_by if sort_by in _SORT_WHITELIST else "data_pedido")
         items = (
             db.query(Pedido)
             .options(
@@ -279,7 +281,13 @@ class PedidoService:
         if has_rma:
             raise BusinessLogicException("Pedido não pode ser excluído pois possui RMA(s) vinculado(s)")
 
-        pedido.deleted_at = datetime.now(timezone.utc)
+        now = datetime.now(timezone.utc)
+        pedido.deleted_at = now
+
+        db.query(Produto).filter(
+            Produto.id_pedido == pedido_id,
+            Produto.deleted_at.is_(None),
+        ).update({"deleted_at": now})
 
         _audit(db, AuditAction.DELETE, pedido.id, current_user_id,
                old_values={"status": pedido.status, "numero_os": pedido.numero_os},

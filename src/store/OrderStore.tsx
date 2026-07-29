@@ -21,17 +21,19 @@ export type RmaItemStatus =
   | 'Received'
   | 'Sent for Repair'
   | 'In Repair'
-  | 'Repaired and Not Received'
-  | 'Repaired and Received'
+  | 'Repaired Not Received'
+  | 'Repaired Received'
   | 'To Pack'
   | 'Ready for Delivery'
   | 'Out for Delivery'
-  | 'Delivered';
+  | 'Delivered'
+  | 'Estorno';
 
 export const RMA_ITEM_STATUSES: RmaItemStatus[] = [
   'Not Received', 'Received', 'Sent for Repair', 'In Repair',
-  'Repaired and Not Received', 'Repaired and Received',
+  'Repaired Not Received', 'Repaired Received',
   'To Pack', 'Ready for Delivery', 'Out for Delivery', 'Delivered',
+  'Estorno',
 ];
 
 export const RMA_STATUS_LABELS: Record<RmaItemStatus, string> = {
@@ -39,25 +41,27 @@ export const RMA_STATUS_LABELS: Record<RmaItemStatus, string> = {
   'Received': 'RECEBIDO',
   'Sent for Repair': 'ENVIADO PARA REPARO',
   'In Repair': 'EM REPARO',
-  'Repaired and Not Received': 'REPARADO E NÃO RECEBIDO',
-  'Repaired and Received': 'REPARADO E RECEBIDO',
+  'Repaired Not Received': 'REPARADO E NÃO RECEBIDO',
+  'Repaired Received': 'REPARADO E RECEBIDO',
   'To Pack': 'A EMBALAR',
   'Ready for Delivery': 'PRONTO P/ ENTREGA',
   'Out for Delivery': 'EM ENTREGA',
   'Delivered': 'ENTREGUE',
+  'Estorno': 'ESTORNO',
 };
 
 export const RMA_STATUS_COLORS: Record<RmaItemStatus, string> = {
-  'Not Received':              'bg-[hsl(var(--st-cancelled)/0.18)] text-[hsl(var(--st-cancelled))] border-[hsl(var(--st-cancelled)/0.5)]',
-  'Received':                  'bg-[hsl(var(--st-received)/0.18)] text-[hsl(var(--st-received))] border-[hsl(var(--st-received)/0.5)]',
-  'Sent for Repair':           'bg-[hsl(var(--st-tobuy)/0.18)] text-[hsl(var(--st-tobuy))] border-[hsl(var(--st-tobuy)/0.5)]',
-  'In Repair':                 'bg-[hsl(var(--st-bought)/0.18)] text-[hsl(var(--st-bought))] border-[hsl(var(--st-bought)/0.5)]',
-  'Repaired and Not Received': 'bg-[hsl(var(--st-invoiced-pending)/0.18)] text-[hsl(var(--st-invoiced-pending))] border-[hsl(var(--st-invoiced-pending)/0.6)]',
-  'Repaired and Received':     'bg-[hsl(var(--st-invoiced-received)/0.4)] text-[hsl(22_85%_30%)] border-[hsl(var(--st-invoiced-received))]',
-  'To Pack':                   'bg-[hsl(var(--st-topack)/0.35)] text-[hsl(220_70%_30%)] border-[hsl(var(--st-topack))]',
-  'Ready for Delivery':        'bg-[hsl(var(--st-ready)/0.18)] text-[hsl(var(--st-ready))] border-[hsl(var(--st-ready)/0.6)]',
-  'Out for Delivery':          'bg-[hsl(var(--st-delivering)/0.4)] text-[hsl(140_70%_22%)] border-[hsl(var(--st-delivering))]',
-  'Delivered':                 'bg-[hsl(var(--st-delivered)/0.18)] text-[hsl(var(--st-delivered))] border-[hsl(var(--st-delivered)/0.6)]',
+  'Not Received':           'bg-[hsl(var(--st-cancelled)/0.18)] text-[hsl(var(--st-cancelled))] border-[hsl(var(--st-cancelled)/0.5)]',
+  'Received':               'bg-[hsl(var(--st-received)/0.18)] text-[hsl(var(--st-received))] border-[hsl(var(--st-received)/0.5)]',
+  'Sent for Repair':        'bg-[hsl(var(--st-tobuy)/0.18)] text-[hsl(var(--st-tobuy))] border-[hsl(var(--st-tobuy)/0.5)]',
+  'In Repair':              'bg-[hsl(var(--st-bought)/0.18)] text-[hsl(var(--st-bought))] border-[hsl(var(--st-bought)/0.5)]',
+  'Repaired Not Received':  'bg-[hsl(var(--st-invoiced-pending)/0.18)] text-[hsl(var(--st-invoiced-pending))] border-[hsl(var(--st-invoiced-pending)/0.6)]',
+  'Repaired Received':      'bg-[hsl(var(--st-invoiced-received)/0.4)] text-[hsl(22_85%_30%)] border-[hsl(var(--st-invoiced-received))]',
+  'To Pack':                'bg-[hsl(var(--st-topack)/0.35)] text-[hsl(220_70%_30%)] border-[hsl(var(--st-topack))]',
+  'Ready for Delivery':     'bg-[hsl(var(--st-ready)/0.18)] text-[hsl(var(--st-ready))] border-[hsl(var(--st-ready)/0.6)]',
+  'Out for Delivery':       'bg-[hsl(var(--st-delivering)/0.4)] text-[hsl(140_70%_22%)] border-[hsl(var(--st-delivering))]',
+  'Delivered':              'bg-[hsl(var(--st-delivered)/0.18)] text-[hsl(var(--st-delivered))] border-[hsl(var(--st-delivered)/0.6)]',
+  'Estorno':                'bg-red-50 text-red-700 border-red-300',
 };
 
 export interface RmaItem {
@@ -68,6 +72,8 @@ export interface RmaItem {
   quantity: number;
   /** Free-text — who is fixing the item */
   repairedBy?: string;
+  /** Supplier migrated from the originating product */
+  supplier?: string;
   status: RmaItemStatus;
 }
 

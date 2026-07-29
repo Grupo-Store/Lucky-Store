@@ -158,7 +158,7 @@ class CotacaoService:
         eligible_for_order: Optional[bool] = None,
         numero_requisicao: Optional[str] = None,
     ):
-        from sqlalchemy import or_
+
         q = db.query(Cotacao).filter(Cotacao.deleted_at.is_(None))
 
         if id_loja:
@@ -174,7 +174,7 @@ class CotacaoService:
         if data_fim:
             q = q.filter(Cotacao.data_cotacao <= data_fim)
         if eligible_for_order:
-            q = q.filter(or_(Cotacao.status_fechada == True, Cotacao.status_caida == True))
+            q = q.filter(Cotacao.status_fechada == True, Cotacao.status_caida != True)
 
         sort_col = getattr(Cotacao, sort_by, Cotacao.data_cotacao)
         q = q.order_by(desc(sort_col) if sort_dir == "desc" else asc(sort_col))

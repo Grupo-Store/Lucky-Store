@@ -18,6 +18,7 @@ class ItemRmaStatus(str, enum.Enum):
     READY_FOR_DELIVERY = "Ready for Delivery"
     OUT_FOR_DELIVERY = "Out for Delivery"
     DELIVERED = "Delivered"
+    ESTORNO = "Estorno"
 
 
 class ItemRma(Base):
@@ -31,6 +32,7 @@ class ItemRma(Base):
     quantidade = Column(Integer, nullable=False)
     status = Column(SQLEnum(ItemRmaStatus, native_enum=False, values_callable=lambda x: [e.value for e in x]), nullable=False, default=ItemRmaStatus.NOT_RECEIVED)
     consertado_por = Column(String(255), nullable=True)
+    fornecedor = Column(String(255), nullable=True)
     valor_estornado = Column(Numeric(12, 2), nullable=True)
     data_estorno = Column(Date, nullable=True)
     motivo_estorno = Column(String(255), nullable=True)

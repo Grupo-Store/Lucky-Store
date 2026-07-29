@@ -44,6 +44,7 @@ class Produto(Base):
 
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
     updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc), nullable=False)
+    deleted_at = Column(DateTime(timezone=True), nullable=True)
 
     pedido = relationship("Pedido", back_populates="produtos")
     vendedor = relationship("Vendedor", foreign_keys=[id_vendedor], back_populates="produtos_vendidos")

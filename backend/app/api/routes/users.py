@@ -11,6 +11,7 @@ from app.schemas.audit_log import AuditLogResponse
 from app.services.auth import AuthService
 from app.services.lgpd import LgpdService
 from app.api.routes.auth import get_current_user_dep, require_admin, get_current_user
+from app.models.user import UserRole
 from app.utils.errors import NotFoundException, to_http_exception
 from pydantic import BaseModel
 
@@ -62,8 +63,10 @@ def get_user(
 def export_user_data(
     user_id: UUID,
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ):
+    if str(current_user.id) != str(user_id) and current_user.role != UserRole.ADMIN:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Acesso negado")
     user = db.query(User).filter(User.id == user_id, User.deleted_at.is_(None)).first()
     if not user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")

@@ -190,6 +190,7 @@ export interface ProdutoApiItem {
   descricao: string;
   quantidade: number;
   valor_projetado: string;
+  preco_custo: string | null;
   valor_compra: string | null;
   status: string;
   prazo_entrega: string | null;
@@ -337,7 +338,8 @@ export type RmaStatus =
   | 'Shipped'
   | 'Delivered'
   | 'Cancelled'
-  | 'Completed';
+  | 'Completed'
+  | 'Reembolso';
 
 export type ItemRmaStatus =
   | 'Not Received'
@@ -349,7 +351,8 @@ export type ItemRmaStatus =
   | 'To Pack'
   | 'Ready for Delivery'
   | 'Out for Delivery'
-  | 'Delivered';
+  | 'Delivered'
+  | 'Estorno';
 
 export interface ItemRma {
   id: string;
@@ -359,6 +362,7 @@ export interface ItemRma {
   quantidade: number;
   status: ItemRmaStatus;
   consertado_por: string | null;
+  fornecedor: string | null;
   valor_estornado: string | null;
   data_estorno: string | null;
   motivo_estorno: string | null;
@@ -392,6 +396,7 @@ export interface CreateRmaPayload {
     id_produto_origem?: string;
     descricao: string;
     quantidade: number;
+    fornecedor?: string;
   }[];
 }
 

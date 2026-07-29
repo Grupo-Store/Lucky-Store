@@ -43,6 +43,20 @@ def _total_estornado(db: Session, pedido_id: UUID) -> Decimal:
     return Decimal(str(total))
 
 
+def _batch_total_estornado(db: Session, pedido_ids: list) -> dict:
+    if not pedido_ids:
+        return {}
+    from sqlalchemy import text as _text
+    rows = (
+        db.query(Rma.id_pedido_origem, func.coalesce(func.sum(ItemRma.valor_estornado), 0))
+        .join(ItemRma, ItemRma.id_rma == Rma.id)
+        .filter(Rma.id_pedido_origem.in_(pedido_ids))
+        .group_by(Rma.id_pedido_origem)
+        .all()
+    )
+    return {str(pedido_id): Decimal(str(total)) for pedido_id, total in rows}
+
+
 router = APIRouter(prefix="/pedidos", tags=["pedidos"])
 
 
@@ -83,6 +97,7 @@ def list_pedidos(
         sort_by=sort_by, sort_dir=sort_dir,
         numero_os=numero_os,
     )
+    estornado_map = _batch_total_estornado(db, [p.id for p in items])
     items_out = [
         PedidoListItemResponse(
             id=p.id,
@@ -116,7 +131,7 @@ def list_pedidos(
             num_parcelas_efetivas=p.num_parcelas_efetivas,
             plano_parcelas=p.plano_parcelas,
             plano_parcelas_pedido=p.plano_parcelas_pedido,
-            valor_total_estornado=_total_estornado(db, p.id),
+            valor_total_estornado=estornado_map.get(str(p.id), Decimal("0")),
         )
         for p in items
     ]

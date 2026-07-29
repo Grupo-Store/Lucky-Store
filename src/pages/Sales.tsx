@@ -1,4 +1,5 @@
 import { useState, useMemo, memo, useEffect } from 'react';
+import { toast } from 'sonner';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -167,6 +168,7 @@ const ITEM_RMA_STATUS_ORDER: ItemRmaStatus[] = [
   'Not Received', 'Received', 'Sent for Repair', 'In Repair',
   'Repaired Not Received', 'Repaired Received',
   'To Pack', 'Ready for Delivery', 'Out for Delivery', 'Delivered',
+  'Estorno',
 ];
 
 const ITEM_RMA_STATUS_LABELS: Record<ItemRmaStatus, string> = {
@@ -180,6 +182,7 @@ const ITEM_RMA_STATUS_LABELS: Record<ItemRmaStatus, string> = {
   'Ready for Delivery':    'Pronto p/ Entrega',
   'Out for Delivery':      'Em Entrega',
   'Delivered':             'Entregue',
+  'Estorno':               'Estorno',
 };
 
 const ITEM_RMA_STATUS_COLORS: Record<ItemRmaStatus, string> = {
@@ -193,6 +196,7 @@ const ITEM_RMA_STATUS_COLORS: Record<ItemRmaStatus, string> = {
   'Ready for Delivery':    'bg-[hsl(var(--st-ready)/0.18)] text-[hsl(var(--st-ready))] border-[hsl(var(--st-ready)/0.6)]',
   'Out for Delivery':      'bg-[hsl(var(--st-delivering)/0.4)] text-[hsl(140_70%_22%)] border-[hsl(var(--st-delivering))]',
   'Delivered':             'bg-[hsl(var(--st-delivered)/0.18)] text-[hsl(var(--st-delivered))] border-[hsl(var(--st-delivered)/0.6)]',
+  'Estorno':               'bg-red-50 text-red-700 border-red-300',
 };
 
 function getRmaDisplayStatus(rma: RmaResponse): ItemRmaStatus | null {
@@ -400,7 +404,7 @@ export default function Sales() {
 
   /* ---------- Item / Order status update hooks ---------- */
   const { mutate: updateItemStatusApi } = useUpdateItemStatus();
-  const { mutate: updateOrderStatusInline } = useUpdateOrderStatusInline();
+  const { mutate: updateOrderStatusInline, isPending: isStatusUpdating } = useUpdateOrderStatusInline();
 
   const displayedOrders = useMemo<PedidoListItem[]>(() => {
     if (orderView === 'rma') return [];
@@ -1156,8 +1160,12 @@ export default function Sales() {
                                 <TableCell style={{ padding: '15px 18px' }} onClick={e => e.stopPropagation()}>
                                   <Select
                                     value={effectiveStatus}
+                                    disabled={isStatusUpdating}
                                     onValueChange={v =>
-                                      updateOrderStatusInline({ id: item.id, new_status: v as PedidoStatus })
+                                      updateOrderStatusInline(
+                                        { id: item.id, new_status: v as PedidoStatus },
+                                        { onError: () => toast.error('Erro ao atualizar status do pedido.') },
+                                      )
                                     }
                                   >
                                     <SelectTrigger className={cn(

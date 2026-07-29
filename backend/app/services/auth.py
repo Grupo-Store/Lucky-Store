@@ -1,4 +1,4 @@
-import random
+import secrets
 import string
 from datetime import datetime, timedelta, timezone
 
@@ -69,7 +69,7 @@ class AuthService:
             EmailVerificationCode.used.is_(False),
         ).update({"used": True})
 
-        code = "".join(random.choices(string.digits, k=6))
+        code = "".join(secrets.choice(string.digits) for _ in range(6))
         expires_at = datetime.now(timezone.utc) + timedelta(
             minutes=settings.EMAIL_CODE_EXPIRE_MINUTES
         )
@@ -116,11 +116,16 @@ class AuthService:
 
     @staticmethod
     def refresh_access_token(refresh_token: str) -> dict:
+        from app.core.blacklist import blacklist_token, is_blacklisted
+        if is_blacklisted(refresh_token):
+            raise AuthenticationException("Refresh token revogado")
         user_id = verify_token(refresh_token, expected_type="refresh")
         if not user_id:
             raise AuthenticationException("Invalid or expired refresh token")
+        blacklist_token(refresh_token)
         return {
             "access_token": create_access_token(subject=user_id),
+            "refresh_token": create_refresh_token(subject=user_id),
             "token_type": "bearer",
         }
 

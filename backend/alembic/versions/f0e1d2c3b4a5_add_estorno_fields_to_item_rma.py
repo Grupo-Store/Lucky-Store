@@ -16,9 +16,9 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    op.add_column('item_rma', sa.Column('valor_estornado', sa.Numeric(12, 2), nullable=True))
-    op.add_column('item_rma', sa.Column('data_estorno', sa.Date(), nullable=True))
-    op.add_column('item_rma', sa.Column('motivo_estorno', sa.String(length=255), nullable=True))
+    op.execute("ALTER TABLE item_rma ADD COLUMN IF NOT EXISTS valor_estornado NUMERIC(12, 2)")
+    op.execute("ALTER TABLE item_rma ADD COLUMN IF NOT EXISTS data_estorno DATE")
+    op.execute("ALTER TABLE item_rma ADD COLUMN IF NOT EXISTS motivo_estorno VARCHAR(255)")
 
 
 def downgrade() -> None:

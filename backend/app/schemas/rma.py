@@ -11,6 +11,7 @@ class ItemRmaCreate(BaseModel):
     id_produto_origem: Optional[UUID] = None
     descricao: str
     quantidade: int
+    fornecedor: Optional[str] = None
 
     @field_validator("quantidade")
     @classmethod
@@ -23,6 +24,7 @@ class ItemRmaCreate(BaseModel):
 class ItemRmaStatusUpdate(BaseModel):
     new_status: ItemRmaStatus
     consertado_por: Optional[str] = None
+    fornecedor: Optional[str] = None
     valor_estornado: Optional[Decimal] = None
     data_estorno: Optional[date] = None
     motivo_estorno: Optional[str] = None
@@ -36,6 +38,7 @@ class ItemRmaResponse(BaseModel):
     quantidade: int
     status: ItemRmaStatus
     consertado_por: Optional[str]
+    fornecedor: Optional[str] = None
     valor_estornado: Optional[Decimal] = None
     data_estorno: Optional[date] = None
     motivo_estorno: Optional[str] = None

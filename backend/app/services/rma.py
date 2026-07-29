@@ -4,6 +4,7 @@ from typing import Optional
 from uuid import UUID
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import asc, desc
+from sqlalchemy.exc import IntegrityError
 from app.models.rma import Rma, RmaStatus
 from app.models.item_rma import ItemRma, ItemRmaStatus
 from app.models.pedido import Pedido
@@ -14,9 +15,10 @@ from app.utils.errors import NotFoundException, BusinessLogicException
 
 
 def _audit(db: Session, action: AuditAction, entity_id, changed_by: UUID,
-           old_values: dict = None, new_values: dict = None):
+           old_values: dict = None, new_values: dict = None,
+           entity_type: str = "rma"):
     db.add(AuditLog(
-        entity_type="rma",
+        entity_type=entity_type,
         entity_id=entity_id,
         action=action,
         changed_by=changed_by,
@@ -36,6 +38,7 @@ _ITEM_STATUS_LEVEL = {
     ItemRmaStatus.READY_FOR_DELIVERY: 7,
     ItemRmaStatus.OUT_FOR_DELIVERY: 8,
     ItemRmaStatus.DELIVERED: 9,
+    ItemRmaStatus.ESTORNO: 10,
 }
 
 _RMA_STATUS_LEVEL = {
@@ -49,6 +52,21 @@ _RMA_STATUS_LEVEL = {
     RmaStatus.DELIVERED: 7,
     RmaStatus.COMPLETED: 8,
     RmaStatus.CANCELLED: 9,
+    RmaStatus.REEMBOLSO: 10,
+}
+
+_VALID_TRANSITIONS: dict[RmaStatus, set] = {
+    RmaStatus.REGISTERED:  {RmaStatus.IN_ANALYSIS, RmaStatus.CANCELLED},
+    RmaStatus.IN_ANALYSIS: {RmaStatus.APPROVED, RmaStatus.CANCELLED, RmaStatus.REEMBOLSO},
+    RmaStatus.APPROVED:    {RmaStatus.IN_REPAIR, RmaStatus.CANCELLED, RmaStatus.REEMBOLSO},
+    RmaStatus.IN_REPAIR:   {RmaStatus.REPAIRED, RmaStatus.CANCELLED, RmaStatus.REEMBOLSO},
+    RmaStatus.REPAIRED:    {RmaStatus.READY, RmaStatus.CANCELLED, RmaStatus.REEMBOLSO},
+    RmaStatus.READY:       {RmaStatus.SHIPPED, RmaStatus.CANCELLED, RmaStatus.REEMBOLSO},
+    RmaStatus.SHIPPED:     {RmaStatus.DELIVERED, RmaStatus.CANCELLED, RmaStatus.REEMBOLSO},
+    RmaStatus.DELIVERED:   {RmaStatus.COMPLETED, RmaStatus.CANCELLED, RmaStatus.REEMBOLSO},
+    RmaStatus.COMPLETED:   set(),
+    RmaStatus.CANCELLED:   set(),
+    RmaStatus.REEMBOLSO:   set(),
 }
 
 
@@ -114,6 +132,7 @@ class RmaService:
                 id_produto_origem=item.id_produto_origem,
                 descricao=item.descricao,
                 quantidade=item.quantidade,
+                fornecedor=item.fornecedor,
                 status=ItemRmaStatus.NOT_RECEIVED,
             ))
 
@@ -129,7 +148,11 @@ class RmaService:
             reason="RMA criado",
         ))
 
-        db.commit()
+        try:
+            db.commit()
+        except IntegrityError:
+            db.rollback()
+            raise BusinessLogicException(f"Número RMA '{numero_rma}' já existe (criação simultânea detectada)")
         db.refresh(rma)
         return rma
 
@@ -158,7 +181,7 @@ class RmaService:
         sort_dir: str = "desc",
         numero_rma: Optional[str] = None,
     ):
-        q = db.query(Rma).options(joinedload(Rma.pedido)).filter(Rma.deleted_at.is_(None))
+        q = db.query(Rma).options(joinedload(Rma.pedido), joinedload(Rma.itens)).filter(Rma.deleted_at.is_(None))
 
         if status:
             q = q.filter(Rma.status == status)
@@ -175,7 +198,8 @@ class RmaService:
         if numero_rma:
             q = q.filter(Rma.numero_rma.ilike(f"%{numero_rma}%"))
 
-        sort_col = getattr(Rma, sort_by, Rma.data_registro)
+        _SORT_WHITELIST = {"data_registro", "numero_rma", "status", "prazo_entrega", "created_at", "updated_at"}
+        sort_col = getattr(Rma, sort_by if sort_by in _SORT_WHITELIST else "data_registro")
         q = q.order_by(desc(sort_col) if sort_dir == "desc" else asc(sort_col))
 
         total = q.count()
@@ -202,6 +226,11 @@ class RmaService:
         if data.prazo_entrega is not None:
             rma.prazo_entrega = data.prazo_entrega
         if data.status is not None and data.status != rma.status:
+            allowed = _VALID_TRANSITIONS.get(rma.status, set())
+            if data.status not in allowed:
+                raise BusinessLogicException(
+                    f"Transição inválida: {rma.status.value} → {data.status.value}"
+                )
             rma.status = data.status
             db.add(StatusHistory(
                 entity_type=EntityType.RMA,
@@ -239,7 +268,7 @@ class RmaService:
             reason="RMA concluído",
         ))
         _audit(db, AuditAction.UPDATE, rma.id, current_user_id,
-               old_values={"status": old_status}, new_values={"status": RmaStatus.COMPLETED})
+               old_values={"status": str(old_status)}, new_values={"status": str(RmaStatus.COMPLETED)})
 
         db.commit()
         db.refresh(rma)
@@ -264,11 +293,11 @@ class RmaService:
 
         old_status = item.status
         item.status = data.new_status
-        if data.consertado_por is not None:
-            item.consertado_por = data.consertado_por
-        # Estorno: aplica apenas os campos enviados na requisição (permite limpar com null,
-        # sem apagar quando o patch vem só de status — ex.: mudança de status no fluxo de vendas)
         fields_set = data.model_fields_set
+        if "consertado_por" in fields_set:
+            item.consertado_por = data.consertado_por
+        if "fornecedor" in fields_set:
+            item.fornecedor = data.fornecedor
         if "valor_estornado" in fields_set:
             item.valor_estornado = data.valor_estornado
         if "data_estorno" in fields_set:
@@ -285,7 +314,8 @@ class RmaService:
             reason=None,
         ))
         _audit(db, AuditAction.UPDATE, item.id, current_user_id,
-               old_values={"status": old_status}, new_values={"status": data.new_status})
+               old_values={"status": old_status}, new_values={"status": data.new_status},
+               entity_type="item_rma")
 
         # Auto-avança o status do RMA com base no estado conjunto dos itens
         rma = db.query(Rma).filter(Rma.id == rma_id).first()

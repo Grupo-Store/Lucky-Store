@@ -4,7 +4,9 @@ from sqlalchemy.orm import Session
 
 from app.models.cotacao import Cotacao
 from app.models.cliente import Cliente
+from app.models.item_cotacao import ItemCotacao
 from app.models.pedido import Pedido
+from app.models.produto import Produto
 from app.models.status_history import StatusHistory, EntityType
 from app.models.audit_log import AuditLog, AuditAction
 from app.services.pedido import _generate_numero_os
@@ -22,14 +24,21 @@ class ConversaoCotacaoService:
         cotacao = db.query(Cotacao).filter(
             Cotacao.id == cotacao_id,
             Cotacao.deleted_at.is_(None),
-        ).first()
+        ).with_for_update().first()
         if not cotacao:
             raise NotFoundException(f"Cotação {cotacao_id} não encontrada")
 
         if cotacao.status_caida:
             raise BusinessLogicException("Cotação caída não pode ser convertida em pedido")
-        if cotacao.status_fechada:
-            raise BusinessLogicException("Cotação já foi convertida em pedido anteriormente")
+
+        existing_pedido = db.query(Pedido).filter(
+            Pedido.id_cotacao == cotacao_id,
+            Pedido.deleted_at.is_(None),
+        ).first()
+        if existing_pedido:
+            raise BusinessLogicException(
+                f"Cotação já foi convertida no pedido {existing_pedido.numero_os}"
+            )
 
         # Resolve client: find by CNPJ or name; create if not found
         if cotacao.cnpj_cliente:
@@ -64,6 +73,22 @@ class ConversaoCotacaoService:
         )
         db.add(pedido)
         db.flush()
+
+        itens_cotacao = db.query(ItemCotacao).filter(ItemCotacao.id_cotacao == cotacao_id).all()
+        for item in itens_cotacao:
+            db.add(Produto(
+                id_pedido=pedido.id,
+                id_vendedor=cotacao.id_vendedor,
+                descricao=item.descricao,
+                quantidade=item.quantidade,
+                valor_projetado=item.valor_unitario,
+                valor_compra=item.valor_fechamento,
+                fornecedor=item.fornecedor,
+                is_direct_supply=item.is_direct_supply,
+                porcentagem_fornecedor=item.porcentagem_fornecedor,
+                frete_fornecedor=item.frete_fornecedor,
+                status="To Buy",
+            ))
 
         db.add(StatusHistory(
             entity_type=EntityType.PEDIDO,

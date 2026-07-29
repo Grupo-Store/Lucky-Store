@@ -1,9 +1,13 @@
+import logging
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.openapi.utils import get_openapi
 from app.config import get_settings
 from app.utils.errors import OrderlyHubException
+
+# Garante que loggers da aplicação apareçam no output do uvicorn
+logging.getLogger("app").setLevel(logging.DEBUG)
 from app.api import router
 
 settings = get_settings()
