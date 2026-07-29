@@ -10,6 +10,8 @@
  *   5. cleanStr — sanitises API string values
  */
 import { describe, it, expect } from 'vitest';
+import { calcDirectSupplyCost, calcCompanyRevenue } from '@/store/OrderStore';
+import type { DirectSupplyOrderItem } from '@/store/OrderStore';
 
 // ─── Minimal type replicas (mirrors src/types/api.ts) ─────────────────────────
 
@@ -393,7 +395,66 @@ describe('getCotacaoPhase', () => {
   });
 });
 
-// ─── 5. cleanStr ──────────────────────────────────────────────────────────────
+// ─── 5. Divisão venda: fornecedor × empresa ───────────────────────────────────
+
+function dsOrderItem(over: Partial<DirectSupplyOrderItem> = {}): DirectSupplyOrderItem {
+  return {
+    id: 'ds-1', name: 'Produto X', quantity: 1,
+    projectedValue: 0, purchaseValue: 0, closingValue: 0,
+    supplier: '', supplierPct: 0, supplierFreight: 0, supplierInvoice: '',
+    ...over,
+  };
+}
+
+describe('calcDirectSupplyCost — parte que vai para o fornecedor', () => {
+
+  it('aplica a % sobre a margem (venda − compra) × qtd e soma o frete', () => {
+    // margem = (1000 − 600) × 2 = 800 ; 10% = 80 ; + frete 50 = 130
+    const item = dsOrderItem({ quantity: 2, purchaseValue: 600, closingValue: 1000, supplierPct: 10, supplierFreight: 50 });
+    expect(calcDirectSupplyCost([item])).toBe(130);
+  });
+
+  it('retorna apenas o frete quando a % é zero', () => {
+    const item = dsOrderItem({ quantity: 1, purchaseValue: 600, closingValue: 1000, supplierPct: 0, supplierFreight: 40 });
+    expect(calcDirectSupplyCost([item])).toBe(40);
+  });
+
+  it('soma múltiplos itens', () => {
+    const a = dsOrderItem({ id: 'a', quantity: 1, purchaseValue: 100, closingValue: 200, supplierPct: 50 });   // 50
+    const b = dsOrderItem({ id: 'b', quantity: 1, purchaseValue: 0, closingValue: 100, supplierFreight: 25 }); // 25
+    expect(calcDirectSupplyCost([a, b])).toBe(75);
+  });
+
+  it('é zero quando não há itens de fornecimento direto', () => {
+    expect(calcDirectSupplyCost([])).toBe(0);
+    expect(calcDirectSupplyCost(undefined)).toBe(0);
+  });
+});
+
+describe('calcCompanyRevenue — base dos impostos', () => {
+
+  it('desconta a parte do fornecedor do valor de venda', () => {
+    const item = dsOrderItem({ quantity: 2, purchaseValue: 600, closingValue: 1000, supplierPct: 10, supplierFreight: 50 });
+    // venda 2000 − 130 = 1870
+    expect(calcCompanyRevenue(2000, [item])).toBe(1870);
+  });
+
+  it('é igual ao valor de venda quando não há fornecimento direto', () => {
+    expect(calcCompanyRevenue(2000, [])).toBe(2000);
+    expect(calcCompanyRevenue(2000, undefined)).toBe(2000);
+  });
+
+  it('o imposto de venda incide sobre a empresa, não sobre empresa + fornecedor', () => {
+    const item = dsOrderItem({ quantity: 2, purchaseValue: 600, closingValue: 1000, supplierPct: 10, supplierFreight: 50 });
+    const base = calcCompanyRevenue(2000, [item]);
+    const impostoCorreto = base * 5 / 100;       // 1870 × 5% = 93,50
+    const impostoAntigo  = 2000 * 5 / 100;       // 100,00 — comportamento errado anterior
+    expect(impostoCorreto).toBeCloseTo(93.5, 2);
+    expect(impostoCorreto).toBeLessThan(impostoAntigo);
+  });
+});
+
+// ─── 6. cleanStr ──────────────────────────────────────────────────────────────
 
 describe('cleanStr', () => {
 

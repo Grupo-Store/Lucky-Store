@@ -211,6 +211,16 @@ export function OrderModal({ open, onClose, order, onSave, nextOS, prefill }: Pr
   );
   const derivedFreightTotal = useMemo(() => calcFreightTotal(form.freight), [form.freight]);
 
+  const dsItems = form.directSupplyItems || [];
+  /** Parte da venda que vai para o fornecedor direto (margem × % + frete). */
+  const directSupplyCost = useMemo(() => calcDirectSupplyCost(form.directSupplyItems), [form.directSupplyItems]);
+  /**
+   * Base dos percentuais que incidem sobre "o que fica com a empresa".
+   * No faturamento direto a venda é dividida entre fornecedor e empresa — o imposto
+   * de venda incide apenas sobre a parte da empresa, não sobre o valor cheio.
+   */
+  const companyRevenue = (form.salesValue || 0) - directSupplyCost;
+
   const computed = useMemo(() => {
     const sales = form.salesValue || 0;
     const finalProd = derivedFinalProductCost;
@@ -218,12 +228,10 @@ export function OrderModal({ open, onClose, order, onSave, nextOS, prefill }: Pr
       creditCostValue: ((form.creditCostPercent || 0) * sales) / 100,
       debitCostValue: ((form.debitCostPercent || 0) * sales) / 100,
       purchaseTaxValue: ((form.purchaseTaxPercent || 0) * finalProd) / 100,
-      salesTaxValue: ((form.salesTaxPercent || 0) * sales) / 100,
+      salesTaxValue: ((form.salesTaxPercent || 0) * companyRevenue) / 100,
     };
-  }, [form.salesValue, derivedFinalProductCost, form.creditCostPercent, form.debitCostPercent, form.purchaseTaxPercent, form.salesTaxPercent]);
+  }, [form.salesValue, companyRevenue, derivedFinalProductCost, form.creditCostPercent, form.debitCostPercent, form.purchaseTaxPercent, form.salesTaxPercent]);
 
-  const dsItems = form.directSupplyItems || [];
-  const directSupplyCost = calcDirectSupplyCost(dsItems);
   const finalCost = calcFinalCost({
     ...form, finalProductCost: derivedFinalProductCost, freight: form.freight, ...computed,
     directSupplyItems: dsItems,
@@ -860,13 +868,15 @@ export function OrderModal({ open, onClose, order, onSave, nextOS, prefill }: Pr
               }}
             />
             <BiPctRow
-              label="Imposto Venda — sobre Valor de Venda"
-              base={form.salesValue || 0}
+              label={form.directBilling
+                ? 'Imposto Venda — sobre Receita da Empresa (venda − parte do fornecedor)'
+                : 'Imposto Venda — sobre Valor de Venda'}
+              base={companyRevenue}
               percent={form.salesTaxPercent || 0}
               value={computed.salesTaxValue}
               onPercentChange={p => set('salesTaxPercent', p)}
               onValueChange={v => {
-                const base = form.salesValue || 0;
+                const base = companyRevenue;
                 set('salesTaxPercent', base > 0 ? (v / base) * 100 : 0);
               }}
             />
@@ -1112,6 +1122,18 @@ export function OrderModal({ open, onClose, order, onSave, nextOS, prefill }: Pr
               <h3>Resumo de Valores</h3>
               <div className="opm-sumbody">
                 <div className="opm-line"><span className="k">Valor de Venda</span><span className="v">{toBRL(form.salesValue || 0)}</span></div>
+                {form.directBilling && (
+                  <>
+                    <div className="opm-line">
+                      <span className="k">Parte do Fornecedor</span>
+                      <span className="v" style={{ color: '#b07a1f' }}>-{toBRL(directSupplyCost)}</span>
+                    </div>
+                    <div className="opm-line">
+                      <span className="k" style={{ fontWeight: 700 }}>Receita da Empresa</span>
+                      <span className="v" style={{ fontWeight: 700 }}>{toBRL(companyRevenue)}</span>
+                    </div>
+                  </>
+                )}
                 {(form.refundTotal ?? 0) > 0 && (
                   <div className="opm-line"><span className="k" style={{ color: '#d24545' }}>Valor Estornado</span><span className="v" style={{ color: '#d24545' }}>-{toBRL(form.refundTotal!)}</span></div>
                 )}

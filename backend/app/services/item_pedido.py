@@ -50,6 +50,9 @@ class ItemPedidoService:
             quantidade=data.quantidade,
             valor_projetado=data.valor_projetado,
             valor_compra=data.valor_compra,
+            # Em itens de fornecimento direto, valor_compra guarda o valor de VENDA
+            # e preco_custo guarda o custo pago ao fornecedor.
+            preco_custo=data.preco_custo,
             fornecedor=data.fornecedor,
             is_direct_supply=data.is_direct_supply,
             porcentagem_fornecedor=data.porcentagem_fornecedor,
