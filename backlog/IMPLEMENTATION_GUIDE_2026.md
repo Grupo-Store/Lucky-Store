@@ -1,103 +1,85 @@
 # Orderly Hub - Implementation Guide 2026
 
-## Technology Stack Confirmed
+## Technology Stack ✅ DECIDIDO
 
 - **Frontend:** React 18 + TypeScript + Vite + Shadcn UI
-- **Backend:** [DECISION THIS WEEK] FastAPI (Python) OR Express (Node.js)
-- **Database:** PostgreSQL 14+
-- **ORM:** SQLAlchemy (Python) OR Prisma (Node.js)
-- **Deployment:** Docker + GitHub Actions
-- **Hosting:** AWS/Azure/DigitalOcean/Railway/Render
+- **Backend:** Python + FastAPI 0.104+ ✅
+- **Database:** PostgreSQL 14+ (local dev) + Railway PostgreSQL (produção) ✅
+- **ORM:** SQLAlchemy 2.x + Alembic ✅
+- **Validação:** Pydantic v2 ✅
+- **Deployment:** Railway (backend + DB) + Vercel (frontend) ✅
 
 ---
 
-## Path A: Python + FastAPI Implementation
+## Python + FastAPI — Setup ✅ CONCLUÍDO
 
-### Project Setup
+### Estrutura criada em `backend/`
 
 ```bash
-# Create project directory
-mkdir orderly-hub-backend
-cd orderly-hub-backend
-
-# Initialize Python project
+# Ambiente virtual e dependências
 python -m venv venv
 source venv/bin/activate  # Windows: venv\Scripts\activate
-
-# Create requirements.txt
-cat > requirements.txt << EOF
-fastapi==0.104.0
-uvicorn==0.24.0
-sqlalchemy==2.0.23
-psycopg2-binary==2.9.9
-python-dotenv==1.0.0
-pydantic==2.5.0
-pydantic-settings==2.1.0
-passlib==1.7.4
-bcrypt==4.1.1
-python-jose==3.3.0
-pyotp==2.9.0  # TOTP 2FA
-python-multipart==0.0.6
-alembic==1.13.0  # DB migrations
-pytest==7.4.3
-pytest-asyncio==0.21.1
-EOF
-
-# Install dependencies
 pip install -r requirements.txt
 
-# Initialize Alembic for migrations
-alembic init alembic
+# Banco local (primeira vez)
+psql -U postgres -c "CREATE DATABASE orderly_hub;"
+psql -U postgres -d orderly_hub -f ../database/updated/DATABASE_INIT.sql
+
+# Migrations Alembic
+alembic revision --autogenerate -m "init"
+alembic upgrade head
+
+# Subir servidor de desenvolvimento
+uvicorn main:app --reload
+# Acesso: http://localhost:8000
+# Docs:   http://localhost:8000/docs
 ```
 
-### Project Structure
+### Estrutura real do projeto (April 25, 2026)
 
 ```
-orderly-hub-backend/
-├── alembic/                 # Database migrations
-│   ├── versions/
-│   │   ├── 001_initial.py
-│   │   └── ...
-│   ├── env.py
-│   ├── script.py.mako
-│   └── alembic.ini
+backend/
+├── main.py                  ✅ FastAPI app, CORS, exception handler, /health
+├── alembic.ini              ✅ configurado
+├── Procfile                 ✅ para Railway
+├── railway.toml             ✅ healthcheck + restart policy
+├── requirements.txt         ✅ todas dependências
+├── .env                     ✅ DATABASE_URL, JWT_SECRET, CORS, 2FA
+│
+├── alembic/
+│   ├── env.py               ✅ wired com Base.metadata + settings
+│   ├── script.py.mako       ✅
+│   └── versions/            ✅ (aguarda primeira migration)
+│
 ├── app/
-│   ├── __init__.py
-│   ├── main.py              # FastAPI app initialization
-│   ├── config.py            # Configuration
-│   ├── database.py          # Database connection
+│   ├── config.py            ✅ Pydantic Settings
+│   ├── database.py          ✅ engine + SessionLocal + get_db
 │   │
-│   ├── models/              # SQLAlchemy models
-│   │   ├── __init__.py
-│   │   ├── user.py
-│   │   ├── order.py
-│   │   ├── quote.py
-│   │   ├── rma.py
-│   │   └── audit.py
+│   ├── models/
+│   │   ├── user.py          ✅ User, UserRole enum, soft delete
+│   │   ├── order.py         ⬜ pendente
+│   │   ├── quote.py         ⬜ pendente
+│   │   ├── rma.py           ⬜ pendente
+│   │   └── audit.py         ⬜ pendente
 │   │
-│   ├── schemas/             # Pydantic schemas (request/response)
-│   │   ├── __init__.py
-│   │   ├── user.py
-│   │   ├── order.py
-│   │   ├── quote.py
-│   │   └── audit.py
+│   ├── schemas/
+│   │   ├── user.py          ✅ UserCreate, UserResponse, Login, TOTP
+│   │   ├── order.py         ⬜ pendente
+│   │   └── quote.py         ⬜ pendente
 │   │
-│   ├── services/            # Business logic
-│   │   ├── __init__.py
-│   │   ├── auth_service.py
-│   │   ├── order_service.py
-│   │   ├── quote_service.py
-│   │   ├── rma_service.py
-│   │   └── audit_service.py
+│   ├── services/
+│   │   ├── auth.py          ✅ register, login, TOTP, tokens, logout
+│   │   ├── order_service.py ⬜ pendente
+│   │   └── audit_service.py ⬜ pendente
 │   │
-│   ├── api/routes/          # API endpoints
-│   │   ├── __init__.py
-│   │   ├── auth.py          # /api/auth/*
-│   │   ├── orders.py        # /api/orders/*
-│   │   ├── quotes.py        # /api/quotes/*
-│   │   └── rma.py           # /api/rma/*
+│   ├── api/routes/
+│   │   ├── __init__.py      ✅ router central
+│   │   ├── auth.py          ✅ 8 endpoints completos
+│   │   ├── orders.py        ⬜ pendente
+│   │   ├── quotes.py        ⬜ pendente
+│   │   └── rma.py           ⬜ pendente
 │   │
-│   ├── middleware/          # Custom middleware
+│   ├── middleware/          # Custom middleware (a implementar)
 │   │   ├── __init__.py
 │   │   ├── auth.py          # JWT verification
 │   │   └── error_handler.py

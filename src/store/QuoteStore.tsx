@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useCallback } from 'react';
-import { Company, Seller } from './OrderStore';
+import { Company, Seller, PaymentMethod } from './OrderStore';
 
 export type QuotePhaseKey = 'sent' | 'forClosing' | 'closed' | 'dropped';
 
@@ -34,19 +34,28 @@ export interface QuoteItem {
   id: string;
   name: string;
   quantity: number;
-  /** Quote value (R$) */
   quoteValue: number;
-  /** Closing value (R$) — optional, used when quote progresses to closed */
   closingValue: number;
   supplier: string;
+}
+
+export interface DirectSupplyQuoteItem {
+  id: string;
+  name: string;
+  quantity: number;
+  quoteValue: number;
+  closingValue: number;
+  supplier: string;
+  supplierPct: number;
+  supplierFreight: number;
 }
 
 export interface Quote {
   id: string;
   index: string;
-  /** Creation timestamp (ms) — used for default newest-first sort */
+  /** Número da cotação dentro da própria loja (1º, 2º... daquela empresa) */
+  storeIndex?: number;
   createdAt: number;
-  /** B2B Company / client name (optional) — when set, takes precedence over customer when converting to order */
   b2bCompany?: string;
   customer: string;
   cnpj: string;
@@ -56,17 +65,20 @@ export interface Quote {
   directBilling: boolean;
   supplier: string;
   seller: Seller;
-  /** Base quote value (R$) — entered in General Info */
   value: number;
-  /** Quote items */
   items: QuoteItem[];
-  /** Free-text observations */
+  directSupplyItems: DirectSupplyQuoteItem[];
   observations: string;
   phases: QuotePhases;
-  /** Tax % applied to Lucky Store revenue (for profitability calc) */
   taxLucky?: number;
-  /** Tax % applied to BTech revenue (for profitability calc) */
   taxBTech?: number;
+  // Envio de cotação
+  deliveryDate?: string;
+  deliveryForecast?: string;
+  paymentMethod?: PaymentMethod | '';
+  paymentDetails?: string;
+  paymentDeadline?: string;
+  warranty?: string;
 }
 
 export const emptyPhases = (): QuotePhases => ({
@@ -115,6 +127,7 @@ const sampleQuotes: Quote[] = [
       { id: 'qi1', name: 'Notebook Lenovo ThinkPad', quantity: 2, quoteValue: 5000, closingValue: 4800, supplier: 'Distribuidora Tech' },
       { id: 'qi2', name: 'Dock Station USB-C', quantity: 2, quoteValue: 1250, closingValue: 1200, supplier: 'Distribuidora Tech' },
     ],
+    directSupplyItems: [],
     observations: 'Cliente solicitou entrega expressa.',
     phases: {
       sent: { active: true, date: '2026-04-02' },
@@ -128,7 +141,7 @@ const sampleQuotes: Quote[] = [
     customer: 'StartUp Hub', cnpj: '22.222.222/0001-22',
     requestNumber: 'REQ-7782', requestDate: '2026-04-05',
     company: 'BTech', directBilling: true, supplier: 'Distribuidora ABC', seller: 'Lucas',
-    value: 0, items: [], observations: '',
+    value: 0, items: [], directSupplyItems: [], observations: '',
     phases: {
       sent: { active: true, date: '2026-04-06' },
       forClosing: { active: true, expectedDate: '2026-04-12' },
@@ -141,7 +154,7 @@ const sampleQuotes: Quote[] = [
     customer: 'Old Client', cnpj: '33.333.333/0001-33',
     requestNumber: 'REQ-7790', requestDate: '2026-03-28',
     company: 'AJJ', directBilling: false, supplier: '', seller: 'Pedro',
-    value: 0, items: [], observations: '',
+    value: 0, items: [], directSupplyItems: [], observations: '',
     phases: {
       sent: { active: true, date: '2026-03-29' },
       forClosing: { active: false },

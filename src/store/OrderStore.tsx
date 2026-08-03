@@ -21,17 +21,19 @@ export type RmaItemStatus =
   | 'Received'
   | 'Sent for Repair'
   | 'In Repair'
-  | 'Repaired and Not Received'
-  | 'Repaired and Received'
+  | 'Repaired Not Received'
+  | 'Repaired Received'
   | 'To Pack'
   | 'Ready for Delivery'
   | 'Out for Delivery'
-  | 'Delivered';
+  | 'Delivered'
+  | 'Estorno';
 
 export const RMA_ITEM_STATUSES: RmaItemStatus[] = [
   'Not Received', 'Received', 'Sent for Repair', 'In Repair',
-  'Repaired and Not Received', 'Repaired and Received',
+  'Repaired Not Received', 'Repaired Received',
   'To Pack', 'Ready for Delivery', 'Out for Delivery', 'Delivered',
+  'Estorno',
 ];
 
 export const RMA_STATUS_LABELS: Record<RmaItemStatus, string> = {
@@ -39,25 +41,27 @@ export const RMA_STATUS_LABELS: Record<RmaItemStatus, string> = {
   'Received': 'RECEBIDO',
   'Sent for Repair': 'ENVIADO PARA REPARO',
   'In Repair': 'EM REPARO',
-  'Repaired and Not Received': 'REPARADO E NÃO RECEBIDO',
-  'Repaired and Received': 'REPARADO E RECEBIDO',
+  'Repaired Not Received': 'REPARADO E NÃO RECEBIDO',
+  'Repaired Received': 'REPARADO E RECEBIDO',
   'To Pack': 'A EMBALAR',
   'Ready for Delivery': 'PRONTO P/ ENTREGA',
   'Out for Delivery': 'EM ENTREGA',
   'Delivered': 'ENTREGUE',
+  'Estorno': 'ESTORNO',
 };
 
 export const RMA_STATUS_COLORS: Record<RmaItemStatus, string> = {
-  'Not Received':              'bg-[hsl(var(--st-cancelled)/0.18)] text-[hsl(var(--st-cancelled))] border-[hsl(var(--st-cancelled)/0.5)]',
-  'Received':                  'bg-[hsl(var(--st-received)/0.18)] text-[hsl(var(--st-received))] border-[hsl(var(--st-received)/0.5)]',
-  'Sent for Repair':           'bg-[hsl(var(--st-tobuy)/0.18)] text-[hsl(var(--st-tobuy))] border-[hsl(var(--st-tobuy)/0.5)]',
-  'In Repair':                 'bg-[hsl(var(--st-bought)/0.18)] text-[hsl(var(--st-bought))] border-[hsl(var(--st-bought)/0.5)]',
-  'Repaired and Not Received': 'bg-[hsl(var(--st-invoiced-pending)/0.18)] text-[hsl(var(--st-invoiced-pending))] border-[hsl(var(--st-invoiced-pending)/0.6)]',
-  'Repaired and Received':     'bg-[hsl(var(--st-invoiced-received)/0.4)] text-[hsl(22_85%_30%)] border-[hsl(var(--st-invoiced-received))]',
-  'To Pack':                   'bg-[hsl(var(--st-topack)/0.35)] text-[hsl(220_70%_30%)] border-[hsl(var(--st-topack))]',
-  'Ready for Delivery':        'bg-[hsl(var(--st-ready)/0.18)] text-[hsl(var(--st-ready))] border-[hsl(var(--st-ready)/0.6)]',
-  'Out for Delivery':          'bg-[hsl(var(--st-delivering)/0.4)] text-[hsl(140_70%_22%)] border-[hsl(var(--st-delivering))]',
-  'Delivered':                 'bg-[hsl(var(--st-delivered)/0.18)] text-[hsl(var(--st-delivered))] border-[hsl(var(--st-delivered)/0.6)]',
+  'Not Received':           'bg-[hsl(var(--st-cancelled)/0.18)] text-[hsl(var(--st-cancelled))] border-[hsl(var(--st-cancelled)/0.5)]',
+  'Received':               'bg-[hsl(var(--st-received)/0.18)] text-[hsl(var(--st-received))] border-[hsl(var(--st-received)/0.5)]',
+  'Sent for Repair':        'bg-[hsl(var(--st-tobuy)/0.18)] text-[hsl(var(--st-tobuy))] border-[hsl(var(--st-tobuy)/0.5)]',
+  'In Repair':              'bg-[hsl(var(--st-bought)/0.18)] text-[hsl(var(--st-bought))] border-[hsl(var(--st-bought)/0.5)]',
+  'Repaired Not Received':  'bg-[hsl(var(--st-invoiced-pending)/0.18)] text-[hsl(var(--st-invoiced-pending))] border-[hsl(var(--st-invoiced-pending)/0.6)]',
+  'Repaired Received':      'bg-[hsl(var(--st-invoiced-received)/0.4)] text-[hsl(22_85%_30%)] border-[hsl(var(--st-invoiced-received))]',
+  'To Pack':                'bg-[hsl(var(--st-topack)/0.35)] text-[hsl(220_70%_30%)] border-[hsl(var(--st-topack))]',
+  'Ready for Delivery':     'bg-[hsl(var(--st-ready)/0.18)] text-[hsl(var(--st-ready))] border-[hsl(var(--st-ready)/0.6)]',
+  'Out for Delivery':       'bg-[hsl(var(--st-delivering)/0.4)] text-[hsl(140_70%_22%)] border-[hsl(var(--st-delivering))]',
+  'Delivered':              'bg-[hsl(var(--st-delivered)/0.18)] text-[hsl(var(--st-delivered))] border-[hsl(var(--st-delivered)/0.6)]',
+  'Estorno':                'bg-red-50 text-red-700 border-red-300',
 };
 
 export interface RmaItem {
@@ -68,6 +72,8 @@ export interface RmaItem {
   quantity: number;
   /** Free-text — who is fixing the item */
   repairedBy?: string;
+  /** Supplier migrated from the originating product */
+  supplier?: string;
   status: RmaItemStatus;
 }
 
@@ -77,12 +83,13 @@ export interface FreightCard {
   deliveryPerson: string;
   value: number;
   deliveryDate?: string;
+  pago?: boolean;
 }
 export type PaymentMethod = 'Credit Card' | 'Debit Card' | 'Boleto' | 'Pix' | 'TED' | 'Cash';
 export type Company = '' | 'Lucky Store' | 'BTech' | 'AJJ';
-export type Seller = '' | 'Alcides' | 'Lucas' | 'Pedro';
+export type Seller = string;
 
-export const SELLERS: Exclude<Seller, ''>[] = ['Alcides', 'Lucas', 'Pedro'];
+export const SELLERS: string[] = ['Alcides', 'Lucas', 'Pedro'];
 export const PAYMENT_METHODS: PaymentMethod[] = ['Credit Card', 'Debit Card', 'Boleto', 'Pix', 'TED', 'Cash'];
 export const PAYMENT_METHOD_LABELS: Record<PaymentMethod, string> = {
   'Credit Card': 'Cartão de Crédito',
@@ -103,8 +110,8 @@ export interface SubPurchase {
   receiptDate?: string;
   purchaseValue: number;
   paymentMethod: PaymentMethod | '';
-  /** Number of installments — only meaningful when paymentMethod === 'Credit Card' */
   installments?: number;
+  card?: string;
   status: ItemStatus;
 }
 
@@ -120,6 +127,22 @@ export interface OrderItem {
   productDeliveryDate?: string;
   /** Sub-purchasing breakdown: multiple supplier purchases fulfilling the total quantity. */
   subPurchases?: SubPurchase[];
+}
+
+export interface DirectSupplyOrderItem {
+  id: string;
+  name: string;
+  quantity: number;
+  /** Unit quote value (stored as valor_projetado in DB) */
+  projectedValue: number;
+  /** Unit purchase/cost value paid to supplier */
+  purchaseValue: number;
+  /** Unit sale value charged to customer (stored as valor_compra in DB for direct supply items) */
+  closingValue: number;
+  supplier: string;
+  supplierPct: number;
+  supplierFreight: number;
+  supplierInvoice: string;
 }
 
 /** Sum of all purchase values from sub-purchases (falls back to item.purchaseValue if none). */
@@ -151,6 +174,8 @@ export interface Order {
   createdAt: number;
   orderDate: string;
   customer: string;
+  /** Client's company/enterprise name (b2b). When set, this is the primary identifier shown. */
+  customerCompany?: string;
   cnpj: string;
   company: Company;
   seller: Seller;
@@ -159,6 +184,7 @@ export interface Order {
   directBilling: boolean;
   supplier: string;
   invoice: string;
+  invoiceSupplier: string;
   paymentMethods: PaymentMethod[];
   installments: number;
   deliveryDate: string;
@@ -170,7 +196,10 @@ export interface Order {
   interestValue?: number;
   paymentMethod?: PaymentMethod | '';
   paymentInstallments?: number;
+  /** Multa/juros installment plan (Financeiro / Pagamento section). */
   paymentInstallmentPlan?: PaymentInstallment[];
+  /** Order-value installment plan (Informações Gerais — cartão de crédito). */
+  orderInstallmentPlan?: PaymentInstallment[];
   /** RMA-specific fields. Only present when isRMA = true. */
   rmaNumber?: string;
   rmaParentOrderId?: string;
@@ -198,7 +227,9 @@ export interface Order {
   salesTaxValue: number;
   /** Final sales value entered by user */
   salesValue: number;
+  refundTotal?: number;
   items: OrderItem[];
+  directSupplyItems: DirectSupplyOrderItem[];
   /** Freight cards for non-RMA orders */
   freight: FreightCard[];
 }
@@ -272,6 +303,28 @@ export function isOpenOrder(status: OrderStatus) {
   return OPEN_STATUSES.includes(status);
 }
 
+/** Direct supply cost = Σ custo do fornecedor per item (purchase cost is tracked in finalProductCost) */
+export function calcDirectSupplyCost(items?: DirectSupplyOrderItem[]): number {
+  return (items || []).reduce((s, i) => {
+    const custoFornecedor = ((i.closingValue - (i.purchaseValue || 0)) * i.quantity) * (i.supplierPct || 0) / 100 + (i.supplierFreight || 0);
+    return s + custoFornecedor;
+  }, 0);
+}
+
+/**
+ * Receita da empresa (base para percentuais que incidem sobre "o que fica com a empresa").
+ *
+ * No faturamento direto a venda é dividida entre a parte do fornecedor (Custo Fornecedor
+ * = margem × % fornecedor + frete do fornecedor) e a parte que fica com a empresa.
+ * Impostos e taxas percentuais devem incidir SOMENTE sobre a parte da empresa —
+ * nunca sobre empresa + fornecedor somados.
+ *
+ * Em pedidos sem fornecimento direto o resultado é igual ao próprio valor de venda.
+ */
+export function calcCompanyRevenue(salesValue: number, directSupplyItems?: DirectSupplyOrderItem[]): number {
+  return (salesValue || 0) - calcDirectSupplyCost(directSupplyItems);
+}
+
 /** Final cost = sum of all monetary R$ values from the Financial Section */
 export function calcFinalCost(o: Partial<Order>): number {
   return (o.finalProductCost || 0)
@@ -281,7 +334,22 @@ export function calcFinalCost(o: Partial<Order>): number {
     + (o.creditCostValue || 0)
     + (o.debitCostValue || 0)
     + (o.purchaseTaxValue || 0)
-    + (o.salesTaxValue || 0);
+    + (o.salesTaxValue || 0)
+    + calcDirectSupplyCost(o.directSupplyItems);
+}
+
+/** Partial cost = same as Final but uses initialProductCost with purchase tax applied to it */
+export function calcPartialCost(o: Partial<Order> & { initialProductCost: number; purchaseTaxPercent: number }): number {
+  const purchaseTaxOnInitial = (o.purchaseTaxPercent || 0) * (o.initialProductCost || 0) / 100;
+  return (o.initialProductCost || 0)
+    + (o.boletoCost || 0)
+    + calcFreightTotal(o.freight)
+    + (o.giftCost || 0)
+    + (o.creditCostValue || 0)
+    + (o.debitCostValue || 0)
+    + purchaseTaxOnInitial
+    + (o.salesTaxValue || 0)
+    + calcDirectSupplyCost(o.directSupplyItems);
 }
 
 export function calcProfit(o: Partial<Order>): number {
@@ -293,15 +361,31 @@ export function calcTotal(o: Partial<Order>): number {
   return o.salesValue || 0;
 }
 
+/**
+ * Valor de Venda do pedido = soma do valor projetado de cada produto × quantidade
+ * (itens normais + fornecimento direto).
+ *
+ * Fonte ÚNICA usada tanto pelos modais (OrderModal/ProductModal) quanto pela lista
+ * de pedidos, para que os valores correspondentes fiquem sempre consistentes.
+ * Aceita qualquer objeto com { projectedValue, quantity } — inclusive itens vindos
+ * da API mapeados a partir de valor_projetado / quantidade.
+ */
+type ValuedItem = { projectedValue?: number; quantity?: number };
+export function calcOrderSalesValue(items?: ValuedItem[], directSupplyItems?: ValuedItem[]): number {
+  const sum = (arr?: ValuedItem[]) =>
+    (arr || []).reduce((s, i) => s + (i.projectedValue || 0) * (i.quantity || 0), 0);
+  return sum(items) + sum(directSupplyItems);
+}
+
 const baseOrder = (over: Partial<Order>): Order => ({
   id: '', os: '', createdAt: Date.now(), orderDate: '', customer: '', cnpj: '', company: '', seller: '',
-  ocAfPed: '', directBilling: false, supplier: '', invoice: '',
+  ocAfPed: '', directBilling: false, supplier: '', invoice: '', invoiceSupplier: '',
   paymentMethods: [], installments: 1, deliveryDate: '', status: 'To Buy',
   isRMA: false, cancelled: false, observations: '',
   initialProductCost: 0, finalProductCost: 0, boletoCost: 0, giftCost: 0,
   creditCostPercent: 0, creditCostValue: 0, debitCostPercent: 0, debitCostValue: 0,
   purchaseTaxPercent: 0, purchaseTaxValue: 0, salesTaxPercent: 0, salesTaxValue: 0,
-  salesValue: 0, items: [], freight: [],
+  salesValue: 0, items: [], directSupplyItems: [], freight: [],
   ...over,
 });
 
@@ -391,13 +475,14 @@ export function OrderProvider({ children }: { children: React.ReactNode }) {
   }, [orders]);
 
   const nextRmaNumber = useCallback((parentOs: string) => {
-    const prefix = `${parentOs}-`;
+    const osNum = parentOs.replace(/^OS[-\s]?/i, '').replace(/^-+/, '');
+    const prefix = `RMA-${osNum}-`;
     const max = orders.reduce((m, o) => {
       if (!o.isRMA || !o.rmaNumber || !o.rmaNumber.startsWith(prefix)) return m;
       const n = parseInt(o.rmaNumber.slice(prefix.length), 10);
       return Number.isFinite(n) && n > m ? n : m;
     }, 0);
-    return `${parentOs}-${max + 1}`;
+    return `RMA-${osNum}-${max + 1}`;
   }, [orders]);
 
   const addOrder = useCallback((order: Order) => {

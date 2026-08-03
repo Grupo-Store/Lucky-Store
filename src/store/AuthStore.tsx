@@ -1,16 +1,23 @@
-import React, { createContext, useContext, useState } from 'react';
+import React, { createContext, useContext, useState, useEffect } from 'react';
+import axios from 'axios';
+import { authApi } from '@/api/auth';
+
+const BASE_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:8000/api';
 
 type AuthStage = 'login' | 'verify' | 'authed';
 
 interface AuthContextType {
   stage: AuthStage;
   isLoggedIn: boolean;
-  username: string;
-  /** Step 1: validate credentials, returns true if accepted (advances to verify). */
-  login: (user: string, pass: string) => boolean;
-  /** Step 2: verify the 6-digit code (mock — any 6 digits accepted). */
-  verifyCode: (code: string) => boolean;
-  /** Reset back to login stage (used by "Recuperar Senha" flow & cancel). */
+  email: string;
+  isPending: boolean;
+  isResending: boolean;
+  /** Step 1: call POST /auth/login. Returns error message or null on success. */
+  login: (email: string, pass: string) => Promise<string | null>;
+  /** Step 2: call POST /auth/verify-2fa. Returns error message or null on success. */
+  verifyCode: (code: string) => Promise<string | null>;
+  /** Resend 2FA code: call POST /auth/resend-2fa. Returns error message or null on success. */
+  resendCode: () => Promise<string | null>;
   resetToLogin: () => void;
   logout: () => void;
 }
@@ -18,34 +25,108 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | null>(null);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [stage, setStage] = useState<AuthStage>('login');
-  const [username, setUsername] = useState('');
+  const [stage, setStage] = useState<AuthStage>(() =>
+    localStorage.getItem('access_token') ? 'authed' : 'login'
+  );
+  const [email, setEmail] = useState(() => localStorage.getItem('user_email') ?? '');
+  const [isPending, setIsPending] = useState(false);
+  const [isResending, setIsResending] = useState(false);
 
-  const login = (user: string, pass: string) => {
-    if (user && pass) {
-      setUsername(user);
-      setStage('verify');
-      return true;
+  // On mount: validate the stored token and rehydrate the user's email from the server.
+  // If the access token is expired, client.ts interceptor automatically refreshes it.
+  // If both tokens are expired, client.ts clears localStorage and reloads the page.
+  useEffect(() => {
+    if (stage !== 'authed') return;
+    authApi.me()
+      .then((user) => {
+        setEmail(user.email);
+        localStorage.setItem('user_email', user.email);
+      })
+      .catch(() => {
+        localStorage.removeItem('access_token');
+        localStorage.removeItem('refresh_token');
+        localStorage.removeItem('user_email');
+        setStage('login');
+        setEmail('');
+      });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const login = async (emailInput: string, pass: string): Promise<string | null> => {
+    setIsPending(true);
+    try {
+      const response = await axios.post(`${BASE_URL}/auth/login`, { email: emailInput, password: pass });
+      if (response.status === 202 && response.data?.detail?.requires_2fa) {
+        setEmail(emailInput);
+        setStage('verify');
+        return null;
+      }
+      return 'Resposta inesperada do servidor.';
+    } catch (err: any) {
+      const status = err?.response?.status;
+      if (status === 401) return 'Email ou senha incorretos.';
+      if (status === 422) return 'Formato de email inválido.';
+      return 'Erro ao conectar ao servidor. Tente novamente.';
+    } finally {
+      setIsPending(false);
     }
-    return false;
   };
 
-  const verifyCode = (code: string) => {
-    // UI-only mock: accept any 6-digit numeric code
-    if (/^\d{6}$/.test(code)) {
+  const verifyCode = async (code: string): Promise<string | null> => {
+    setIsPending(true);
+    try {
+      const { data } = await axios.post(`${BASE_URL}/auth/verify-2fa`, { email, code });
+      localStorage.setItem('access_token', data.access_token);
+      localStorage.setItem('refresh_token', data.refresh_token);
+      localStorage.setItem('user_email', email);
+      window.history.replaceState({}, '', '/');
       setStage('authed');
-      return true;
+      return null;
+    } catch (err: any) {
+      const status = err?.response?.status;
+      if (status === 401) return 'Código inválido ou expirado.';
+      return 'Erro ao verificar código. Tente novamente.';
+    } finally {
+      setIsPending(false);
     }
-    return false;
   };
 
-  const resetToLogin = () => { setStage('login'); };
-  const logout = () => { setStage('login'); setUsername(''); };
+  const resendCode = async (): Promise<string | null> => {
+    if (!email) return 'Nenhum e-mail para reenviar.';
+    setIsResending(true);
+    try {
+      await axios.post(`${BASE_URL}/auth/resend-2fa`, { email });
+      return null;
+    } catch {
+      return 'Erro ao reenviar código. Tente novamente.';
+    } finally {
+      setIsResending(false);
+    }
+  };
+
+  const resetToLogin = () => {
+    setStage('login');
+    setEmail('');
+  };
+
+  const logout = () => {
+    const token = localStorage.getItem('access_token');
+    if (token) {
+      axios.post(`${BASE_URL}/auth/logout`, null, {
+        headers: { Authorization: `Bearer ${token}` },
+      }).catch(() => {});
+    }
+    localStorage.removeItem('access_token');
+    localStorage.removeItem('refresh_token');
+    localStorage.removeItem('user_email');
+    setStage('login');
+    setEmail('');
+  };
 
   return (
     <AuthContext.Provider value={{
-      stage, isLoggedIn: stage === 'authed', username,
-      login, verifyCode, resetToLogin, logout,
+      stage, isLoggedIn: stage === 'authed', email, isPending, isResending,
+      login, verifyCode, resendCode, resetToLogin, logout,
     }}>
       {children}
     </AuthContext.Provider>

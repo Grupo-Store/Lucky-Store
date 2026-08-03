@@ -1,0 +1,90 @@
+import { useQuery } from '@tanstack/react-query'
+import { apiFetch } from '@/lib/api'
+import type { ProdutoApiItem, CustoPedido } from '@/types/api'
+
+export interface OrderFilters {
+  page: number
+  limit: number
+  status?: string
+  id_loja?: string
+  id_vendedor?: string
+  data_inicio?: string
+  data_fim?: string
+  sort_by: string
+  sort_dir: 'asc' | 'desc'
+}
+
+export interface FreteApiItem {
+  id: string
+  entregador: string | null
+  valor: string | number
+  data_frete: string
+  pago?: boolean
+}
+
+export interface PedidoListItem {
+  id: string
+  id_cotacao: string | null
+  numero_os: string
+  data_pedido: string
+  data_entrega: string
+  status: string
+  is_rma: boolean | null
+  is_cancelled: boolean | null
+  is_direct_billing: boolean | null
+  valor_venda: string | null
+  parcelas: number | null
+  nome_cliente: string | null
+  cnpj_cliente: string | null
+  nome_loja: string | null
+  nome_vendedor: string | null
+  numero_oc: string | null
+  numero_nf: string | null
+  nota_fiscal_fornecedor: string | null
+  observacao: string | null
+  fornecedor_principal: string | null
+  formas_pagamento: { id: string; forma: string }[]
+  fretes: FreteApiItem[]
+  produtos: ProdutoApiItem[]
+  custo: CustoPedido | null
+  data_pagamento: string | null
+  multa: string | null
+  juros: string | null
+  forma_pagamento_efetiva: string | null
+  num_parcelas_efetivas: number | null
+  plano_parcelas: { date: string; value: number }[] | null
+  plano_parcelas_pedido: { date: string; value: number }[] | null
+  valor_total_estornado: string | null
+}
+
+export interface PedidoListResponse {
+  items: PedidoListItem[]
+  total: number
+  page: number
+  limit: number
+  pages: number
+}
+
+export function useOrdersQuery(filters: OrderFilters, options?: { enabled?: boolean }) {
+  const { data, isLoading, isError, refetch } = useQuery<PedidoListResponse>({
+    queryKey: ['orders', 'list', filters],
+    queryFn: () =>
+      apiFetch<PedidoListResponse>('/pedidos', {
+        params: {
+          page: filters.page,
+          limit: filters.limit,
+          status: filters.status || undefined,
+          id_loja: filters.id_loja || undefined,
+          id_vendedor: filters.id_vendedor || undefined,
+          data_inicio: filters.data_inicio || undefined,
+          data_fim: filters.data_fim || undefined,
+          sort_by: filters.sort_by,
+          sort_dir: filters.sort_dir,
+        },
+      }),
+    staleTime: 30_000,
+    enabled: options?.enabled ?? true,
+  })
+
+  return { data, isLoading, isError, refetch }
+}
