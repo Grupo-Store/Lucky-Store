@@ -1,4 +1,5 @@
-from datetime import date
+from datetime import date, timedelta
+from typing import Optional
 from uuid import UUID
 from sqlalchemy.orm import Session
 
@@ -11,6 +12,21 @@ from app.models.status_history import StatusHistory, EntityType
 from app.models.audit_log import AuditLog, AuditAction
 from app.services.pedido import _generate_numero_os
 from app.utils.errors import NotFoundException, BusinessLogicException
+
+
+_PRAZO_ENTREGA_PADRAO_DIAS = 30
+
+
+def _default_data_entrega(data_prevista: Optional[date]) -> date:
+    """Data de entrega do pedido convertido a partir de uma cotação.
+
+    Só aproveita a data prevista de fechamento se ela ainda estiver no futuro —
+    caso contrário o pedido nasceria já com status Delayed.
+    """
+    hoje = date.today()
+    if data_prevista and data_prevista >= hoje:
+        return data_prevista
+    return hoje + timedelta(days=_PRAZO_ENTREGA_PADRAO_DIAS)
 
 
 class ConversaoCotacaoService:
@@ -64,7 +80,10 @@ class ConversaoCotacaoService:
             numero_os=numero_os,
             numero_nf=None,
             data_pedido=date.today(),
-            data_entrega=cotacao.data_prevista_fechamento or date.today(),
+            # A data prevista de FECHAMENTO da cotação não é a data de ENTREGA do pedido —
+            # em cotações antigas ela já passou e o pedido nascia com status Delayed.
+            # Só é aproveitada se ainda for futura; caso contrário, prazo padrão de 30 dias.
+            data_entrega=_default_data_entrega(cotacao.data_prevista_fechamento),
             status="To Buy",
             is_direct_billing=cotacao.is_direct_billing,
             fornecedor_principal=cotacao.fornecedor,

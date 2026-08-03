@@ -78,6 +78,11 @@ def _derive_rma_status_from_items(items: list) -> RmaStatus | None:
     min_level = min(levels)
     max_level = max(levels)
 
+    # ESTORNO é o nível mais alto de item (10) e não é "entregue" — é devolução de dinheiro.
+    # Precisa ser testado ANTES de DELIVERED, senão min_level >= 9 captura o caso e o RMA
+    # inteiro vira DELIVERED mesmo com todos os itens estornados.
+    if min_level >= _ITEM_STATUS_LEVEL[ItemRmaStatus.ESTORNO]:
+        return RmaStatus.REEMBOLSO
     if min_level >= _ITEM_STATUS_LEVEL[ItemRmaStatus.DELIVERED]:
         return RmaStatus.DELIVERED
     if min_level >= _ITEM_STATUS_LEVEL[ItemRmaStatus.OUT_FOR_DELIVERY]:
@@ -256,6 +261,13 @@ class RmaService:
         if rma.status == RmaStatus.CANCELLED:
             raise BusinessLogicException("RMA cancelado não pode ser concluído")
 
+        # close() precisa respeitar a mesma máquina de estados de update() — antes ela
+        # gravava COMPLETED a partir de qualquer status, furando _VALID_TRANSITIONS.
+        if RmaStatus.COMPLETED not in _VALID_TRANSITIONS.get(rma.status, set()):
+            raise BusinessLogicException(
+                f"Transição inválida: {rma.status} → {RmaStatus.COMPLETED}"
+            )
+
         old_status = rma.status
         rma.status = RmaStatus.COMPLETED
 
@@ -321,7 +333,12 @@ class RmaService:
         rma = db.query(Rma).filter(Rma.id == rma_id).first()
         all_items = db.query(ItemRma).filter(ItemRma.id_rma == rma_id).all()
         derived = _derive_rma_status_from_items(all_items)
-        non_terminal = rma.status not in (RmaStatus.COMPLETED, RmaStatus.CANCELLED)
+        # REEMBOLSO é terminal tanto quanto COMPLETED/CANCELLED. Antes ficava de fora da
+        # lista e só não quebrava porque o nível de REEMBOLSO (10) é maior que o de
+        # qualquer status derivável — proteção acidental. Agora é explícita.
+        non_terminal = rma.status not in (
+            RmaStatus.COMPLETED, RmaStatus.CANCELLED, RmaStatus.REEMBOLSO,
+        )
         if derived and non_terminal:
             derived_level = _RMA_STATUS_LEVEL.get(derived, 0)
             current_level = _RMA_STATUS_LEVEL.get(rma.status, 0)

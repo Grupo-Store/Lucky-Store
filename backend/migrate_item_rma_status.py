@@ -1,5 +1,5 @@
 """
-One-time migration: update item_rma.status from old 8-value enum to new 10-value enum.
+One-time migration: update item_rma.status from the old 8-value enum to the current one.
 
 Old -> New mapping:
   Repaired   -> Repaired Received
@@ -14,6 +14,7 @@ sys.path.insert(0, os.path.dirname(__file__))
 
 from sqlalchemy import text
 from app.database import engine
+from app.models.item_rma import ItemRmaStatus
 
 MIGRATIONS = [
     ("Repaired",  "Repaired Received"),
@@ -22,11 +23,10 @@ MIGRATIONS = [
     ("Cancelled", "Not Received"),
 ]
 
-NEW_VALUES = [
-    "Not Received", "Received", "Sent for Repair", "In Repair",
-    "Repaired Not Received", "Repaired Received", "To Pack",
-    "Ready for Delivery", "Out for Delivery", "Delivered",
-]
+# Derivado do enum, NUNCA escrito à mão. A lista era fixa e ficou parada nos 10 valores
+# antigos: quando 'Estorno' entrou no ItemRmaStatus, rodar este script recriava a check
+# constraint SEM ele e passava a rejeitar estornos no banco.
+NEW_VALUES = [s.value for s in ItemRmaStatus]
 
 def run():
     with engine.connect() as conn:

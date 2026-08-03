@@ -32,6 +32,9 @@ def _fake_item(status: ItemRmaStatus):
     item.quantidade = 1
     item.status = status
     item.consertado_por = None
+    # Campo obrigatório na serialização do ItemRmaResponse — sem isto o MagicMock
+    # devolve outro MagicMock e o Pydantic recusa a resposta.
+    item.fornecedor = None
     item.valor_estornado = None
     item.data_estorno = None
     item.motivo_estorno = None
@@ -44,8 +47,13 @@ def _fake_item(status: ItemRmaStatus):
 
 class TestItemRmaStatusEnum:
 
-    def test_has_exactly_10_members(self):
-        assert len(ItemRmaStatus) == 10
+    def test_contem_exatamente_os_status_esperados(self):
+        """Conjunto e não contagem — 'Estorno' entrou depois e a contagem fixa quebrou."""
+        assert {s.value for s in ItemRmaStatus} == {
+            "Not Received", "Received", "Sent for Repair", "In Repair",
+            "Repaired Not Received", "Repaired Received", "To Pack",
+            "Ready for Delivery", "Out for Delivery", "Delivered", "Estorno",
+        }
 
     def test_not_received_value(self):
         assert ItemRmaStatus.NOT_RECEIVED.value == "Not Received"

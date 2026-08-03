@@ -130,7 +130,10 @@ export function AddOrderChooser({ open, onClose, onChooseNew, onChooseFromQuote 
     const hasDirect = picked.itens?.some(i => i.is_direct_supply) ?? false;
     const prefill: OrderPrefill = {
       sourceQuoteId: picked.id,
-      customer: (picked.b2b_company?.trim()) ? picked.b2b_company : picked.cliente,
+      // customer = pessoa de contato, customerCompany = empresa (b2b). Antes o nome do
+      // contato era descartado sempre que a cotação tinha b2b_company preenchido.
+      customer: picked.cliente,
+      customerCompany: picked.b2b_company?.trim() || undefined,
       cnpj: picked.cnpj_cliente ?? '',
       company: (LOJA_BY_ID[picked.id_loja] ?? '') as Quote['company'],
       seller: (VENDEDOR_BY_ID[picked.id_vendedor] ?? '') as Quote['seller'],

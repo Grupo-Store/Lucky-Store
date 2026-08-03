@@ -453,28 +453,47 @@ export function QuoteModal({ open, onClose, quote, onSave, onDelete, nextIndex }
   const allRevenue = totalRevenue + dsTotalRevenue;
   // Custo Parcial = somatório do custo de cada produto × quantidade (itens normais + fornecimento direto)
   const custoParcial = allCost;
-  const margin = allCost > 0 ? ((allRevenue / allCost) - 1) * 100 : 0;
+  // Margem bruta = quanto do que entrou virou lucro. Antes calculava markup
+  // ((receita / custo) − 1), que com R$1.000 de receita e R$800 de custo dava 25%
+  // em vez dos 20% de margem.
+  const margin = allRevenue > 0 ? ((allRevenue - allCost) / allRevenue) * 100 : 0;
   // grossProfit = lucro interno de itens diretos + margem bruta de itens normais
   const regularGrossProfit = totalRevenue - totalCost;
+  const dsSupplierCost = dsItems.reduce((s, i) => {
+    const lineDiff = ((i.closingValue || 0) - (i.quoteValue || 0)) * (i.quantity || 0);
+    return s + (lineDiff * (i.supplierPct || 0) / 100 + (i.supplierFreight || 0));
+  }, 0);
   const dsInternalProfit = dsItems.reduce((s, i) => {
     const lineDiff = ((i.closingValue || 0) - (i.quoteValue || 0)) * (i.quantity || 0);
     const custoFornecedor = lineDiff * (i.supplierPct || 0) / 100 + (i.supplierFreight || 0);
     return s + (lineDiff - custoFornecedor);
   }, 0);
   const grossProfit = regularGrossProfit + dsInternalProfit;
-  const profitBTech = grossProfit * (1 - taxBTech / 100);
-  const profitLucky = grossProfit * (1 - taxLucky / 100);
+  /**
+   * Base do imposto: receita que fica com a empresa (faturamento − parte do fornecedor
+   * direto). É a MESMA base usada no OrderModal, para que a cotação e o pedido gerado
+   * a partir dela cheguem no mesmo número.
+   */
+  const companyRevenue = allRevenue - dsSupplierCost;
+  // Imposto incide sobre a RECEITA, não sobre o lucro. Antes fazia
+  // `grossProfit × (1 − tax%)`, o que subestimava o imposto e inflava o lucro líquido.
+  const taxValueBTech = companyRevenue * (taxBTech / 100);
+  const taxValueLucky = companyRevenue * (taxLucky / 100);
+  const profitBTech = grossProfit - taxValueBTech;
+  const profitLucky = grossProfit - taxValueLucky;
 
-  // Auto-sync closed phase value to sum of all Valor Final
+  // Auto-sync closed phase value to sum of all Valor Final.
+  // Usa allRevenue (itens normais + fornecimento direto). Com totalRevenue, o
+  // valor_fechamento salvo no banco ficava menor, faltando a parte dos itens DS.
   useEffect(() => {
-    if ((form.phases.closed.value || 0) !== totalRevenue) {
+    if ((form.phases.closed.value || 0) !== allRevenue) {
       setForm(prev => ({
         ...prev,
-        phases: { ...prev.phases, closed: { ...prev.phases.closed, value: totalRevenue } },
+        phases: { ...prev.phases, closed: { ...prev.phases.closed, value: allRevenue } },
       }));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [totalRevenue]);
+  }, [allRevenue]);
 
   // Valor (Informações Gerais) = somatório dos valores finais dos itens (closingValue × qtd),
   // itens normais + fornecimento direto. Persistido como valor_total.
@@ -1057,11 +1076,13 @@ export function QuoteModal({ open, onClose, quote, onSave, onDelete, nextIndex }
                 </div>
                 <div className="qm-stores">
                   <div className="qm-store">
-                    <span className="k"><span className="sdot" style={{ background: '#3f5bd9' }} />Lucro BTech<span className="tax">(−{taxBTech}%)</span></span>
+                    {/* O imposto agora incide sobre a receita, então o rótulo mostra o
+                        valor em R$ efetivamente descontado, não a alíquota solta. */}
+                    <span className="k"><span className="sdot" style={{ background: '#3f5bd9' }} />Lucro BTech<span className="tax" title={`${taxBTech}% sobre a receita da empresa`}>(−{toBRL(taxValueBTech)})</span></span>
                     <span className="v">{toBRL(profitBTech)}</span>
                   </div>
                   <div className="qm-store">
-                    <span className="k"><span className="sdot" style={{ background: '#1f9d57' }} />Lucro Lucky<span className="tax">(−{taxLucky}%)</span></span>
+                    <span className="k"><span className="sdot" style={{ background: '#1f9d57' }} />Lucro Lucky<span className="tax" title={`${taxLucky}% sobre a receita da empresa`}>(−{toBRL(taxValueLucky)})</span></span>
                     <span className="v">{toBRL(profitLucky)}</span>
                   </div>
                 </div>

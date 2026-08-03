@@ -382,6 +382,8 @@ export function RmaModal({ open, onClose, orders, rma, onSave, nextRmaNumber }: 
       salesTaxPercent: 0, salesTaxValue: 0,
       salesValue: 0,
       items: [],
+      // Obrigatório em Order. RMA não tem fornecimento direto, mas o campo precisa existir.
+      directSupplyItems: [],
       freight: [],
       rmaItems,
       rmaFreight: freight,

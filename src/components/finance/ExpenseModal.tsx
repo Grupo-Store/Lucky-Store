@@ -61,9 +61,11 @@ export function ExpenseModal({ open, onClose, expense, onSave, onDelete }: Props
     const n = e.installments || 0;
     const cur = e.installmentPlan || [];
     if (cur.length === n) return;
+    // A sobra de arredondamento vai na ÚLTIMA parcela, senão R$100 ÷ 3 soma R$99,99.
     const valuePer = n > 0 ? +(baseValue / n).toFixed(2) : 0;
+    const lastValue = n > 0 ? +(baseValue - valuePer * (n - 1)).toFixed(2) : 0;
     const next: InstallmentPlan[] = Array.from({ length: n }, (_, i) =>
-      cur[i] || { date: '', value: valuePer }
+      cur[i] || { date: '', value: i === n - 1 ? lastValue : valuePer }
     );
     upd('installmentPlan', next);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -197,7 +199,9 @@ export function ExpenseModal({ open, onClose, expense, onSave, onDelete }: Props
             <h3 className="font-semibold text-secondary mb-2">2. Resumo</h3>
             <div className="grid grid-cols-3 gap-3 text-center">
               <div><div className="text-xs text-muted-foreground">Valor Previsto</div><div className="text-lg font-bold">{BRL(e.predictedValue || 0)}</div></div>
-              <div><div className="text-xs text-muted-foreground">Valor Pago</div><div className="text-lg font-bold">{BRL(e.paidValue ?? e.predictedValue ?? 0)}</div></div>
+              {/* Só mostra "pago" quando de fato foi pago — o fallback para o previsto
+                  fazia uma despesa em aberto aparecer como quitada. */}
+              <div><div className="text-xs text-muted-foreground">Valor Pago</div><div className="text-lg font-bold">{e.status === 'Pago' ? BRL(e.paidValue ?? 0) : '—'}</div></div>
               <div><div className="text-xs text-muted-foreground">Economia</div><div className="text-lg font-bold text-green-700">{BRL(expenseSavings(e))}</div></div>
             </div>
           </CardContent></Card>

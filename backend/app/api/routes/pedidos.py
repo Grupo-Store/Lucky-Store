@@ -9,7 +9,7 @@ from app.models.user import User
 from app.models.audit_log import AuditLog
 from app.models.status_history import StatusHistory, EntityType
 from app.models.rma import Rma
-from app.models.item_rma import ItemRma
+from app.models.item_rma import ItemRma, ItemRmaStatus
 from app.schemas.pedido import (
     FretePagoUpdate,
     PedidoCreate, PedidoUpdate, PedidoResponse,
@@ -33,11 +33,21 @@ class OrderHistoryResponse(BaseModel):
     audit_logs: List[AuditLogResponse]
 
 
+# Só entram no total de estornos os itens efetivamente estornados, de RMAs não deletados.
+# Antes somava qualquer item_rma com valor preenchido (inclusive "Not Received") e
+# incluía RMAs soft-deletados, inflando o valor estornado do pedido.
+def _estorno_filters():
+    return (
+        Rma.deleted_at.is_(None),
+        ItemRma.status == ItemRmaStatus.ESTORNO,
+    )
+
+
 def _total_estornado(db: Session, pedido_id: UUID) -> Decimal:
     total = (
         db.query(func.coalesce(func.sum(ItemRma.valor_estornado), 0))
         .join(Rma, ItemRma.id_rma == Rma.id)
-        .filter(Rma.id_pedido_origem == pedido_id)
+        .filter(Rma.id_pedido_origem == pedido_id, *_estorno_filters())
         .scalar()
     )
     return Decimal(str(total))
@@ -46,11 +56,10 @@ def _total_estornado(db: Session, pedido_id: UUID) -> Decimal:
 def _batch_total_estornado(db: Session, pedido_ids: list) -> dict:
     if not pedido_ids:
         return {}
-    from sqlalchemy import text as _text
     rows = (
         db.query(Rma.id_pedido_origem, func.coalesce(func.sum(ItemRma.valor_estornado), 0))
         .join(ItemRma, ItemRma.id_rma == Rma.id)
-        .filter(Rma.id_pedido_origem.in_(pedido_ids))
+        .filter(Rma.id_pedido_origem.in_(pedido_ids), *_estorno_filters())
         .group_by(Rma.id_pedido_origem)
         .all()
     )

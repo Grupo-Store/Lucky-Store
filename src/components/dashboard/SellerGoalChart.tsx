@@ -26,8 +26,9 @@ export function SellerGoalChart({ items, goals = {}, metaTipo = 'faturamento' }:
     name: item.nome,
     alvo: goals[item.id_vendedor]?.alvo ?? 0,
     piso: goals[item.id_vendedor]?.piso ?? 0,
-    // Realizado acompanha o tipo de meta: lucro (só positivo) ou faturamento
-    realizado: isLucro ? Math.max(item.lucro, 0) : item.receita,
+    // Realizado acompanha o tipo de meta. Prejuízo NÃO é cortado em zero — antes um
+    // vendedor com -R$500 aparecia igual a um com R$0, escondendo a perda.
+    realizado: isLucro ? item.lucro : item.receita,
   }));
   const realizadoLabel = isLucro ? 'Lucro' : 'Vendas';
   const realizadoColor = isLucro ? '#16a34a' : '#0f4c5c';

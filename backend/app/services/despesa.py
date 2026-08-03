@@ -42,7 +42,9 @@ class DespesaService:
     @staticmethod
     def update(db: Session, despesa_id: UUID, data: DespesaUpdate, current_user_id: UUID) -> Despesa:
         despesa = DespesaService.get_by_id(db, despesa_id)
-        payload = data.model_dump(exclude_none=True)
+        # exclude_unset e não exclude_none: com exclude_none, enviar {"data_pagamento": null}
+        # era silenciosamente ignorado e o valor antigo persistia — não dava para limpar campo.
+        payload = data.model_dump(exclude_unset=True)
         if 'plano_parcelas' in payload and payload['plano_parcelas']:
             payload['plano_parcelas'] = [p.model_dump() if hasattr(p, 'model_dump') else p
                                          for p in payload['plano_parcelas']]

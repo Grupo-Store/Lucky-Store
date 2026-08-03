@@ -13,14 +13,17 @@ import {
 import { cn } from '@/lib/utils';
 import { useDailyHistorical, type DashboardQueryParams } from '@/hooks/use-dashboard-query';
 
+// `dashed` presente em TODOS os membros: antes só a última linha tinha a propriedade,
+// e como `as const` gera uma união de literais, desestruturar `dashed` no .map()
+// quebrava a tipagem nos membros que não a declaravam.
 const LINE_CONFIG = [
-  { key: 'faturamento',         label: 'Faturamento',        color: '#0f4c5c' },
-  { key: 'custo',               label: 'Custo',              color: '#ef4444' },
-  { key: 'lucro',               label: 'Lucro',              color: '#16a34a' },
-  { key: 'gastos_fixos',        label: 'Gastos Fixos',       color: '#f59e0b' },
-  { key: 'ganhos_financeiros',  label: 'Ganhos Financeiros', color: '#2F6BFF' },
-  { key: 'fretes',              label: 'Fretes',             color: '#9b6bff' },
-  { key: 'ano_anterior',        label: 'Fat. Ano Anterior',  color: '#9ca3af', dashed: true },
+  { key: 'faturamento',         label: 'Faturamento',        color: '#0f4c5c', dashed: false },
+  { key: 'custo',               label: 'Custo',              color: '#ef4444', dashed: false },
+  { key: 'lucro',               label: 'Lucro',              color: '#16a34a', dashed: false },
+  { key: 'gastos_fixos',        label: 'Gastos Fixos',       color: '#f59e0b', dashed: false },
+  { key: 'ganhos_financeiros',  label: 'Ganhos Financeiros', color: '#2F6BFF', dashed: false },
+  { key: 'fretes',              label: 'Fretes',             color: '#9b6bff', dashed: false },
+  { key: 'ano_anterior',        label: 'Fat. Ano Anterior',  color: '#9ca3af', dashed: true  },
 ] as const;
 
 type LineKey = (typeof LINE_CONFIG)[number]['key'];

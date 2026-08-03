@@ -19,7 +19,7 @@ import {
   PaymentInstallment,
   ITEM_STATUS_COLORS, ORDER_STATUS_COLORS, ORDER_STATUS_LABELS,
   PAYMENT_METHODS, PAYMENT_METHOD_LABELS,
-  calcFinalCost, calcPartialCost, calcDirectSupplyCost, calcProfit, calcFreightTotal,
+  calcFinalCost, calcPartialCost, calcDirectSupplyCost, calcProfit, calcFreightTotal, calcItemFinalValue,
 } from '@/store/OrderStore';
 import type { OrderPrefill } from '@/components/AddOrderChooser';
 import { StatusTimeline } from '@/components/StatusTimeline';
@@ -203,7 +203,10 @@ export function OrderModal({ open, onClose, order, onSave, nextOS, prefill }: Pr
   );
   const derivedFinalProductCost = useMemo(
     () => {
-      const regular = (form.items || []).reduce((s, i) => s + (i.purchaseValue || 0) * (i.quantity || 0), 0);
+      // ATENÇÃO à assimetria: em item normal, purchaseValue é o TOTAL do lote (soma das
+      // sub-compras), então NÃO se multiplica por quantity — isso duplicava o custo.
+      // Em item de fornecimento direto, purchaseValue é unitário e é multiplicado.
+      const regular = (form.items || []).reduce((s, i) => s + calcItemFinalValue(i), 0);
       const ds = (form.directSupplyItems || []).reduce((s, i) => s + (i.purchaseValue || 0) * (i.quantity || 0), 0);
       return regular + ds;
     },
@@ -367,7 +370,9 @@ export function OrderModal({ open, onClose, order, onSave, nextOS, prefill }: Pr
       forma_pagamento_efetiva: o.paymentMethod
         ? (FORMA_PAGAMENTO_MAP[o.paymentMethod as string] ?? o.paymentMethod)
         : undefined,
-      num_parcelas_efetivas: o.paymentInstallments > 1 ? o.paymentInstallments : undefined,
+      // Sempre enviado: com `> 1 ? … : undefined`, reduzir de 3x para 1x omitia o campo
+      // do PATCH e o backend mantinha o valor antigo.
+      num_parcelas_efetivas: o.paymentInstallments ?? 1,
       plano_parcelas: o.paymentInstallmentPlan?.length ? o.paymentInstallmentPlan : undefined,
       plano_parcelas_pedido: o.orderInstallmentPlan?.length ? o.orderInstallmentPlan : undefined,
     };

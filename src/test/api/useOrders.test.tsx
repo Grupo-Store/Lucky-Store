@@ -88,18 +88,21 @@ describe('useCreateOrder', () => {
 describe('useUpdateOrder', () => {
   beforeEach(() => vi.clearAllMocks());
 
+  // `status` é omitido de propósito do UpdatePedidoPayload: troca de fase passa pelo
+  // endpoint dedicado /status (useUpdateOrderStatus). O teste usava `status` e por isso
+  // não tipava — trocado por um campo que realmente existe no payload.
   it('calls PUT /pedidos/:id with the payload', async () => {
-    const updated = { ...mockOrder, status: 'Bought' };
+    const updated = { ...mockOrder, valor_venda: '2500.00' };
     mockPut.mockResolvedValueOnce({ data: updated });
 
     const { result } = renderHook(() => useUpdateOrder('backend-uuid-abc'), { wrapper: makeWrapper() });
 
     await act(async () => {
-      result.current.mutate({ status: 'Bought' as const });
+      result.current.mutate({ valor_venda: '2500.00' });
     });
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
-    expect(mockPut).toHaveBeenCalledWith('/pedidos/backend-uuid-abc', { status: 'Bought' });
+    expect(mockPut).toHaveBeenCalledWith('/pedidos/backend-uuid-abc', { valor_venda: '2500.00' });
   });
 });
 

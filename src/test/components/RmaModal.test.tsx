@@ -68,7 +68,9 @@ const mockUseOrdersQuery = vi.fn(() => ({
 }));
 
 vi.mock('@/hooks/use-orders-query', () => ({
-  useOrdersQuery: (...args: any[]) => mockUseOrdersQuery(...args),
+  // mockUseOrdersQuery é declarado sem parâmetros, então espalhar `args` nele não
+  // tipa. O hook é chamado só pelos seus efeitos aqui, os argumentos não importam.
+  useOrdersQuery: () => mockUseOrdersQuery(),
 }));
 
 // ─── Fixtures ────────────────────────────────────────────────────────────────
@@ -118,6 +120,7 @@ const deliveredOrder: Order = {
     },
   ],
   freight: [],
+  directSupplyItems: [],
 };
 
 const nextRmaNumber = (parentOs: string) => `${parentOs}-1`;
@@ -255,7 +258,9 @@ describe('RmaModal — step 3: form + API call', () => {
 
   it('shows the RMA form in step 3', async () => {
     await renderAndAdvanceToStep3();
-    expect(screen.getByText(/Produtos do RMA/i)).toBeInTheDocument();
+    // A seção se chama "Itens do RMA" (o teste ainda procurava o nome antigo,
+    // "Produtos do RMA"). Aparece duas vezes: no título e no menu de navegação.
+    expect(screen.getAllByText(/Itens do RMA/i).length).toBeGreaterThan(0);
     // Item name is in an Input value in step 3 (not a text node)
     expect(screen.getByDisplayValue('Impressora HP LaserJet')).toBeInTheDocument();
   });

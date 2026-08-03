@@ -70,8 +70,8 @@ class TestCalculateFinancials:
         expected_custo_total = Decimal("149.50")
         assert result.custo_total == expected_custo_total
         assert result.lucro_liquido == valor_venda - expected_custo_total
-        # margem = (200 - 149.50) / 200 * 100 = 25.25
-        assert result.margem_bruta_pct == Decimal("25.25")
+        # Escala 0–1, igual à `margem` do dashboard: (200 - 149.50) / 200 = 0.2525
+        assert result.margem_bruta_pct == Decimal("0.2525")
 
     def test_valor_venda_none_returns_no_lucro_or_margem(self):
         """Sem valor de venda não é possível calcular lucro nem margem."""
@@ -97,16 +97,28 @@ class TestCalculateFinancials:
 
         assert result.custo_total == Decimal("0")
         assert result.lucro_liquido == Decimal("100.00")
-        assert result.margem_bruta_pct == Decimal("100.00")
+        # 100% de margem na escala 0–1
+        assert result.margem_bruta_pct == Decimal("1.0000")
 
-    def test_margem_rounded_to_two_decimal_places(self):
-        """Margem deve ser arredondada a 2 casas decimais."""
-        # custo_total = 1, valor_venda = 3  → margem = 66.666... → 66.67
+    def test_margem_quantized_to_four_decimal_places(self):
+        """Margem é quantizada em 4 casas na escala 0–1 (= 2 casas em pontos percentuais)."""
+        # custo_total = 1, valor_venda = 3 → (3 - 1) / 3 = 0.6666... → 0.6667
         custo = _mock_custo(custo_produto_final=Decimal("1"))
         result = _calculate_financials(custo, Decimal("3"))
 
-        # round(66.666..., 2) == 66.67
-        assert result.margem_bruta_pct == Decimal("66.67")
+        assert result.margem_bruta_pct == Decimal("0.6667")
+
+    def test_margem_usa_a_mesma_escala_do_dashboard(self):
+        """Regressão: dashboard devolve 0–1; esta função devolvia 0–100.
+
+        Misturar as duas fontes exibia "2500%" na interface.
+        """
+        custo = _mock_custo(custo_produto_final=Decimal("750"))
+        result = _calculate_financials(custo, Decimal("1000"))
+
+        # 25% de margem → 0.25 e NÃO 25
+        assert result.margem_bruta_pct == Decimal("0.2500")
+        assert result.margem_bruta_pct < Decimal("1")
 
 
 # ── CustoPedidoService.create_costs ──────────────────────────────────────────

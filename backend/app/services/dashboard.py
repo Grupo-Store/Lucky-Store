@@ -181,8 +181,30 @@ def get_kpis(
     estornos = Decimal(str(estornos_q.scalar() or 0))
 
     receita = receita_bruta - estornos
-    lucro = receita - custo
+
+    # Frete é custo real do período e precisa entrar no P&L antes de calcular lucro/margem.
+    # Só entram fretes de pedidos vivos, não-RMA e não cancelados — o join com Pedido é
+    # sempre feito (não apenas quando há filtro de loja) justamente para poder filtrar.
+    frete_q = (
+        db.query(func.coalesce(func.sum(Frete.valor), 0))
+        .join(Pedido, Pedido.id == Frete.id_pedido)
+        .filter(
+            Frete.data_frete >= inicio,
+            Frete.data_frete <= fim,
+            Pedido.deleted_at.is_(None),
+            Pedido.is_rma.isnot(True),
+            Pedido.is_cancelled.isnot(True),
+        )
+    )
+    if id_loja:
+        frete_q = frete_q.filter(Pedido.id_loja == id_loja)
+    custo_frete = Decimal(str(frete_q.scalar() or 0))
+
+    lucro = receita - custo - custo_frete
     margem = (lucro / receita).quantize(Decimal("0.0001")) if receita > 0 else Decimal("0")
+
+    # NOTA: despesas fixas (Despesa) são globais — não há atribuição por loja porque as
+    # empresas operam como uma só operação. O valor abaixo é o mesmo para qualquer id_loja.
     gastos_fixos_q = (
         db.query(func.coalesce(func.sum(
             case(
@@ -203,20 +225,6 @@ def get_kpis(
         )
     )
     outros_custos = Decimal(str(gastos_fixos_q.scalar() or 0))
-
-    frete_q = (
-        db.query(func.coalesce(func.sum(Frete.valor), 0))
-        .filter(
-            Frete.data_frete >= inicio,
-            Frete.data_frete <= fim,
-        )
-    )
-    if id_loja:
-        frete_q = (
-            frete_q.join(Pedido, Pedido.id == Frete.id_pedido)
-            .filter(Pedido.id_loja == id_loja)
-        )
-    custo_frete = Decimal(str(frete_q.scalar() or 0))
 
     num_pedidos = row.num_pedidos or 0
 
@@ -277,7 +285,7 @@ def get_breakdown_by_company(
             ), 0).label("receita"),
             func.coalesce(func.sum(
                 case((Pedido.is_cancelled.isnot(True),
-                      CustoPedido.custo_produto_final + CustoPedido.custo_servico), else_=0)
+                      func.coalesce(CustoPedido.custo_produto_final, 0) + func.coalesce(CustoPedido.custo_servico, 0)), else_=0)
             ), 0).label("custo"),
             func.count(case((Pedido.is_cancelled.isnot(True), 1))).label("num_pedidos"),
             func.count(case((Pedido.is_cancelled.is_(True), 1))).label("num_cancelamentos"),
@@ -343,7 +351,7 @@ def get_breakdown_by_seller(
             ), 0).label("receita"),
             func.coalesce(func.sum(
                 case((Pedido.is_cancelled.isnot(True),
-                      CustoPedido.custo_produto_final + CustoPedido.custo_servico), else_=0)
+                      func.coalesce(CustoPedido.custo_produto_final, 0) + func.coalesce(CustoPedido.custo_servico, 0)), else_=0)
             ), 0).label("custo"),
             func.count(case((Pedido.is_cancelled.isnot(True), 1))).label("num_pedidos"),
             func.count(case((Pedido.is_cancelled.is_(True), 1))).label("num_cancelamentos"),
@@ -556,7 +564,7 @@ def get_daily_series(
                 ), 0).label("receita"),
                 func.coalesce(func.sum(
                     case((Pedido.is_cancelled.isnot(True),
-                          CustoPedido.custo_produto_final + CustoPedido.custo_servico), else_=0)
+                          func.coalesce(CustoPedido.custo_produto_final, 0) + func.coalesce(CustoPedido.custo_servico, 0)), else_=0)
                 ), 0).label("custo"),
                 func.coalesce(func.sum(
                     case((Pedido.is_cancelled.isnot(True),
@@ -603,21 +611,27 @@ def get_daily_series(
             continue
         gastos_by_day[dia] = gastos_by_day.get(dia, Decimal(0)) + Decimal(str(val or 0))
 
-    # Fretes pelo dia em que foram cadastrados (created_at), opcionalmente restrito por loja
-    frete_dia = func.date(Frete.created_at)
+    # Fretes pela data do frete (data_frete) — MESMO campo e MESMOS filtros usados em
+    # get_kpis. Antes usava created_at, então um frete criado no dia 1 com entrega no dia 10
+    # aparecia no gráfico no dia 1 e no KPI no dia 10, e os totais nunca fechavam.
+    frete_dia = Frete.data_frete
     frete_q = (
         db.query(
             frete_dia.label("dia"),
             func.coalesce(func.sum(Frete.valor), 0).label("total"),
         )
-        .filter(frete_dia >= inicio, frete_dia <= fim)
+        .join(Pedido, Pedido.id == Frete.id_pedido)
+        .filter(
+            frete_dia >= inicio,
+            frete_dia <= fim,
+            Pedido.deleted_at.is_(None),
+            Pedido.is_rma.isnot(True),
+            Pedido.is_cancelled.isnot(True),
+        )
         .group_by(frete_dia)
     )
     if id_loja:
-        frete_q = (
-            frete_q.join(Pedido, Pedido.id == Frete.id_pedido)
-            .filter(Pedido.id_loja == id_loja)
-        )
+        frete_q = frete_q.filter(Pedido.id_loja == id_loja)
     fretes_by_day: dict[date, Decimal] = {
         row.dia: Decimal(str(row.total or 0)) for row in frete_q.all()
     }
@@ -649,7 +663,8 @@ def get_daily_series(
         items.append(DailySeriesItem(
             data=current.isoformat(),
             faturamento=receita,
-            lucro=receita - custo,
+            # Mesma definição de lucro usada em get_kpis: receita − custo − frete
+            lucro=receita - custo - fretes,
             ano_anterior=prev_by_md.get((current.month, current.day), Decimal(0)),
             custo=custo,
             gastos_fixos=gastos_fixos,
@@ -718,9 +733,12 @@ def get_projections(
     gap_floor  = max(meta_floor  - receita, 0.0) if meta_floor  is not None else None
     pct_meta   = round(receita / meta_target, 4)  if meta_target else None
 
+    # "Quanto preciso vender por dia para BATER A META" → usa gap_target (meta alvo).
+    # Antes usava gap_floor, que responde "para atingir o piso mínimo" — número menor
+    # e otimista demais.
     meta_diaria_dinamica = None
-    if gap_floor is not None and dias_restantes > 0:
-        meta_diaria_dinamica = round(gap_floor / dias_restantes, 2)
+    if gap_target is not None and dias_restantes > 0:
+        meta_diaria_dinamica = round(gap_target / dias_restantes, 2)
 
     # Projeções de lucro líquido (metas de lucro já agregadas acima)
     gap_lucro_target = max(meta_lucro_target - lucro_liquido, 0.0) if meta_lucro_target is not None else None
@@ -728,8 +746,8 @@ def get_projections(
     pct_meta_lucro   = round(lucro_liquido / meta_lucro_target, 4)  if meta_lucro_target else None
 
     meta_lucro_diaria_dinamica = None
-    if gap_lucro_floor is not None and dias_restantes > 0:
-        meta_lucro_diaria_dinamica = round(gap_lucro_floor / dias_restantes, 2)
+    if gap_lucro_target is not None and dias_restantes > 0:
+        meta_lucro_diaria_dinamica = round(gap_lucro_target / dias_restantes, 2)
 
     return ProjectionsResponse(
         periodo_inicio=inicio,

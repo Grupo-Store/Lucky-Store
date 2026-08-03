@@ -232,6 +232,9 @@ class PedidoListItemResponse(BaseModel):
     numero_os: str
     data_pedido: date
     data_entrega: date
+    # Data real de criação do registro — a lista precisa dela para ordenar por
+    # "mais recente primeiro" sem inventar Date.now() no frontend.
+    created_at: Optional[datetime] = None
     status: str
 
     @model_validator(mode='after')

@@ -1,9 +1,10 @@
 import math
+from bisect import bisect_right
 from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Optional
 from uuid import UUID
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 from sqlalchemy import asc, desc, text, func
 
 from app.models.cotacao import Cotacao
@@ -180,10 +181,39 @@ class CotacaoService:
         q = q.order_by(desc(sort_col) if sort_dir == "desc" else asc(sort_col))
 
         total = q.count()
-        items = q.offset((page - 1) * limit).limit(limit).all()
+        items = (
+            q.options(selectinload(Cotacao.itens))
+            .offset((page - 1) * limit).limit(limit).all()
+        )
+
+        # numero_loja de TODAS as cotações da página em uma única query, em vez de um
+        # COUNT por cotação (N+1) dentro de _hydrate_cotacao.
+        numeros_por_loja: dict[UUID, list[int]] = {}
+        lojas = {c.id_loja for c in items}
+        if lojas:
+            rows = (
+                db.query(Cotacao.id_loja, Cotacao.numero)
+                .filter(
+                    Cotacao.id_loja.in_(lojas),
+                    Cotacao.deleted_at.is_(None),
+                    Cotacao.numero.isnot(None),
+                )
+                .all()
+            )
+            for id_loja_row, numero in rows:
+                numeros_por_loja.setdefault(id_loja_row, []).append(numero)
+            for nums in numeros_por_loja.values():
+                nums.sort()
 
         for cotacao in items:
-            _hydrate_cotacao(db, cotacao)
+            for item in cotacao.itens:
+                _calc_item_totals(item)
+            if cotacao.numero is None:
+                cotacao.numero_loja = None
+            else:
+                cotacao.numero_loja = bisect_right(
+                    numeros_por_loja.get(cotacao.id_loja, []), cotacao.numero
+                )
 
         return items, total, math.ceil(total / limit) if total else 0
 

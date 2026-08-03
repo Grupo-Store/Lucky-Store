@@ -11,7 +11,7 @@ from app.models.produto import Produto
 from app.models.rma import Rma
 from app.models.status_history import StatusHistory, EntityType
 from app.models.audit_log import AuditLog, AuditAction
-from app.schemas.pedido import PedidoCreate, PedidoUpdate
+from app.schemas.pedido import PedidoCreate, PedidoUpdate, VALID_TRANSITIONS
 from app.utils.errors import NotFoundException, BusinessLogicException
 
 
@@ -36,9 +36,28 @@ def _audit(db: Session, action: AuditAction, entity_id, changed_by: UUID,
 
 
 def _economia(pedido: Pedido) -> Optional[Decimal]:
+    """Economia = valor de venda − custo total.
+
+    Usa EXATAMENTE o mesmo conjunto de campos de `_calculate_financials`
+    (services/custo_pedido.py). Antes somava apenas custo_produto_final e custo_servico,
+    ignorando brinde, impostos, custo de crédito/débito e boleto — o que fazia a economia
+    exibida na lista divergir do lucro exibido no detalhe do pedido.
+    """
     if pedido.valor_venda is None or pedido.custo is None:
         return None
-    custo_total = (pedido.custo.custo_produto_final or Decimal(0)) + (pedido.custo.custo_servico or Decimal(0))
+    c = pedido.custo
+    custo_total = sum(
+        (v or Decimal(0)) for v in (
+            c.custo_produto_final,
+            c.custo_servico,
+            c.brinde,
+            c.imposto_compra,
+            c.imposto_venda,
+            c.custo_credito,
+            c.custo_debito,
+            c.custo_boleto,
+        )
+    )
     return pedido.valor_venda - custo_total
 
 
@@ -206,7 +225,9 @@ class PedidoService:
             "valor_venda": str(pedido.valor_venda) if pedido.valor_venda else None,
         }
 
-        dump = data.model_dump(exclude_none=True)
+        # exclude_unset e não exclude_none: campos nullable precisam poder ser limpos via
+        # PATCH enviando null explicitamente.
+        dump = data.model_dump(exclude_unset=True)
         custo_data = dump.pop('custo', None)
         formas_data = dump.pop('formas_pagamento', None)
 
@@ -250,6 +271,18 @@ class PedidoService:
                       ip_address: str = None, user_agent: str = None) -> Pedido:
         pedido = PedidoService.get_by_id(db, pedido_id)
         old_status = pedido.status
+
+        # VALID_TRANSITIONS existia em schemas/pedido.py mas nunca era consultado: qualquer
+        # salto era aceito (Cancelled → Bought, To Buy → Delivered). Reentrar no mesmo status
+        # é permitido porque a UI reenvia o status atual em salvamentos sem troca de fase.
+        if new_status != old_status:
+            allowed = VALID_TRANSITIONS.get(old_status, [])
+            if new_status not in allowed:
+                raise BusinessLogicException(
+                    f"Transição de status inválida: '{old_status}' → '{new_status}'. "
+                    f"Permitidas a partir de '{old_status}': {', '.join(allowed) or 'nenhuma'}"
+                )
+
         pedido.status = new_status
         if new_status == "Cancelled":
             pedido.is_cancelled = True
@@ -277,7 +310,11 @@ class PedidoService:
                     ip_address: str = None, user_agent: str = None) -> None:
         pedido = PedidoService.get_by_id(db, pedido_id)
 
-        has_rma = db.query(Rma).filter(Rma.id_pedido_origem == pedido_id).first()
+        # RMAs já deletados não devem bloquear o soft-delete do pedido.
+        has_rma = db.query(Rma).filter(
+            Rma.id_pedido_origem == pedido_id,
+            Rma.deleted_at.is_(None),
+        ).first()
         if has_rma:
             raise BusinessLogicException("Pedido não pode ser excluído pois possui RMA(s) vinculado(s)")
 

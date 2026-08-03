@@ -80,6 +80,7 @@ const existingOrder: Order = {
   salesValue: 2000,
   items: [],
   freight: [],
+  directSupplyItems: [],
 };
 
 // ─── Tests ───────────────────────────────────────────────────────────────────

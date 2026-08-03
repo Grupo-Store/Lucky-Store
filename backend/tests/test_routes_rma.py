@@ -46,6 +46,9 @@ def _fake_item_rma(rma_id=None):
     item.quantidade = 1
     item.status = ItemRmaStatus.NOT_RECEIVED
     item.consertado_por = None
+    # Sem isto o MagicMock devolve outro MagicMock e o ItemRmaResponse rejeita a
+    # serialização ("Input should be a valid string").
+    item.fornecedor = None
     item.valor_estornado = None
     item.data_estorno = None
     item.motivo_estorno = None

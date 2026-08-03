@@ -31,8 +31,10 @@ def _calculate_financials(custo: CustoPedido, valor_venda: Optional[Decimal]) ->
         return FinancialsOut(custo_total=custo_total, lucro_liquido=None, margem_bruta_pct=None)
 
     lucro_liquido = valor_venda - custo_total
+    # Escala 0–1, igual à `margem` do dashboard (services/dashboard.py). Antes esta função
+    # devolvia 0–100 e a do dashboard 0–1: misturar as duas fontes exibia "2500%".
     margem_bruta_pct = (
-        round(lucro_liquido / valor_venda * 100, 2) if valor_venda != 0 else None
+        (lucro_liquido / valor_venda).quantize(Decimal("0.0001")) if valor_venda != 0 else None
     )
     return FinancialsOut(
         custo_total=custo_total,
@@ -82,9 +84,15 @@ class CustoPedidoService:
         if not custo:
             raise NotFoundException("Custo não encontrado. Use POST para criar.")
 
-        old_values = {k: str(v) if v is not None else None for k, v in data.model_dump().items()}
+        # old_values precisa ser o estado ANTES da atualização, lido do banco.
+        # Antes lia data.model_dump() (o próprio request), então o histórico registrava
+        # os valores novos como se fossem os antigos.
+        old_values = {
+            field: (str(getattr(custo, field)) if getattr(custo, field, None) is not None else None)
+            for field in data.model_dump().keys()
+        }
 
-        for field, value in data.model_dump(exclude_none=True).items():
+        for field, value in data.model_dump(exclude_unset=True).items():
             setattr(custo, field, value)
 
         db.add(AuditLog(

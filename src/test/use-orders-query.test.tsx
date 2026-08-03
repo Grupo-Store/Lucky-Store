@@ -17,8 +17,11 @@ describe('useOrdersQuery', () => {
     vi.restoreAllMocks()
   })
 
+  // Os mocks precisam ser em apiClient.request (axios), NÃO em global.fetch:
+  // apiFetch delega ao apiClient, então mockar fetch não interceptava nada e a
+  // query ficava pendurada até o waitFor estourar.
   it('initializes with isLoading true and no data before fetch resolves', () => {
-    vi.spyOn(global, 'fetch').mockReturnValue(new Promise(() => {}))
+    vi.spyOn(apiClient, 'request').mockReturnValue(new Promise(() => {}) as any)
     const { result } = renderHook(
       () => useOrdersQuery({ page: 1, limit: 20, sort_by: 'data_pedido', sort_dir: 'desc' }),
       { wrapper: makeWrapper() }
@@ -40,8 +43,11 @@ describe('useOrdersQuery', () => {
   })
 
   it('sets isError on fetch failure', async () => {
-    vi.spyOn(global, 'fetch').mockResolvedValue(
-      new Response(JSON.stringify({ detail: 'Unauthorized' }), { status: 401 })
+    vi.spyOn(apiClient, 'request').mockRejectedValue(
+      Object.assign(new Error('Unauthorized'), {
+        isAxiosError: true,
+        response: { status: 401, data: { detail: 'Unauthorized' } },
+      })
     )
     const { result } = renderHook(
       () => useOrdersQuery({ page: 1, limit: 20, sort_by: 'data_pedido', sort_dir: 'desc' }),

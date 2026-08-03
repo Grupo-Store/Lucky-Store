@@ -377,9 +377,13 @@ class TestRmaStatus:
         from app.models.rma import RmaStatus
         assert RmaStatus.CANCELLED == "Cancelled"
 
-    def test_ten_statuses_exist(self):
+    def test_todos_os_status_esperados_existem(self):
+        """Verifica o CONJUNTO, não a contagem — contagem fixa quebra a cada valor novo."""
         from app.models.rma import RmaStatus
-        assert len(RmaStatus) == 10
+        assert {s.value for s in RmaStatus} == {
+            "Registered", "In Analysis", "Approved", "In Repair", "Repaired",
+            "Ready", "Shipped", "Delivered", "Cancelled", "Completed", "Reembolso",
+        }
 
     def test_all_values_are_title_case(self):
         from app.models.rma import RmaStatus
@@ -430,9 +434,13 @@ class TestItemRmaStatus:
         from app.models.item_rma import ItemRmaStatus
         assert ItemRmaStatus.DELIVERED == "Delivered"
 
-    def test_eight_statuses_exist(self):
+    def test_todos_os_status_de_item_esperados_existem(self):
         from app.models.item_rma import ItemRmaStatus
-        assert len(ItemRmaStatus) == 10
+        assert {s.value for s in ItemRmaStatus} == {
+            "Not Received", "Received", "Sent for Repair", "In Repair",
+            "Repaired Not Received", "Repaired Received", "To Pack",
+            "Ready for Delivery", "Out for Delivery", "Delivered", "Estorno",
+        }
 
 
 class TestItemRmaModel:

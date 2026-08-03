@@ -146,7 +146,9 @@ export function ProductModal({ open, onClose, order, item, onSave }: Props) {
   }, [item, open]);
 
   const totalSelected = useMemo(() => subs.reduce((s, sp) => s + (sp.selectedQuantity || 0), 0), [subs]);
-  const projected = item?.projectedValue || 0;
+  // projectedValue é UNITÁRIO e purchaseValue das sub-compras é TOTAL — comparar os dois
+  // direto invertia o sinal em qualquer item com quantidade > 1 (economia virava estouro).
+  const projected = (item?.projectedValue || 0) * (item?.quantity || 0);
   const finalValue = useMemo(() => subs.reduce((s, sp) => s + (sp.purchaseValue || 0), 0), [subs]);
   const savings = projected - finalValue;
   const overQuantity = item ? totalSelected > (item.quantity || 0) : false;

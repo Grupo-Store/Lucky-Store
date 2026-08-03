@@ -17,7 +17,9 @@ class FretesService:
             db.query(Frete, Pedido)
             .join(Pedido, Frete.id_pedido == Pedido.id)
             .filter(Pedido.deleted_at.is_(None))
-            .filter(Pedido.is_cancelled.is_(False))
+            # isnot(True) e não is_(False): em SQL, NULL != False, então pedidos com a flag
+            # nunca preenchida sumiam da listagem de fretes.
+            .filter(Pedido.is_cancelled.isnot(True))
             .filter(Frete.id_pedido.isnot(None))
         )
 

@@ -49,8 +49,13 @@ class TestMigrationMappings:
 
 class TestNewValues:
 
-    def test_new_values_has_ten_entries(self):
-        assert len(NEW_VALUES) == 10
+    def test_new_values_inclui_estorno(self):
+        """Regressão: NEW_VALUES era uma lista fixa e não acompanhou o enum.
+
+        Rodar o script recriava a check constraint sem 'Estorno' e o banco passava
+        a rejeitar itens estornados.
+        """
+        assert "Estorno" in NEW_VALUES
 
     def test_new_values_matches_enum_count(self):
         assert len(NEW_VALUES) == len(ItemRmaStatus)

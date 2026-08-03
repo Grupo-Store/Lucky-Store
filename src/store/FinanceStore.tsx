@@ -52,7 +52,11 @@ export interface CalendarEntry {
 export function expandExpense(e: Expense): CalendarEntry[] {
   const isPaid = e.kind === 'PAGO' || e.status === 'Pago';
 
-  if (isPaid && e.paymentMethod === 'Credit Card' && e.installmentPlan && e.installmentPlan.length > 0) {
+  // Boleto também é parcelável no ExpenseModal (mesma condição `isCredit` de lá).
+  // Antes só Cartão de Crédito era expandido, então planos de boleto eram salvos no
+  // banco mas nunca apareciam no calendário financeiro.
+  const isParcelavel = e.paymentMethod === 'Credit Card' || e.paymentMethod === 'Boleto';
+  if (isPaid && isParcelavel && e.installmentPlan && e.installmentPlan.length > 0) {
     return e.installmentPlan
       .filter(p => p.date)
       .map((p, i) => ({
@@ -118,15 +122,24 @@ export function expandOrderFinancial(o: Order): CalendarEntry[] {
   if (creditWithPlan) {
     const totalPlanValue = plan.reduce((s, p) => s + (p.value || 0), 0);
     const dated = plan.filter(p => p.date);
-    const share = (total: number, p: PaymentInstallment) =>
+    // A sobra de arredondamento é jogada na última parcela para que a soma das partes
+    // seja exatamente igual ao total distribuído (antes sobravam centavos).
+    const rawShare = (total: number, p: PaymentInstallment) =>
       totalPlanValue > 0 ? (p.value || 0) / totalPlanValue * total : total / dated.length;
+    const share = (total: number, p: PaymentInstallment, i: number) => {
+      if (i < dated.length - 1) return +rawShare(total, p).toFixed(2);
+      const alocado = dated
+        .slice(0, -1)
+        .reduce((s, q) => s + +rawShare(total, q).toFixed(2), 0);
+      return +(total - alocado).toFixed(2);
+    };
 
     dated.forEach((p, i) => {
       if (multa > 0) {
         out.push({
           id: `op-${o.id}-i${i}`,
           date: p.date,
-          value: +share(multa, p).toFixed(2),
+          value: share(multa, p, i),
           type: 'MULTA',
           title: `${o.os} (${i + 1}ª)`,
           refId: o.id,
@@ -138,7 +151,7 @@ export function expandOrderFinancial(o: Order): CalendarEntry[] {
         out.push({
           id: `oi-${o.id}-i${i}`,
           date: p.date,
-          value: +share(juros, p).toFixed(2),
+          value: share(juros, p, i),
           type: 'JUROS',
           title: `${o.os} (${i + 1}ª)`,
           refId: o.id,

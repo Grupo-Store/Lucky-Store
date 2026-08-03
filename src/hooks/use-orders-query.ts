@@ -28,6 +28,7 @@ export interface PedidoListItem {
   numero_os: string
   data_pedido: string
   data_entrega: string
+  created_at: string | null
   status: string
   is_rma: boolean | null
   is_cancelled: boolean | null

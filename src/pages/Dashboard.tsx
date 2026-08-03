@@ -629,7 +629,13 @@ export default function Dashboard() {
       <span className="text-muted-foreground">Empresa</span>
       {company !== 'all' && <span className="font-semibold">{company}</span>}
       <CalendarIcon className="h-3.5 w-3.5 text-muted-foreground" />
-      <span className="font-semibold">{MONTHS[globalFilters.month]}/{globalFilters.year}</span>
+      {/* Mesma lógica do botão de filtro (linha ~509): quando há range personalizado
+          ativo, o breadcrumb precisa mostrar o range e não o mês/ano antigo. */}
+      <span className="font-semibold">
+        {globalFilters.rangeFrom && globalFilters.rangeTo
+          ? `${format(globalFilters.rangeFrom, 'dd/MM/yy')} – ${format(globalFilters.rangeTo, 'dd/MM/yy')}`
+          : `${MONTHS[globalFilters.month]}/${globalFilters.year}`}
+      </span>
     </div>
   );
 

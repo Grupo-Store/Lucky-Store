@@ -85,9 +85,11 @@ class TestPedidoAuditIpCapture:
         user_id = uuid.uuid4()
         fake_pedido = _fake_pedido(pedido_id)
 
+        # "Bought" e não "Delivered": change_status agora valida VALID_TRANSITIONS e
+        # o pedido fake nasce em "To Buy", de onde só se vai para Bought ou Cancelled.
         with patch.object(PedidoService, "get_by_id", return_value=fake_pedido):
             PedidoService.change_status(
-                mock_db, pedido_id, "Delivered", user_id,
+                mock_db, pedido_id, "Bought", user_id,
                 ip_address="172.16.0.1", user_agent="curl/7.0",
             )
 

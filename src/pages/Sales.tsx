@@ -236,7 +236,9 @@ export function pedidoListToOrder(item: PedidoListItem): Order {
   return {
     id: item.id,
     os: item.numero_os,
-    createdAt: Date.now(),
+    // Data real de criação. Antes usava Date.now(), então a ordenação "mais recente
+    // primeiro" na verdade ordenava pela ordem de chegada da lista.
+    createdAt: new Date(item.created_at ?? item.data_pedido).getTime(),
     orderDate: item.data_pedido,
     customer: item.nome_cliente ?? '',
     cnpj: item.cnpj_cliente ?? '',
@@ -268,7 +270,8 @@ export function pedidoListToOrder(item: PedidoListItem): Order {
     purchaseTaxValue:   parseFloat(item.custo?.imposto_compra         ?? '0') || 0,
     salesTaxPercent:    parseFloat(item.custo?.pct_imposto_venda      ?? '0') || 0,
     salesTaxValue:      parseFloat(item.custo?.imposto_venda          ?? '0') || 0,
-    salesValue: item.valor_venda ?? 0,
+    // valor_venda vem da API como string (Decimal serializado), não como number.
+    salesValue: parseFloat(String(item.valor_venda ?? '0')) || 0,
     refundTotal: parseFloat(String(item.valor_total_estornado ?? '0')) || 0,
     items: (item.produtos ?? []).filter(p => !p.is_direct_supply).map(p => ({
       id: p.id,
@@ -526,7 +529,15 @@ export default function Sales() {
         (VENDEDOR_BY_ID[qt.id_vendedor] ?? '').toLowerCase().includes(q)
       )) return false;
       if (quoteRange.from && quoteDateField === 'phaseDate') {
-        if (!qt.data_validade || !isInRange(qt.data_validade, quoteRange)) return false;
+        // Data da FASE corrente, não data_validade. Antes qualquer cotação sem validade
+        // preenchida era descartada mesmo tendo fase datada dentro do período.
+        const phaseDate =
+          highest === 'dropped'    ? qt.data_queda :
+          highest === 'closed'     ? qt.data_fechamento :
+          highest === 'forClosing' ? qt.data_prevista_fechamento :
+          highest === 'sent'       ? qt.data_envio :
+          qt.data_cotacao;
+        if (!phaseDate || !isInRange(phaseDate, quoteRange)) return false;
       }
       return true;
     });
@@ -611,7 +622,11 @@ export default function Sales() {
     const savedPurchaseValue = parseFloat(String(produto.valor_compra ?? '0')) || 0;
 
     const subPurchases: SubPurchase[] = produto.sub_compras && produto.sub_compras.length > 0
-      ? produto.sub_compras.map(sp => ({ ...sp, status: sp.status as ItemStatus }))
+      ? produto.sub_compras.map(sp => ({
+          ...sp,
+          status: sp.status as ItemStatus,
+          paymentMethod: (sp.paymentMethod || '') as PaymentMethod | '',
+        }))
       : savedPurchaseValue > 0 ? [{
           id: crypto.randomUUID(),
           selectedQuantity: produto.quantidade,
@@ -1117,7 +1132,7 @@ export default function Sales() {
                             ))
                           ) : displayedOrders.map(item => {
                             const effectiveStatus = getEffectiveStatus(item.status, item.is_cancelled ?? false, item.data_entrega);
-                            const orderValue = item.valor_venda ?? 0;
+                            const orderValue = parseFloat(String(item.valor_venda ?? '0')) || 0;
                             const warn = WARN_STATUSES.includes(item.status as OrderStatus) &&
                               differenceInCalendarDays(new Date(item.data_entrega + 'T12:00:00'), new Date()) <= 3;
                             const lojaDot: Record<string, string> = { 'Lucky Store': '#2F6BFF', 'BTech': '#19A974', 'AJJ': '#9B6BFF' };
