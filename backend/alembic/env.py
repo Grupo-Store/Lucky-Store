@@ -1,3 +1,4 @@
+import os
 from logging.config import fileConfig
 from sqlalchemy import engine_from_config, pool
 from alembic import context
@@ -15,7 +16,10 @@ if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
 settings = get_settings()
-config.set_main_option("sqlalchemy.url", settings.database_url.replace("%", "%%"))
+_db_url = os.environ.get("DATABASE_URL") or settings.DATABASE_URL
+if _db_url.startswith("postgresql://"):
+    _db_url = _db_url.replace("postgresql://", "postgresql+psycopg2://", 1)
+config.set_main_option("sqlalchemy.url", _db_url.replace("%", "%%"))
 
 target_metadata = Base.metadata
 
