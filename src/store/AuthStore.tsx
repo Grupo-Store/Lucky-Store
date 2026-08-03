@@ -1,5 +1,6 @@
-import React, { createContext, useContext, useState } from 'react';
+import React, { createContext, useContext, useState, useEffect } from 'react';
 import axios from 'axios';
+import { authApi } from '@/api/auth';
 
 const BASE_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:8000/api';
 
@@ -24,10 +25,32 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | null>(null);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [stage, setStage] = useState<AuthStage>('login');
-  const [email, setEmail] = useState('');
+  const [stage, setStage] = useState<AuthStage>(() =>
+    localStorage.getItem('access_token') ? 'authed' : 'login'
+  );
+  const [email, setEmail] = useState(() => localStorage.getItem('user_email') ?? '');
   const [isPending, setIsPending] = useState(false);
   const [isResending, setIsResending] = useState(false);
+
+  // On mount: validate the stored token and rehydrate the user's email from the server.
+  // If the access token is expired, client.ts interceptor automatically refreshes it.
+  // If both tokens are expired, client.ts clears localStorage and reloads the page.
+  useEffect(() => {
+    if (stage !== 'authed') return;
+    authApi.me()
+      .then((user) => {
+        setEmail(user.email);
+        localStorage.setItem('user_email', user.email);
+      })
+      .catch(() => {
+        localStorage.removeItem('access_token');
+        localStorage.removeItem('refresh_token');
+        localStorage.removeItem('user_email');
+        setStage('login');
+        setEmail('');
+      });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const login = async (emailInput: string, pass: string): Promise<string | null> => {
     setIsPending(true);
@@ -55,6 +78,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const { data } = await axios.post(`${BASE_URL}/auth/verify-2fa`, { email, code });
       localStorage.setItem('access_token', data.access_token);
       localStorage.setItem('refresh_token', data.refresh_token);
+      localStorage.setItem('user_email', email);
       window.history.replaceState({}, '', '/');
       setStage('authed');
       return null;
@@ -94,6 +118,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
     localStorage.removeItem('access_token');
     localStorage.removeItem('refresh_token');
+    localStorage.removeItem('user_email');
     setStage('login');
     setEmail('');
   };

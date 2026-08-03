@@ -42,7 +42,6 @@ function AuthGate() {
       <QuoteProvider>
         <FinanceProvider>
         <DashboardFilterProvider>
-        <BrowserRouter>
           <Routes>
             <Route element={<AppLayout />}>
               <Route path="/" element={<Sales />} />
@@ -54,7 +53,6 @@ function AuthGate() {
             </Route>
             <Route path="*" element={<NotFound />} />
           </Routes>
-        </BrowserRouter>
         </DashboardFilterProvider>
         </FinanceProvider>
       </QuoteProvider>
@@ -68,7 +66,9 @@ const App = () => (
       <Toaster />
       <Sonner />
       <AuthProvider>
-        <AuthGate />
+        <BrowserRouter>
+          <AuthGate />
+        </BrowserRouter>
       </AuthProvider>
     </TooltipProvider>
     <ReactQueryDevtools initialIsOpen={false} />
