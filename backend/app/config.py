@@ -14,6 +14,14 @@ class Settings(BaseSettings):
     
     # Database
     DATABASE_URL: str = "postgresql://postgres:postgres@localhost:5432/orderly_hub"
+
+    @property
+    def database_url(self) -> str:
+        # Railway injects postgresql:// but SQLAlchemy 2.x needs postgresql+psycopg2://
+        url = self.DATABASE_URL
+        if url.startswith("postgresql://"):
+            url = url.replace("postgresql://", "postgresql+psycopg2://", 1)
+        return url
     
     # JWT
     JWT_SECRET: str = "your-secret-key-change-in-production-min-32-chars-long"

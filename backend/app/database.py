@@ -6,7 +6,7 @@ settings = get_settings()
 
 # Create database engine
 engine = create_engine(
-    settings.DATABASE_URL,
+    settings.database_url,
     echo=settings.APP_DEBUG,
     pool_size=10,
     max_overflow=20,
