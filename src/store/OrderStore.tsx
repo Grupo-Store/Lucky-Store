@@ -311,6 +311,20 @@ export function calcDirectSupplyCost(items?: DirectSupplyOrderItem[]): number {
   }, 0);
 }
 
+/**
+ * Receita da empresa (base para percentuais que incidem sobre "o que fica com a empresa").
+ *
+ * No faturamento direto a venda é dividida entre a parte do fornecedor (Custo Fornecedor
+ * = margem × % fornecedor + frete do fornecedor) e a parte que fica com a empresa.
+ * Impostos e taxas percentuais devem incidir SOMENTE sobre a parte da empresa —
+ * nunca sobre empresa + fornecedor somados.
+ *
+ * Em pedidos sem fornecimento direto o resultado é igual ao próprio valor de venda.
+ */
+export function calcCompanyRevenue(salesValue: number, directSupplyItems?: DirectSupplyOrderItem[]): number {
+  return (salesValue || 0) - calcDirectSupplyCost(directSupplyItems);
+}
+
 /** Final cost = sum of all monetary R$ values from the Financial Section */
 export function calcFinalCost(o: Partial<Order>): number {
   return (o.finalProductCost || 0)
