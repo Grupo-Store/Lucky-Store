@@ -1,5 +1,4 @@
 import json
-from pydantic import field_validator
 from pydantic_settings import BaseSettings
 from functools import lru_cache
 
@@ -31,18 +30,18 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
     
-    # CORS
-    ALLOWED_ORIGINS: list = ["http://localhost:3000", "http://localhost:5173", "http://localhost:8080"]
+    # CORS — stored as str to avoid pydantic-settings JSON-parsing the env var
+    ALLOWED_ORIGINS: str = "http://localhost:3000,http://localhost:5173,http://localhost:8080"
 
-    @field_validator("ALLOWED_ORIGINS", mode="before")
-    @classmethod
-    def parse_allowed_origins(cls, v):
-        if isinstance(v, str):
-            try:
-                return json.loads(v)
-            except (json.JSONDecodeError, ValueError):
-                return [s.strip() for s in v.split(",") if s.strip()]
-        return v
+    @property
+    def allowed_origins_list(self) -> list:
+        v = self.ALLOWED_ORIGINS
+        if not v:
+            return []
+        try:
+            return json.loads(v)
+        except (json.JSONDecodeError, ValueError):
+            return [s.strip() for s in v.split(",") if s.strip()]
 
     # TOTP (2FA) — mantido para compatibilidade com dados existentes
     TOTP_ISSUER: str = "OrderlyHub"
