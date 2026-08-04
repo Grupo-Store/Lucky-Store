@@ -9,4 +9,4 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 
-CMD echo "DATABASE_URL prefix: $(echo $DATABASE_URL | cut -c1-35)" && alembic upgrade head && uvicorn main:app --host 0.0.0.0 --port ${PORT:-8000}
+CMD python migrate.py && uvicorn main:app --host 0.0.0.0 --port ${PORT:-8000}
