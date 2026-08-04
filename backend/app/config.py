@@ -47,12 +47,9 @@ class Settings(BaseSettings):
     TOTP_ISSUER: str = "OrderlyHub"
     TOTP_WINDOW: int = 1
 
-    # Email (2FA via email)
-    MAIL_USERNAME: str = ""
-    MAIL_PASSWORD: str = ""
-    MAIL_FROM: str = ""
-    MAIL_SERVER: str = "smtp.gmail.com"
-    MAIL_PORT: int = 587
+    # Email (2FA via Resend)
+    RESEND_API_KEY: str = ""
+    MAIL_FROM: str = "onboarding@resend.dev"
     EMAIL_CODE_EXPIRE_MINUTES: int = 5
 
     class Config:

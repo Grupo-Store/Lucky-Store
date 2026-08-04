@@ -13,8 +13,7 @@ qrcode[pil]==8.0
 pillow==12.2.0
 python-multipart==0.0.20
 alembic==1.15.2
-fastapi-mail==1.4.2
-aiosmtplib==3.0.2
+resend==2.10.0
 pytest==8.3.5
 pytest-asyncio==0.26.0
 httpx==0.28.1
