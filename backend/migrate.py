@@ -16,9 +16,11 @@ if url.startswith("postgresql://"):
     url = url.replace("postgresql://", "postgresql+psycopg2://", 1)
     os.environ["DATABASE_URL"] = url
 
+print(f"DATABASE_URL scheme: {url[:30]}...")
+
 from sqlalchemy import create_engine, text
 
-engine = create_engine(url)
+engine = create_engine(url, pool_pre_ping=True)
 
 try:
     with engine.connect() as conn:
@@ -60,15 +62,23 @@ if not has_users:
     Base.metadata.create_all(engine)
     print("All tables created successfully")
 
-    from alembic.config import Config
-    from alembic import command as alembic_command
-    cfg = Config("alembic.ini")
-    alembic_command.stamp(cfg, "head")
-    print("Database stamped at head")
+    try:
+        from alembic.config import Config
+        from alembic import command as alembic_command
+        cfg = Config("alembic.ini")
+        alembic_command.stamp(cfg, "head")
+        print("Database stamped at head")
+    except Exception as e:
+        # Race condition: another instance already stamped — that's OK
+        print(f"Stamp warning (may be a concurrent instance): {e}")
 else:
     print("Existing database — running alembic upgrade head")
-    from alembic.config import Config
-    from alembic import command as alembic_command
-    cfg = Config("alembic.ini")
-    alembic_command.upgrade(cfg, "head")
-    print("Migrations complete")
+    try:
+        from alembic.config import Config
+        from alembic import command as alembic_command
+        cfg = Config("alembic.ini")
+        alembic_command.upgrade(cfg, "head")
+        print("Migrations complete")
+    except Exception as e:
+        print(f"Migration error: {e}", file=sys.stderr)
+        sys.exit(1)
