@@ -28,9 +28,14 @@ class UserCreate(UserBase):
 class UserResponse(UserBase):
     id: UUID
     is_active: bool
-    totp_enabled: bool
+    totp_enabled: bool = False
     created_at: datetime
     updated_at: datetime
+
+    @field_validator("totp_enabled", mode="before")
+    @classmethod
+    def coerce_totp_enabled(cls, v: object) -> bool:
+        return bool(v) if v is not None else False
 
     class Config:
         from_attributes = True
