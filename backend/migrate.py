@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """
-Smart migration runner.
+Smart migration runner + app startup.
 - Fresh DB (no 'users' table): create_all + alembic stamp head
 - Existing DB: alembic upgrade head
+Then starts uvicorn directly (no shell && needed).
 """
 import os
 import sys
@@ -69,8 +70,7 @@ if not has_users:
         alembic_command.stamp(cfg, "head")
         print("Database stamped at head")
     except Exception as e:
-        # Race condition: another instance already stamped — that's OK
-        print(f"Stamp warning (may be a concurrent instance): {e}")
+        print(f"Stamp warning (concurrent instance): {e}")
 else:
     print("Existing database — running alembic upgrade head")
     try:
@@ -82,3 +82,10 @@ else:
     except Exception as e:
         print(f"Migration error: {e}", file=sys.stderr)
         sys.exit(1)
+
+# Start uvicorn directly — avoids shell && issues
+import uvicorn
+
+port = int(os.environ.get("PORT", 8000))
+print(f"Starting uvicorn on 0.0.0.0:{port}")
+uvicorn.run("main:app", host="0.0.0.0", port=port)
