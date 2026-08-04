@@ -47,9 +47,9 @@ class Settings(BaseSettings):
     TOTP_ISSUER: str = "OrderlyHub"
     TOTP_WINDOW: int = 1
 
-    # Email (2FA via Resend)
-    RESEND_API_KEY: str = ""
-    MAIL_FROM: str = "onboarding@resend.dev"
+    # Email (2FA via Mailgun)
+    MAILGUN_API_KEY: str = ""
+    MAILGUN_DOMAIN: str = ""
     EMAIL_CODE_EXPIRE_MINUTES: int = 5
 
     class Config:

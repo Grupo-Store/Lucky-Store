@@ -1,6 +1,5 @@
-import asyncio
 import logging
-import resend
+import httpx
 from app.config import get_settings
 
 settings = get_settings()
@@ -33,14 +32,18 @@ async def send_verification_email(email: str, name: str, code: str) -> None:
     """
 
     try:
-        resend.api_key = settings.RESEND_API_KEY
-        params: resend.Emails.SendParams = {
-            "from": f"Portal Grupo Store <{settings.MAIL_FROM}>",
-            "to": [email],
-            "subject": f"{code} é o seu código de acesso — Portal Grupo Store",
-            "html": body,
-        }
-        await asyncio.to_thread(resend.Emails.send, params)
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                f"https://api.mailgun.net/v3/{settings.MAILGUN_DOMAIN}/messages",
+                auth=("api", settings.MAILGUN_API_KEY),
+                data={
+                    "from": f"Portal Grupo Store <mailgun@{settings.MAILGUN_DOMAIN}>",
+                    "to": email,
+                    "subject": f"{code} é o seu código de acesso — Portal Grupo Store",
+                    "html": body,
+                },
+            )
+            response.raise_for_status()
         logger.info("E-mail de verificação enviado para %s", email)
     except Exception as exc:
         logger.error("Falha ao enviar e-mail para %s: %s", email, exc, exc_info=True)
