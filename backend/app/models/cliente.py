@@ -11,6 +11,9 @@ class Cliente(Base):
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     nome = Column(String(255), nullable=False)
+    # Razão social / empresa do cliente (campo "Empresa" nos formulários).
+    # Separado de `nome`, que guarda o contato.
+    empresa = Column(String(255), nullable=True)
     cnpj = Column(String(20), unique=True, nullable=True)
     email = Column(String(255), nullable=True)
     phone = Column(String(20), nullable=True)

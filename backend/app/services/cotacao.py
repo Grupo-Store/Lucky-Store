@@ -9,6 +9,7 @@ from sqlalchemy import asc, desc, text, func
 from app.models.cotacao import Cotacao
 from app.models.item_cotacao import ItemCotacao
 from app.models.cliente import Cliente
+from app.services.cliente import upsert_cliente
 from app.models.audit_log import AuditLog, AuditAction
 from app.models.status_history import StatusHistory, EntityType
 from app.schemas.cotacao import CotacaoCreate, CotacaoUpdate, PhaseUpdate
@@ -31,14 +32,11 @@ def _get_quote_phase(cotacao: Cotacao) -> str | None:
     return None
 
 
-def _upsert_cliente(db: Session, nome: str, cnpj: str | None) -> None:
+def _upsert_cliente(db: Session, nome: str, cnpj: str | None,
+                    empresa: str | None = None) -> None:
     if not cnpj:
         return
-    existing = db.query(Cliente).filter(Cliente.cnpj == cnpj).first()
-    if not existing:
-        db.add(Cliente(nome=nome, cnpj=cnpj))
-    elif existing.nome != nome:
-        existing.nome = nome
+    upsert_cliente(db, nome, cnpj, empresa)
 
 
 def _audit(db: Session, action: AuditAction, entity_id, changed_by: UUID,
@@ -85,7 +83,7 @@ class CotacaoService:
 
     @staticmethod
     def create(db: Session, data: CotacaoCreate, current_user_id: UUID) -> Cotacao:
-        _upsert_cliente(db, data.cliente, data.cnpj_cliente)
+        _upsert_cliente(db, data.cliente, data.cnpj_cliente, data.b2b_company)
 
         cotacao = Cotacao(
             id_loja=data.id_loja,
@@ -209,7 +207,7 @@ class CotacaoService:
         for field, value in data.model_dump(exclude_none=True).items():
             setattr(cotacao, field, value)
 
-        _upsert_cliente(db, cotacao.cliente, cotacao.cnpj_cliente)
+        _upsert_cliente(db, cotacao.cliente, cotacao.cnpj_cliente, cotacao.b2b_company)
 
         new_values = {
             "cliente": cotacao.cliente,

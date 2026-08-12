@@ -14,6 +14,7 @@ import { Target, Pencil, CalendarIcon, Building2, User, ChevronLeft, ChevronRigh
 import { ptBR } from 'date-fns/locale';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
+import { useIsMobile } from '@/hooks/use-mobile';
 import { useDashboardFilters } from '@/store/DashboardFilterStore';
 import { toast } from 'sonner';
 import { KpiCard } from '@/components/dashboard/KpiCard';
@@ -390,6 +391,7 @@ export default function Dashboard() {
   const [company, setCompany] = useState<CompanyKey>('all');
   const [goalsOpen, setGoalsOpen] = useState(false);
   const [dateOpen, setDateOpen] = useState(false);
+  const isMobile = useIsMobile();
   const [dateTab, setDateTab] = useState<'data' | 'periodo'>('data');
   const [showFatMeta, setShowFatMeta]     = useState(true);
   const [showLucroMeta, setShowLucroMeta] = useState(true);
@@ -511,8 +513,14 @@ export default function Dashboard() {
             : `${MONTHS[globalFilters.month]}/${globalFilters.year}`}
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-auto p-0" align="start">
-        <div className="flex border-b">
+      {/* Altura limitada ao espaço disponível: em telas baixas o calendário de
+          2 meses estourava a janela e escondia o botão "Aplicar". */}
+      <PopoverContent
+        className="w-auto p-0 flex flex-col max-h-[var(--radix-popover-content-available-height)] max-w-[var(--radix-popover-content-available-width)]"
+        align="start"
+        collisionPadding={12}
+      >
+        <div className="flex border-b shrink-0">
           <button
             onClick={() => setDateTab('data')}
             className={cn('flex-1 px-4 py-2 text-sm font-semibold transition',
@@ -550,16 +558,18 @@ export default function Dashboard() {
             <Button className="w-full" size="sm" onClick={() => setDateOpen(false)}>Aplicar</Button>
           </div>
         ) : (
-          <div>
-            <Calendar
-              mode="range"
-              selected={{ from: globalFilters.rangeFrom, to: globalFilters.rangeTo }}
-              onSelect={(r: any) => setGlobalFilters(f => ({ ...f, rangeFrom: r?.from, rangeTo: r?.to }))}
-              locale={ptBR}
-              numberOfMonths={2}
-              className="p-3 pointer-events-auto"
-            />
-            <div className="p-2 border-t flex justify-between">
+          <div className="flex min-h-0 flex-1 flex-col">
+            <div className="min-h-0 flex-1 overflow-auto overscroll-contain">
+              <Calendar
+                mode="range"
+                selected={{ from: globalFilters.rangeFrom, to: globalFilters.rangeTo }}
+                onSelect={(r: any) => setGlobalFilters(f => ({ ...f, rangeFrom: r?.from, rangeTo: r?.to }))}
+                locale={ptBR}
+                numberOfMonths={isMobile ? 1 : 2}
+                className="p-3 pointer-events-auto"
+              />
+            </div>
+            <div className="p-2 border-t flex justify-between shrink-0">
               <Button size="sm" variant="ghost" onClick={() => setGlobalFilters(f => ({ ...f, rangeFrom: undefined, rangeTo: undefined }))}>Limpar</Button>
               <Button size="sm" onClick={() => setDateOpen(false)}>Aplicar</Button>
             </div>

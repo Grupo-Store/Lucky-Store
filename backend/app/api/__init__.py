@@ -15,6 +15,7 @@ from app.api.routes.despesas import router as despesas_router
 from app.api.routes.calendar import router as calendar_router
 from app.api.routes.fretes import router as fretes_router
 from app.api.routes.vendedores import router as vendedores_router
+from app.api.routes.clientes import router as clientes_router
 
 router = APIRouter()
 router.include_router(auth_router)
@@ -33,3 +34,4 @@ router.include_router(despesas_router)
 router.include_router(calendar_router)
 router.include_router(fretes_router)
 router.include_router(vendedores_router)
+router.include_router(clientes_router)

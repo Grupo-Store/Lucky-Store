@@ -18,6 +18,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { ArrowUp, ArrowDown, Plus, Search, X, AlertTriangle } from 'lucide-react';
 import { format, differenceInCalendarDays } from 'date-fns';
 import { cn } from '@/lib/utils';
+import { matchesCpfCnpj } from '@/lib/document';
 import {
   useOrders, Order, OrderItem, DirectSupplyOrderItem, SubPurchase, OrderStatus, ItemStatus, Company, Seller,
   ORDER_STATUS_COLORS, ORDER_STATUS_LABELS, ITEM_STATUS_COLORS,
@@ -239,6 +240,7 @@ export function pedidoListToOrder(item: PedidoListItem): Order {
     createdAt: Date.now(),
     orderDate: item.data_pedido,
     customer: item.nome_cliente ?? '',
+    customerCompany: item.empresa_cliente ?? '',
     cnpj: item.cnpj_cliente ?? '',
     company: (item.nome_loja ?? '') as Company,
     seller: (item.nome_vendedor ?? '') as Seller,
@@ -421,6 +423,7 @@ export default function Sales() {
         item.numero_os.toLowerCase().includes(q) ||
         (item.nome_cliente ?? '').toLowerCase().includes(q) ||
         (item.cnpj_cliente ?? '').toLowerCase().includes(q) ||
+        matchesCpfCnpj(item.cnpj_cliente, q) ||
         (item.nome_loja ?? '').toLowerCase().includes(q) ||
         (item.nome_vendedor ?? '').toLowerCase().includes(q)
       ))

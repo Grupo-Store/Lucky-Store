@@ -100,6 +100,8 @@ class PedidoCreate(BaseModel):
     id_cotacao: Optional[UUID] = None
     nome_cliente: str
     cpf_cnpj: Optional[str] = None
+    # Razão social do cliente — alimenta clientes.empresa para o autocomplete
+    empresa_cliente: Optional[str] = None
     numero_os: Optional[str] = None
     numero_nf: Optional[str] = None
     numero_oc: Optional[str] = None
@@ -136,6 +138,11 @@ class PedidoUpdate(BaseModel):
     id_loja: Optional[UUID] = None
     id_vendedor: Optional[UUID] = None
     id_cliente: Optional[UUID] = None
+    # Dados do cliente — editar o pedido também atualiza o cadastro em `clientes`,
+    # para o autocomplete não continuar sugerindo um valor corrigido.
+    nome_cliente: Optional[str] = None
+    cpf_cnpj: Optional[str] = None
+    empresa_cliente: Optional[str] = None
     numero_os: Optional[str] = None
     numero_nf: Optional[str] = None
     numero_oc: Optional[str] = None
@@ -246,6 +253,7 @@ class PedidoListItemResponse(BaseModel):
     parcelas: Optional[int] = None
     nome_cliente: Optional[str] = None
     cnpj_cliente: Optional[str] = None
+    empresa_cliente: Optional[str] = None
     nome_loja: Optional[str] = None
     nome_vendedor: Optional[str] = None
     numero_oc: Optional[str] = None

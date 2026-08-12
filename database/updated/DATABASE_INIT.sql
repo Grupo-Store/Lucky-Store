@@ -77,6 +77,7 @@ CREATE INDEX idx_vendedores_deleted ON vendedores(deleted_at);
 CREATE TABLE clientes (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   nome VARCHAR(255) NOT NULL,
+  empresa VARCHAR(255),
   cnpj VARCHAR(20) UNIQUE,
   email VARCHAR(255),
   phone VARCHAR(20),
@@ -90,6 +91,8 @@ CREATE TABLE clientes (
 );
 
 CREATE INDEX idx_clientes_cnpj ON clientes(cnpj);
+-- CNPJ sem pontuação, usado pelo autocomplete de cliente
+CREATE INDEX idx_clientes_cnpj_digits ON clientes ((regexp_replace(cnpj, '[^0-9]', '', 'g')));
 CREATE INDEX idx_clientes_nome ON clientes(nome);
 CREATE INDEX idx_clientes_deleted ON clientes(deleted_at);
 

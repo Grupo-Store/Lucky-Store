@@ -10,6 +10,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { ArrowLeft, Search, ChevronRight, FilePlus, FileText } from 'lucide-react';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
+import { matchesCpfCnpj } from '@/lib/document';
 import { Quote, QUOTE_PHASE_LABELS, QUOTE_PHASE_COLORS } from '@/store/QuoteStore';
 import type { DirectSupplyOrderItem } from '@/store/OrderStore';
 import { apiClient } from '@/api/client';
@@ -104,6 +105,7 @@ export function AddOrderChooser({ open, onClose, onChooseNew, onChooseFromQuote 
     return items.filter(qt =>
       qt.cliente.toLowerCase().includes(q) ||
       (qt.cnpj_cliente ?? '').toLowerCase().includes(q) ||
+      matchesCpfCnpj(qt.cnpj_cliente, q) ||
       (LOJA_BY_ID[qt.id_loja] ?? '').toLowerCase().includes(q)
     );
   }, [quotesData, search]);

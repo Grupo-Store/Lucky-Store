@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import asc, desc, text
 from app.models.pedido import Pedido, PedidoFormaPagamento, CustoPedido
 from app.models.cliente import Cliente
+from app.services.cliente import upsert_cliente
 from app.models.produto import Produto
 from app.models.rma import Rma
 from app.models.status_history import StatusHistory, EntityType
@@ -42,18 +43,38 @@ def _economia(pedido: Pedido) -> Optional[Decimal]:
     return pedido.valor_venda - custo_total
 
 
-def _get_or_create_cliente(db: Session, nome: str, cpf_cnpj: Optional[str]) -> UUID:
-    if cpf_cnpj:
-        cliente = db.query(Cliente).filter(
-            Cliente.cnpj == cpf_cnpj,
-            Cliente.deleted_at.is_(None),
-        ).first()
-        if cliente:
-            return cliente.id
-    cliente = Cliente(nome=nome, cnpj=cpf_cnpj or None)
-    db.add(cliente)
-    db.flush()
+def _get_or_create_cliente(db: Session, nome: str, cpf_cnpj: Optional[str],
+                           empresa: Optional[str] = None) -> UUID:
+    cliente = upsert_cliente(db, nome, cpf_cnpj, empresa)
+    if cliente is None:
+        cliente = Cliente(nome=nome, cnpj=cpf_cnpj or None)
+        db.add(cliente)
+        db.flush()
     return cliente.id
+
+
+def _sync_cliente(db: Session, pedido: Pedido, nome: Optional[str],
+                  cpf_cnpj: Optional[str], empresa: Optional[str]) -> None:
+    """Reflete no cadastro de clientes o que foi editado no pedido.
+
+    Com documento: faz upsert e reaponta o pedido, porque trocar o CPF/CNPJ
+    significa que é outro cliente. Sem documento: edita o cadastro já vinculado
+    em vez de criar um novo — senão corrigir um nome geraria cliente duplicado.
+    """
+    if not any([nome, cpf_cnpj, empresa]):
+        return
+
+    if cpf_cnpj:
+        cliente = upsert_cliente(db, nome or "", cpf_cnpj, empresa)
+        if cliente is not None:
+            pedido.id_cliente = cliente.id
+        return
+
+    if pedido.cliente is not None:
+        if nome:
+            pedido.cliente.nome = nome
+        if empresa:
+            pedido.cliente.empresa = empresa
 
 
 class PedidoService:
@@ -61,7 +82,9 @@ class PedidoService:
     @staticmethod
     def create(db: Session, data: PedidoCreate, current_user_id: UUID,
                ip_address: str = None, user_agent: str = None) -> Pedido:
-        id_cliente = _get_or_create_cliente(db, data.nome_cliente, data.cpf_cnpj)
+        id_cliente = _get_or_create_cliente(
+            db, data.nome_cliente, data.cpf_cnpj, data.empresa_cliente
+        )
         pedido = Pedido(
             id_loja=data.id_loja,
             id_vendedor=data.id_vendedor,
@@ -209,9 +232,14 @@ class PedidoService:
         dump = data.model_dump(exclude_none=True)
         custo_data = dump.pop('custo', None)
         formas_data = dump.pop('formas_pagamento', None)
+        nome_cliente = dump.pop('nome_cliente', None)
+        cpf_cnpj = dump.pop('cpf_cnpj', None)
+        empresa_cliente = dump.pop('empresa_cliente', None)
 
         for field, value in dump.items():
             setattr(pedido, field, value)
+
+        _sync_cliente(db, pedido, nome_cliente, cpf_cnpj, empresa_cliente)
 
         # Sincroniza formas de pagamento (relação) — substitui o conjunto atual.
         if formas_data is not None:

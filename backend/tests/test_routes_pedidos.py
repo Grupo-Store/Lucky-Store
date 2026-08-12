@@ -59,6 +59,7 @@ def _fake_pedido(pedido_id=None):
     cliente = MagicMock()
     cliente.nome = None
     cliente.cnpj = None
+    cliente.empresa = None
     p.cliente = cliente
     loja = MagicMock()
     loja.nome = None

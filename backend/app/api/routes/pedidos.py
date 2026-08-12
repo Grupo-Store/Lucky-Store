@@ -113,6 +113,7 @@ def list_pedidos(
             parcelas=p.parcelas,
             nome_cliente=p.cliente.nome if p.cliente else None,
             cnpj_cliente=p.cliente.cnpj if p.cliente else None,
+            empresa_cliente=p.cliente.empresa if p.cliente else None,
             nome_loja=p.loja.nome if p.loja else None,
             nome_vendedor=p.vendedor.nome if p.vendedor else None,
             numero_oc=p.numero_oc,

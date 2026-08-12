@@ -247,7 +247,7 @@ export function RmaModal({ open, onClose, orders, rma, onSave, nextRmaNumber }: 
   }, [open, rma]);
 
   const choosePicked = (o: PedidoListItem) => {
-    setParent({ id: o.id, os: o.numero_os, customer: o.nome_cliente ?? '', cnpj: '' });
+    setParent({ id: o.id, os: o.numero_os, customer: o.nome_cliente ?? '', cnpj: o.cnpj_cliente ?? '' });
     setCompany((o.nome_loja ?? '') as Company);
     setSeller((o.nome_vendedor ?? '') as Seller);
     setRmaNumberDisplay(nextRmaNumber(o.numero_os));

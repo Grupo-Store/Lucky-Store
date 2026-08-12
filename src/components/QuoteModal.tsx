@@ -10,10 +10,12 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
-import { CalendarIcon, Plus, Trash2, Printer, ClipboardList, Factory, Package, FileText, Activity, Calculator } from 'lucide-react';
+import { CalendarIcon, Plus, Trash2, Printer, ClipboardList, Factory, Package, FileText, Activity, Calculator, Loader2 } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
+import { formatCpfCnpj, displayCpfCnpj } from '@/lib/document';
+import { useClienteLookup } from '@/hooks/use-cliente-lookup';
 import { toast } from 'sonner';
 import { Company, Seller, PaymentMethod, PAYMENT_METHODS, PAYMENT_METHOD_LABELS } from '@/store/OrderStore';
 import {
@@ -417,6 +419,17 @@ export function QuoteModal({ open, onClose, quote, onSave, onDelete, nextIndex }
 
   const set = <K extends keyof Quote>(k: K, v: Quote[K]) => setForm(prev => ({ ...prev, [k]: v }));
 
+  // Autocomplete de cliente: ao completar o CPF/CNPJ, busca o cliente já
+  // cadastrado e preenche Cliente/Empresa. Só preenche campo vazio, para não
+  // apagar o que o usuário digitou.
+  const { loading: lookingUpCliente } = useClienteLookup(form.cnpj, {
+    onFound: cliente => setForm(prev => ({
+      ...prev,
+      customer: prev.customer || cliente.nome || '',
+      b2bCompany: prev.b2bCompany || cliente.empresa || '',
+    })),
+  });
+
   const setPhase = <K extends keyof QuotePhases>(key: K, patch: Partial<QuotePhases[K]>) => {
     setForm(prev => ({ ...prev, phases: { ...prev.phases, [key]: { ...prev.phases[key], ...patch } as QuotePhases[K] } }));
   };
@@ -720,8 +733,15 @@ export function QuoteModal({ open, onClose, quote, onSave, onDelete, nextIndex }
             </div>
             <div>
               <Label>CPF/CNPJ</Label>
-              <Input className="bg-[#FBFCFE] border-[#E2E8F1]" value={form.cnpj || ''}
-                onChange={e => set('cnpj', e.target.value)} onKeyDown={handleEnterBlur} />
+              <div className="relative">
+                <Input className="bg-[#FBFCFE] border-[#E2E8F1] pr-8" value={displayCpfCnpj(form.cnpj)}
+                  onChange={e => set('cnpj', formatCpfCnpj(e.target.value))} onKeyDown={handleEnterBlur}
+                  inputMode="numeric" placeholder="000.000.000-00" maxLength={18} />
+                {lookingUpCliente && (
+                  <Loader2 className="absolute right-2 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin text-muted-foreground"
+                    aria-label="Buscando cliente" />
+                )}
+              </div>
             </div>
             <div>
               <Label>Nº da Requisição</Label>

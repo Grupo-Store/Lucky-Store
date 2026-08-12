@@ -130,6 +130,8 @@ export interface CreatePedidoPayload {
   id_cotacao?: string;
   nome_cliente: string;
   cpf_cnpj?: string;
+  /** Razão social do cliente — alimenta o autocomplete por CPF/CNPJ */
+  empresa_cliente?: string;
   data_pedido: string;
   data_entrega: string;
   status: PedidoStatus;
@@ -152,7 +154,7 @@ export interface CreatePedidoPayload {
   plano_parcelas_pedido?: { date: string; value: number }[];
 }
 
-export type UpdatePedidoPayload = Partial<Omit<CreatePedidoPayload, 'id_loja' | 'id_vendedor' | 'nome_cliente' | 'status'>>;
+export type UpdatePedidoPayload = Partial<Omit<CreatePedidoPayload, 'id_loja' | 'id_vendedor' | 'status'>>;
 
 export interface PedidoFilters {
   page?: number;

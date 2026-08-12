@@ -9,10 +9,12 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
-import { CalendarIcon, Plus, Trash2, Printer, CheckCircle2, Circle, ClipboardList, Banknote, Package, Truck, Receipt, AlertTriangle } from 'lucide-react';
+import { CalendarIcon, Plus, Trash2, Printer, CheckCircle2, Circle, ClipboardList, Banknote, Package, Truck, Receipt, AlertTriangle, Loader2 } from 'lucide-react';
 import { format, addDays } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
+import { formatCpfCnpj, displayCpfCnpj } from '@/lib/document';
+import { useClienteLookup } from '@/hooks/use-cliente-lookup';
 import { toast } from 'sonner';
 import {
   Order, OrderItem, DirectSupplyOrderItem, ItemStatus, PaymentMethod, Company, Seller, OrderStatus, FreightCard,
@@ -191,6 +193,17 @@ export function OrderModal({ open, onClose, order, onSave, nextOS, prefill }: Pr
   }, [order, open, nextOS, prefill]);
 
   const set = (k: keyof Order, v: any) => setForm(prev => ({ ...prev, [k]: v }));
+
+  // Autocomplete de cliente: ao completar o CPF/CNPJ, busca o cliente já
+  // cadastrado e preenche Cliente/Empresa. Só preenche campo vazio, para não
+  // apagar o que o usuário digitou.
+  const { loading: lookingUpCliente } = useClienteLookup(form.cnpj, {
+    onFound: cliente => setForm(prev => ({
+      ...prev,
+      customer: prev.customer || cliente.nome || '',
+      customerCompany: prev.customerCompany || cliente.empresa || '',
+    })),
+  });
 
   /* ---------------- Derived calculations ---------------- */
   const derivedInitialProductCost = useMemo(
@@ -389,6 +402,9 @@ export function OrderModal({ open, onClose, order, onSave, nextOS, prefill }: Pr
 
     if (isEdit) {
       const payload: UpdatePedidoPayload = {
+        nome_cliente: o.customer || undefined,
+        cpf_cnpj: o.cnpj || undefined,
+        empresa_cliente: o.customerCompany || undefined,
         data_pedido: o.orderDate,
         data_entrega: o.deliveryDate,
         valor_venda: String(o.salesValue),
@@ -507,6 +523,7 @@ export function OrderModal({ open, onClose, order, onSave, nextOS, prefill }: Pr
         id_cotacao: sourceQuoteId || undefined,
         nome_cliente: o.customer,
         cpf_cnpj: o.cnpj || undefined,
+        empresa_cliente: o.customerCompany || undefined,
         data_pedido: o.orderDate,
         data_entrega: o.deliveryDate,
         status: o.status as PedidoStatus,
@@ -731,7 +748,13 @@ export function OrderModal({ open, onClose, order, onSave, nextOS, prefill }: Pr
             )}
             <div>
               <Label>CPF/CNPJ</Label>
-              <Input className="bg-[#FBFCFE] border-[#E2E8F1]" value={form.cnpj || ''} onChange={e => set('cnpj', e.target.value)} onKeyDown={handleEnterBlur} />
+              <div className="relative">
+                <Input className="bg-[#FBFCFE] border-[#E2E8F1] pr-8" value={displayCpfCnpj(form.cnpj)} onChange={e => set('cnpj', formatCpfCnpj(e.target.value))} onKeyDown={handleEnterBlur} inputMode="numeric" placeholder="000.000.000-00" maxLength={18} />
+                {lookingUpCliente && (
+                  <Loader2 className="absolute right-2 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin text-muted-foreground"
+                    aria-label="Buscando cliente" />
+                )}
+              </div>
             </div>
             <div>
               <Label>OC/AF/PED <span className="text-destructive">*</span></Label>

@@ -36,6 +36,7 @@ export interface PedidoListItem {
   parcelas: number | null
   nome_cliente: string | null
   cnpj_cliente: string | null
+  empresa_cliente: string | null
   nome_loja: string | null
   nome_vendedor: string | null
   numero_oc: string | null
