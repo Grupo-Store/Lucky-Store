@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime, timezone
-from sqlalchemy import Column, String, Text, Boolean, Date, DateTime, ForeignKey, UniqueConstraint, Integer
+from sqlalchemy import Column, String, Text, Boolean, Date, DateTime, ForeignKey, UniqueConstraint, Integer, Sequence
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.types import Numeric
 from sqlalchemy.orm import relationship
@@ -14,8 +14,15 @@ class Cotacao(Base):
     id_loja = Column(UUID(as_uuid=True), ForeignKey("lojas.id"), nullable=False)
     id_vendedor = Column(UUID(as_uuid=True), ForeignKey("vendedores.id"), nullable=False)
 
-    # Número sequencial de registro (1, 2, 3, ...) — atribuído via sequence na criação
-    numero = Column(Integer, nullable=True)
+    # Número sequencial de registro (1, 2, 3, ...) — atribuído via sequence na criação.
+    #
+    # A Sequence é declarada AQUI, e não só nas migrations, porque o migrate.py
+    # cria banco novo com Base.metadata.create_all() + alembic stamp head. O
+    # stamp marca as migrations como aplicadas sem executá-las, então o
+    # create_all só enxerga o que está nos models. Sem esta declaração o
+    # contador não era criado e qualquer cotação nova falhava com
+    # UndefinedTable em nextval('cotacao_numero_seq').
+    numero = Column(Integer, Sequence("cotacao_numero_seq"), nullable=True)
 
     numero_requisicao = Column(String(50), nullable=True)
     b2b_company = Column(String(255), nullable=True)
