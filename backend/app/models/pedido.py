@@ -1,9 +1,25 @@
 import uuid
 from datetime import datetime, timezone
-from sqlalchemy import Column, String, Boolean, Integer, Date, DateTime, Text, Numeric, ForeignKey  # type: ignore[import]
+from sqlalchemy import Column, String, Boolean, Integer, Date, DateTime, Text, Numeric, ForeignKey, Sequence  # type: ignore[import]
 from sqlalchemy.dialects.postgresql import UUID, JSONB  # type: ignore[import]
 from sqlalchemy.orm import relationship
 from app.database import Base
+
+
+# Contador que gera o numero de OS (OS-001, OS-002, ...), consumido por
+# _generate_numero_os() em app/services/pedido.py.
+#
+# Declarado aqui, no metadata, e nao apenas como SQL cru dentro de uma
+# migration, por dois motivos:
+#
+# 1. Esta sequence nunca chegou a existir em lugar nenhum do projeto - nem
+#    model, nem migration. Todo banco, novo ou antigo, nascia sem ela, e criar
+#    pedido sem informar o numero manualmente falhava com UndefinedTable.
+# 2. O migrate.py cria banco novo com Base.metadata.create_all() + alembic
+#    stamp head. O stamp marca as migrations como aplicadas sem executa-las,
+#    entao o create_all so enxerga o que esta nos models. Anexar a Sequence ao
+#    metadata e o que garante que um banco novo ja nasca com o contador.
+pedido_os_seq = Sequence("pedido_os_seq", metadata=Base.metadata)
 
 
 class Pedido(Base):
