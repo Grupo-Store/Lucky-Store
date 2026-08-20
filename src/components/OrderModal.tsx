@@ -805,85 +805,6 @@ export function OrderModal({ open, onClose, order, onSave, nextOS, prefill }: Pr
           </div>{/* /opm-body sec-geral */}
         </section>
 
-        {/* ============== 2. FINANCEIRO ============== */}
-        <section className="opm-card" id="sec-financeiro">
-          <h2><Banknote className="h-[15px] w-[15px]" /> Financeiro</h2>
-          <div className="opm-body">
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-            <div>
-              <Label>Custo Inicial Produto</Label>
-              <Input readOnly value={toBRL(derivedInitialProductCost)} className="bg-[#F4F7FB] border-[#E2E8F1] font-semibold" />
-            </div>
-            <div>
-              <Label>Custo Final Produto </Label>
-              <Input readOnly value={toBRL(derivedFinalProductCost)} className="bg-[#F4F7FB] border-[#E2E8F1] font-semibold" />
-            </div>
-            {renderCurrencyInput('boletoCost', 'Custo Boleto')}
-            <div>
-              <Label>Frete <span className="text-xs text-muted-foreground">(soma da seção Frete)</span></Label>
-              <Input readOnly value={toBRL(derivedFreightTotal)} className="bg-[#F4F7FB] border-[#E2E8F1] font-semibold" />
-            </div>
-            {renderCurrencyInput('giftCost', 'Brinde')}
-            {form.directBilling && (
-              <div>
-                <Label>Custo Fornecimento Direto <span className="text-xs text-muted-foreground">(auto)</span></Label>
-                <Input readOnly value={toBRL(directSupplyCost)} className="bg-[#F4F7FB] border-[#E2E8F1] font-semibold" />
-              </div>
-            )}
-          </div>
-
-          {/* Bidirectional %↔R$ rows */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
-            <BiPctRow
-              label="Custo Crédito — sobre Valor de Venda"
-              base={form.salesValue || 0}
-              percent={form.creditCostPercent || 0}
-              value={computed.creditCostValue}
-              onPercentChange={p => set('creditCostPercent', p)}
-              onValueChange={v => {
-                const base = form.salesValue || 0;
-                set('creditCostPercent', base > 0 ? (v / base) * 100 : 0);
-              }}
-            />
-            <BiPctRow
-              label="Custo Débito — sobre Valor de Venda"
-              base={form.salesValue || 0}
-              percent={form.debitCostPercent || 0}
-              value={computed.debitCostValue}
-              onPercentChange={p => set('debitCostPercent', p)}
-              onValueChange={v => {
-                const base = form.salesValue || 0;
-                set('debitCostPercent', base > 0 ? (v / base) * 100 : 0);
-              }}
-            />
-            <BiPctRow
-              label="Imposto Compra — sobre Custo Final Produto"
-              base={derivedFinalProductCost}
-              percent={form.purchaseTaxPercent || 0}
-              value={computed.purchaseTaxValue}
-              onPercentChange={p => set('purchaseTaxPercent', p)}
-              onValueChange={v => {
-                const base = derivedFinalProductCost;
-                set('purchaseTaxPercent', base > 0 ? (v / base) * 100 : 0);
-              }}
-            />
-            <BiPctRow
-              label={form.directBilling
-                ? 'Imposto Venda — sobre Receita da Empresa (venda − parte do fornecedor)'
-                : 'Imposto Venda — sobre Valor de Venda'}
-              base={companyRevenue}
-              percent={form.salesTaxPercent || 0}
-              value={computed.salesTaxValue}
-              onPercentChange={p => set('salesTaxPercent', p)}
-              onValueChange={v => {
-                const base = companyRevenue;
-                set('salesTaxPercent', base > 0 ? (v / base) * 100 : 0);
-              }}
-            />
-          </div>
-          </div>{/* /opm-body sec-financeiro */}
-        </section>
-
         {/* ============== 2b. ITENS DE FORNECIMENTO DIRETO ============== */}
         {form.directBilling && (
           <section className="opm-card opm-amber" id="sec-ds">
@@ -1081,6 +1002,88 @@ export function OrderModal({ open, onClose, order, onSave, nextOS, prefill }: Pr
           </div>{/* /opm-body sec-frete */}
         </section>
 
+        {/* ============== 3b-bis. FINANCEIRO ============== */}
+        {/* Depois de Itens e Frete de proposito: quase tudo aqui e derivado deles
+           (Custo Inicial/Final vem dos produtos, Frete vem da secao Frete), entao
+           preencher esta secao antes so mostrava campos zerados. */}
+        <section className="opm-card" id="sec-financeiro">
+          <h2><Banknote className="h-[15px] w-[15px]" /> Financeiro</h2>
+          <div className="opm-body">
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+            <div>
+              <Label>Custo Inicial Produto</Label>
+              <Input readOnly value={toBRL(derivedInitialProductCost)} className="bg-[#F4F7FB] border-[#E2E8F1] font-semibold" />
+            </div>
+            <div>
+              <Label>Custo Final Produto </Label>
+              <Input readOnly value={toBRL(derivedFinalProductCost)} className="bg-[#F4F7FB] border-[#E2E8F1] font-semibold" />
+            </div>
+            {renderCurrencyInput('boletoCost', 'Custo Boleto')}
+            <div>
+              <Label>Frete <span className="text-xs text-muted-foreground">(soma da seção Frete)</span></Label>
+              <Input readOnly value={toBRL(derivedFreightTotal)} className="bg-[#F4F7FB] border-[#E2E8F1] font-semibold" />
+            </div>
+            {renderCurrencyInput('giftCost', 'Brinde')}
+            {form.directBilling && (
+              <div>
+                <Label>Custo Fornecimento Direto <span className="text-xs text-muted-foreground">(auto)</span></Label>
+                <Input readOnly value={toBRL(directSupplyCost)} className="bg-[#F4F7FB] border-[#E2E8F1] font-semibold" />
+              </div>
+            )}
+          </div>
+
+          {/* Bidirectional %↔R$ rows */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+            <BiPctRow
+              label="Custo Crédito — sobre Valor de Venda"
+              base={form.salesValue || 0}
+              percent={form.creditCostPercent || 0}
+              value={computed.creditCostValue}
+              onPercentChange={p => set('creditCostPercent', p)}
+              onValueChange={v => {
+                const base = form.salesValue || 0;
+                set('creditCostPercent', base > 0 ? (v / base) * 100 : 0);
+              }}
+            />
+            <BiPctRow
+              label="Custo Débito — sobre Valor de Venda"
+              base={form.salesValue || 0}
+              percent={form.debitCostPercent || 0}
+              value={computed.debitCostValue}
+              onPercentChange={p => set('debitCostPercent', p)}
+              onValueChange={v => {
+                const base = form.salesValue || 0;
+                set('debitCostPercent', base > 0 ? (v / base) * 100 : 0);
+              }}
+            />
+            <BiPctRow
+              label="Imposto Compra — sobre Custo Final Produto"
+              base={derivedFinalProductCost}
+              percent={form.purchaseTaxPercent || 0}
+              value={computed.purchaseTaxValue}
+              onPercentChange={p => set('purchaseTaxPercent', p)}
+              onValueChange={v => {
+                const base = derivedFinalProductCost;
+                set('purchaseTaxPercent', base > 0 ? (v / base) * 100 : 0);
+              }}
+            />
+            <BiPctRow
+              label={form.directBilling
+                ? 'Imposto Venda — sobre Receita da Empresa (venda − parte do fornecedor)'
+                : 'Imposto Venda — sobre Valor de Venda'}
+              base={companyRevenue}
+              percent={form.salesTaxPercent || 0}
+              value={computed.salesTaxValue}
+              onPercentChange={p => set('salesTaxPercent', p)}
+              onValueChange={v => {
+                const base = companyRevenue;
+                set('salesTaxPercent', base > 0 ? (v / base) * 100 : 0);
+              }}
+            />
+          </div>
+          </div>{/* /opm-body sec-financeiro */}
+        </section>
+
         {/* ============== 3c. PAGAMENTO ============== */}
         <div id="sec-pagamento" style={{ scrollMarginTop: 14 }}>
           <PagamentoSection form={form} set={set} />
@@ -1184,10 +1187,10 @@ export function OrderModal({ open, onClose, order, onSave, nextOS, prefill }: Pr
 
             <nav className="opm-jump">
               <a href="#sec-geral">Informações Gerais</a>
-              <a href="#sec-financeiro">Financeiro</a>
               {form.directBilling && <a href="#sec-ds">Fornecimento Direto</a>}
               <a href="#sec-itens">Itens do Pedido</a>
               <a href="#sec-frete">Frete</a>
+              <a href="#sec-financeiro">Financeiro</a>
               <a href="#sec-pagamento">Pagamento</a>
               <a href="#sec-cancel">Cancelamento</a>
             </nav>
