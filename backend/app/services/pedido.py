@@ -13,6 +13,7 @@ from app.models.status_history import StatusHistory, EntityType
 from app.models.audit_log import AuditLog, AuditAction
 from app.schemas.pedido import PedidoCreate, PedidoUpdate
 from app.utils.errors import NotFoundException, BusinessLogicException
+from app.services.cliente_identidade import obter_ou_criar_cliente
 
 
 def _generate_numero_os(db: Session) -> str:
@@ -43,17 +44,9 @@ def _economia(pedido: Pedido) -> Optional[Decimal]:
 
 
 def _get_or_create_cliente(db: Session, nome: str, cpf_cnpj: Optional[str]) -> UUID:
-    if cpf_cnpj:
-        cliente = db.query(Cliente).filter(
-            Cliente.cnpj == cpf_cnpj,
-            Cliente.deleted_at.is_(None),
-        ).first()
-        if cliente:
-            return cliente.id
-    cliente = Cliente(nome=nome, cnpj=cpf_cnpj or None)
-    db.add(cliente)
-    db.flush()
-    return cliente.id
+    # A regra de "e o mesmo cliente?" mora em cliente_identidade, compartilhada
+    # com cotacao.py e conversao_cotacao.py. Antes cada um decidia sozinho.
+    return obter_ou_criar_cliente(db, nome, cpf_cnpj).id
 
 
 class PedidoService:

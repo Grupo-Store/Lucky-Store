@@ -9,6 +9,7 @@ from sqlalchemy import asc, desc, text, func
 from app.models.cotacao import Cotacao
 from app.models.item_cotacao import ItemCotacao
 from app.models.cliente import Cliente
+from app.services.cliente_identidade import obter_ou_criar_cliente
 from app.models.audit_log import AuditLog, AuditAction
 from app.models.status_history import StatusHistory, EntityType
 from app.schemas.cotacao import CotacaoCreate, CotacaoUpdate, PhaseUpdate
@@ -32,13 +33,16 @@ def _get_quote_phase(cotacao: Cotacao) -> str | None:
 
 
 def _upsert_cliente(db: Session, nome: str, cnpj: str | None) -> None:
+    """Garante que o cliente da cotacao exista no cadastro.
+
+    Antes esta funcao RENOMEAVA o cliente existente quando o nome digitado
+    diferia — uma cotacao para "Alpha" sobrescrevia o cadastro de
+    "Alpha Ltda" que dividisse o mesmo CNPJ. Pela regra atual os dois sao
+    clientes distintos, entao o cadastro alheio nao e mais tocado.
+    """
     if not cnpj:
         return
-    existing = db.query(Cliente).filter(Cliente.cnpj == cnpj).first()
-    if not existing:
-        db.add(Cliente(nome=nome, cnpj=cnpj))
-    elif existing.nome != nome:
-        existing.nome = nome
+    obter_ou_criar_cliente(db, nome, cnpj)
 
 
 def _audit(db: Session, action: AuditAction, entity_id, changed_by: UUID,

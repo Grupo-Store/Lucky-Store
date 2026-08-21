@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 
 from app.models.cotacao import Cotacao
 from app.models.cliente import Cliente
+from app.services.cliente_identidade import obter_ou_criar_cliente
 from app.models.item_cotacao import ItemCotacao
 from app.models.pedido import Pedido
 from app.models.produto import Produto
@@ -40,19 +41,10 @@ class ConversaoCotacaoService:
                 f"Cotação já foi convertida no pedido {existing_pedido.numero_os}"
             )
 
-        # Resolve client: find by CNPJ or name; create if not found
-        if cotacao.cnpj_cliente:
-            cliente = db.query(Cliente).filter(Cliente.cnpj == cotacao.cnpj_cliente).first()
-            if not cliente:
-                cliente = Cliente(nome=cotacao.cliente, cnpj=cotacao.cnpj_cliente)
-                db.add(cliente)
-                db.flush()
-        else:
-            cliente = db.query(Cliente).filter(Cliente.nome == cotacao.cliente).first()
-            if not cliente:
-                cliente = Cliente(nome=cotacao.cliente)
-                db.add(cliente)
-                db.flush()
+        # Resolve o cliente pela regra compartilhada. Antes, sem CNPJ, esta
+        # conversao casava por NOME — dois "Joao" sem documento viravam o mesmo
+        # cliente aqui e clientes diferentes na criacao de pedido.
+        cliente = obter_ou_criar_cliente(db, cotacao.cliente, cotacao.cnpj_cliente)
 
         numero_os = _generate_numero_os(db)
 

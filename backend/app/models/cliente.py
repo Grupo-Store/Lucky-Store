@@ -11,7 +11,12 @@ class Cliente(Base):
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     nome = Column(String(255), nullable=False)
-    cnpj = Column(String(20), unique=True, nullable=True)
+    # Sem UNIQUE de proposito. A regra de identidade de cliente e
+    # (mesmo nome E mesmo documento) - ver app/services/cliente_identidade.py.
+    # Com UNIQUE, "mesmo documento com nome diferente" nao conseguiria virar um
+    # segundo cliente: o INSERT estourava com duplicate key e o vendedor tomava
+    # um 500 ao criar o pedido. O index fica para a busca continuar barata.
+    cnpj = Column(String(20), index=True, nullable=True)
     email = Column(String(255), nullable=True)
     phone = Column(String(20), nullable=True)
     address = Column(String(500), nullable=True)

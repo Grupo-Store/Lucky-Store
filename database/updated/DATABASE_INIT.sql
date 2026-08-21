@@ -77,7 +77,10 @@ CREATE INDEX idx_vendedores_deleted ON vendedores(deleted_at);
 CREATE TABLE clientes (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   nome VARCHAR(255) NOT NULL,
-  cnpj VARCHAR(20) UNIQUE,
+  -- Sem UNIQUE: a regra de identidade e (mesmo nome E mesmo documento),
+  -- entao o mesmo CNPJ com nome diferente sao clientes distintos.
+  -- Ver app/services/cliente_identidade.py e a migration a5b6c7d8e9f0.
+  cnpj VARCHAR(20),
   email VARCHAR(255),
   phone VARCHAR(20),
   address VARCHAR(500),
