@@ -301,12 +301,17 @@ export function OrderModal({ open, onClose, order, onSave, nextOS, prefill }: Pr
 
   /* ---------------- Save (with validation) ---------------- */
   const handleSave = () => {
-    // Mandatory fields: orderDate, deliveryDate, customer, ocAfPed
+    // Empresa e Vendedor entram aqui porque o backend os exige (id_loja e
+    // id_vendedor sao NOT NULL). Em branco eles viravam '' no payload e o
+    // Pydantic devolvia 422 de uuid_parsing — erro tecnico na cara do vendedor,
+    // depois de ele ja ter preenchido o formulario inteiro.
     const missing: string[] = [];
     if (!form.orderDate) missing.push('Data do Pedido');
     if (!form.deliveryDate) missing.push('Data de Entrega');
     if (!(form.customer || '').trim()) missing.push('Cliente');
     if (!(form.ocAfPed || '').trim()) missing.push('OC/AF/PED');
+    if (!(form.company || '').trim()) missing.push('Empresa');
+    if (!(form.seller || '').trim()) missing.push('Vendedor');
     if (missing.length > 0) {
       toast.error(`Preencha os campos obrigatórios: ${missing.join(', ')}`);
       return;

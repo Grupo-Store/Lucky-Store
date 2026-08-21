@@ -42,7 +42,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setEmail(user.email);
         localStorage.setItem('user_email', user.email);
       })
-      .catch(() => {
+      .catch((err) => {
+        // Só derruba a sessão quando o servidor DIZ que a credencial não vale.
+        //
+        // Antes, o catch era genérico: qualquer falha — backend fora do ar,
+        // 502/503 do Railway, wi-fi caindo por um segundo — limpava os tokens e
+        // jogava o usuário na tela de login, sem mensagem nenhuma. O trabalho em
+        // aberto ia junto.
+        //
+        // Expiração de verdade já é tratada em client.ts, que tenta o refresh e,
+        // se ele falhar, limpa o localStorage e recarrega a página. Aqui só
+        // resta o caso de o servidor recusar explicitamente a credencial.
+        const status = err?.response?.status;
+        const credencialRecusada = status === 401 || status === 403;
+        if (!credencialRecusada) return; // rede/servidor instável: mantém a sessão
+
         localStorage.removeItem('access_token');
         localStorage.removeItem('refresh_token');
         localStorage.removeItem('user_email');
