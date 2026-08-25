@@ -42,6 +42,24 @@ vi.mock('@/api/client', () => ({
   getApiError: (e: unknown) => String(e),
 }));
 
+// Sem isto a lista de vendedores vem vazia e o Select de Vendedor nao tem o que
+// oferecer — o formulario fica impossivel de completar no teste.
+vi.mock('@/hooks/useVendedores', () => ({
+  useVendedores: () => ({
+    data: { items: [{ id: 'vendedor-uuid-1', nome: 'Alcides' }] },
+    isLoading: false,
+  }),
+}));
+
+/** Abre um Select do Radix pelo rotulo e escolhe a opcao pelo texto. */
+async function escolherNoSelect(rotulo: RegExp, opcao: RegExp) {
+  const gatilhos = screen.getAllByRole('combobox');
+  const alvo = gatilhos.find(g => rotulo.test(g.closest('div')?.textContent ?? ''));
+  fireEvent.click(alvo ?? gatilhos[0]);
+  const item = await screen.findByRole('option', { name: opcao });
+  fireEvent.click(item);
+}
+
 // ─── Fixtures ────────────────────────────────────────────────────────────────
 
 const existingOrder: Order = {
@@ -142,6 +160,11 @@ describe('OrderModal — create mode', () => {
     // textboxes[0] = OS (readOnly), [1] = Cliente, [2] = CPF/CNPJ, [3] = OC/AF/PED
     fireEvent.change(textboxes[1], { target: { value: 'Test Client' } });
     fireEvent.change(screen.getByPlaceholderText('Ex: OC-1234'), { target: { value: 'OC-0001' } });
+
+    // Empresa e Vendedor tambem sao obrigatorios: o backend exige id_loja e
+    // id_vendedor, e em branco eles voltavam como 422 de uuid_parsing.
+    await escolherNoSelect(/Empresa/, /Lucky Store/);
+    await escolherNoSelect(/Vendedor/, /Alcides/);
 
     fireEvent.click(screen.getByRole('button', { name: /Criar Pedido/i }));
 
