@@ -184,11 +184,40 @@ const QUOTE_PRINT_CSS = `
   .qp-sign-name{font-size:12px;color:#1f2d3d}
 `;
 
-/** Razão social + CNPJ + iniciais + imagens (cabeçalho/rodapé) por loja (para o PDF) */
-const STORE_INFO: Record<string, { label: string; cnpj?: string; initials: string; header: string; footer?: string }> = {
-  'Lucky Store': { label: 'Lucky Store', cnpj: '11.849.935/0001-63', initials: 'LS', header: '/quote-header.png', footer: '/quote-footer.png' },
-  'BTech':       { label: 'BTech Store', cnpj: '54.677.704/0001-22', initials: 'BS', header: '/btech-header.jpeg' },
-  'AJJ':         { label: 'AJJ',         initials: 'AJJ',                              header: '/quote-header.png', footer: '/quote-footer.png' },
+/** Endereço e telefone são os mesmos para as lojas do grupo — só CNPJ e e-mail mudam. */
+const ENDERECO_GRUPO =
+  'Rua Marchal Deodoro Nr 300 SL 1107, Encruzilhada Recife, PE CEP: 52.030-172 Fone/Fax: +55 81 3228.8509';
+
+interface StoreInfo {
+  label: string;
+  cnpj?: string;
+  initials: string;
+  header: string;
+  footer?: string;
+  /** Linha de identificação no pé do PDF. Antes era texto fixo com os dados da
+   *  Lucky Store, então uma cotação da BTech saía impressa com o CNPJ e o
+   *  e-mail da outra empresa. */
+  rodape: { cnpj: string; endereco: string; email: string };
+}
+
+const STORE_INFO: Record<string, StoreInfo> = {
+  'Lucky Store': {
+    label: 'Lucky Store', cnpj: '11.849.935/0001-63', initials: 'LS',
+    header: '/quote-header.png', footer: '/quote-footer.png',
+    rodape: { cnpj: '11849935/0001-63', endereco: ENDERECO_GRUPO, email: 'contato@luckystore.com.br' },
+  },
+  'BTech': {
+    label: 'BTech Store', cnpj: '54.677.704/0001-22', initials: 'BS',
+    header: '/btech-header.jpeg',
+    rodape: { cnpj: '54.677.704/0001-22', endereco: ENDERECO_GRUPO, email: 'btechstore@outlook.com.br' },
+  },
+  'AJJ': {
+    label: 'AJJ', initials: 'AJJ',
+    header: '/quote-header.png', footer: '/quote-footer.png',
+    // A AJJ opera sob o CNPJ e o e-mail da Lucky Store — decisao do negocio, nao
+    // omissao. Se um dia ela tiver dados proprios, e so trocar aqui.
+    rodape: { cnpj: '11849935/0001-63', endereco: ENDERECO_GRUPO, email: 'contato@luckystore.com.br' },
+  },
 };
 
 interface PrintRow { name: string; quantity: number; unit: number; supplier: string }
@@ -198,8 +227,12 @@ function QuotePrintTemplate({ form, rows, total }: { form: Quote; rows: PrintRow
   const sellerName = seller ? (/campos$/i.test(seller) ? seller : `${seller} Campos`) : '—';
   const sendDate = format(new Date(), 'dd/MM/yyyy');
 
-  const store = STORE_INFO[form.company] ??
-    { label: form.company || '—', initials: (form.company || '').slice(0, 2).toUpperCase(), header: '/quote-header.png', footer: '/quote-footer.png' };
+  const store: StoreInfo = STORE_INFO[form.company] ?? {
+    label: form.company || '—',
+    initials: (form.company || '').slice(0, 2).toUpperCase(),
+    header: '/quote-header.png', footer: '/quote-footer.png',
+    rodape: STORE_INFO['Lucky Store'].rodape,
+  };
   const storeLine = store.cnpj ? `${store.label} - ${store.cnpj}` : store.label;
   const titleText = `Cotação - ${[form.index, store.initials, form.storeIndex, form.directBilling ? 'FD' : ''].filter(Boolean).join(' ')}`;
 
@@ -233,7 +266,7 @@ function QuotePrintTemplate({ form, rows, total }: { form: Quote; rows: PrintRow
             <div className="qp-footer">
               {store.footer && <img className="qp-footer-img" src={store.footer} alt="" />}
               <p className="qp-footer-text">
-                CNPJ 11849935/0001-63 Rua Marchal Deodoro Nr 300 SL 1107, Encruzilhada Recife, PE CEP: 52.030-172 Fone/Fax: +55 81 3228.8509 e-mail: contato@luckystore.com.br
+                {`CNPJ ${store.rodape.cnpj} ${store.rodape.endereco} e-mail: ${store.rodape.email}`}
               </p>
             </div>
           </td></tr>
