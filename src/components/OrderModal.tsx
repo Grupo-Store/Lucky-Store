@@ -203,7 +203,9 @@ export function OrderModal({ open, onClose, order, onSave, nextOS, prefill }: Pr
   );
   const derivedFinalProductCost = useMemo(
     () => {
-      const regular = (form.items || []).reduce((s, i) => s + (i.purchaseValue || 0) * (i.quantity || 0), 0);
+      // item.purchaseValue já é o total comprado (soma das sub-compras, ver
+      // OrderStore.tsx SubPurchase/OrderItem) — só ds items usam valor por unidade.
+      const regular = (form.items || []).reduce((s, i) => s + (i.purchaseValue || 0), 0);
       const ds = (form.directSupplyItems || []).reduce((s, i) => s + (i.purchaseValue || 0) * (i.quantity || 0), 0);
       return regular + ds;
     },
@@ -314,6 +316,19 @@ export function OrderModal({ open, onClose, order, onSave, nextOS, prefill }: Pr
     if (!(form.seller || '').trim()) missing.push('Vendedor');
     if (missing.length > 0) {
       toast.error(`Preencha os campos obrigatórios: ${missing.join(', ')}`);
+      return;
+    }
+
+    // Backend exige valor_projetado > 0 (ProdutoCreate.valor_projetado = Field(gt=0)).
+    // Antes, item sem Custo Projetado preenchido virava silenciosamente R$0,01 (Math.max(0.01, ...))
+    // e ficava assim pra sempre, corrompendo o Custo Inicial do pedido sem o vendedor perceber.
+    const semCustoProjetado = [
+      ...(form.items || []),
+      ...(form.directSupplyItems || []),
+    ].filter(i => !(i.projectedValue > 0));
+    if (semCustoProjetado.length > 0) {
+      const nomes = semCustoProjetado.map(i => i.name || 'item sem nome').join(', ');
+      toast.error(`Informe o Custo Projetado (maior que zero) para: ${nomes}`);
       return;
     }
 
