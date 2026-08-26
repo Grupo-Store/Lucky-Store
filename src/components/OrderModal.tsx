@@ -203,7 +203,9 @@ export function OrderModal({ open, onClose, order, onSave, nextOS, prefill }: Pr
   );
   const derivedFinalProductCost = useMemo(
     () => {
-      const regular = (form.items || []).reduce((s, i) => s + (i.purchaseValue || 0) * (i.quantity || 0), 0);
+      // item.purchaseValue já é o total comprado (soma das sub-compras, ver
+      // OrderStore.tsx SubPurchase/OrderItem) — só ds items usam valor por unidade.
+      const regular = (form.items || []).reduce((s, i) => s + (i.purchaseValue || 0), 0);
       const ds = (form.directSupplyItems || []).reduce((s, i) => s + (i.purchaseValue || 0) * (i.quantity || 0), 0);
       return regular + ds;
     },
@@ -317,6 +319,19 @@ export function OrderModal({ open, onClose, order, onSave, nextOS, prefill }: Pr
       return;
     }
 
+    // Backend exige valor_projetado > 0 (ProdutoCreate.valor_projetado = Field(gt=0)).
+    // Antes, item sem Custo Projetado preenchido virava silenciosamente R$0,01 (Math.max(0.01, ...))
+    // e ficava assim pra sempre, corrompendo o Custo Inicial do pedido sem o vendedor perceber.
+    const semCustoProjetado = [
+      ...(form.items || []),
+      ...(form.directSupplyItems || []),
+    ].filter(i => !(i.projectedValue > 0));
+    if (semCustoProjetado.length > 0) {
+      const nomes = semCustoProjetado.map(i => i.name || 'item sem nome').join(', ');
+      toast.error(`Informe o Custo Projetado (maior que zero) para: ${nomes}`);
+      return;
+    }
+
     const o: Order = {
       id: order?.id || crypto.randomUUID(),
       os: form.os || '',
@@ -419,6 +434,11 @@ export function OrderModal({ open, onClose, order, onSave, nextOS, prefill }: Pr
         const orig = origItems.find(orig => orig.id === i.id);
         return orig && orig.status !== i.status;
       });
+      const toUpdateValues = o.items.filter(i => {
+        const orig = origItems.find(orig => orig.id === i.id);
+        return orig && (orig.quantity !== i.quantity
+          || orig.projectedValue !== i.projectedValue || orig.purchaseValue !== i.purchaseValue);
+      });
 
       // ── DS item diff ────────────────────────────────────────────────────────
       const origDsItems = order?.directSupplyItems ?? [];
@@ -462,6 +482,13 @@ export function OrderModal({ open, onClose, order, onSave, nextOS, prefill }: Pr
           ...toUpdateStatus.map(item =>
             apiClient.patch(`/pedidos/${pedidoId}/items/${item.id}/status`, { new_status: item.status })
           ),
+          ...toUpdateValues.map(item =>
+            apiClient.put(`/pedidos/${pedidoId}/items/${item.id}`, {
+              quantidade: item.quantity || 1,
+              valor_projetado: Math.max(0.01, item.projectedValue),
+              valor_compra: item.purchaseValue > 0 ? item.purchaseValue : undefined,
+            })
+          ),
           ...(dsChanged ? origDsItems.map(item => apiClient.delete(`/pedidos/${pedidoId}/items/${item.id}`)) : []),
           ...(dsChanged ? o.directSupplyItems.map(item => apiClient.post(`/pedidos/${pedidoId}/items`, {
             id_vendedor: sellerId,
@@ -483,7 +510,7 @@ export function OrderModal({ open, onClose, order, onSave, nextOS, prefill }: Pr
         ]);
       };
       const finish = async () => {
-        const hasChanges = toAdd.length || toDelete.length || toUpdateStatus.length
+        const hasChanges = toAdd.length || toDelete.length || toUpdateStatus.length || toUpdateValues.length
           || dsChanged
           || fretesToAdd.length || fretesToDelete.length || fretesToUpdate.length;
         if (hasChanges) {
