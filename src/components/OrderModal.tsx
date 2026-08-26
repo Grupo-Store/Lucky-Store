@@ -419,6 +419,11 @@ export function OrderModal({ open, onClose, order, onSave, nextOS, prefill }: Pr
         const orig = origItems.find(orig => orig.id === i.id);
         return orig && orig.status !== i.status;
       });
+      const toUpdateValues = o.items.filter(i => {
+        const orig = origItems.find(orig => orig.id === i.id);
+        return orig && (orig.quantity !== i.quantity
+          || orig.projectedValue !== i.projectedValue || orig.purchaseValue !== i.purchaseValue);
+      });
 
       // ── DS item diff ────────────────────────────────────────────────────────
       const origDsItems = order?.directSupplyItems ?? [];
@@ -462,6 +467,13 @@ export function OrderModal({ open, onClose, order, onSave, nextOS, prefill }: Pr
           ...toUpdateStatus.map(item =>
             apiClient.patch(`/pedidos/${pedidoId}/items/${item.id}/status`, { new_status: item.status })
           ),
+          ...toUpdateValues.map(item =>
+            apiClient.put(`/pedidos/${pedidoId}/items/${item.id}`, {
+              quantidade: item.quantity || 1,
+              valor_projetado: Math.max(0.01, item.projectedValue),
+              valor_compra: item.purchaseValue > 0 ? item.purchaseValue : undefined,
+            })
+          ),
           ...(dsChanged ? origDsItems.map(item => apiClient.delete(`/pedidos/${pedidoId}/items/${item.id}`)) : []),
           ...(dsChanged ? o.directSupplyItems.map(item => apiClient.post(`/pedidos/${pedidoId}/items`, {
             id_vendedor: sellerId,
@@ -483,7 +495,7 @@ export function OrderModal({ open, onClose, order, onSave, nextOS, prefill }: Pr
         ]);
       };
       const finish = async () => {
-        const hasChanges = toAdd.length || toDelete.length || toUpdateStatus.length
+        const hasChanges = toAdd.length || toDelete.length || toUpdateStatus.length || toUpdateValues.length
           || dsChanged
           || fretesToAdd.length || fretesToDelete.length || fretesToUpdate.length;
         if (hasChanges) {
