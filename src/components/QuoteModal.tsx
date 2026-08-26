@@ -223,8 +223,7 @@ const STORE_INFO: Record<string, StoreInfo> = {
 interface PrintRow { name: string; quantity: number; unit: number; supplier: string }
 
 function QuotePrintTemplate({ form, rows, total }: { form: Quote; rows: PrintRow[]; total: number }) {
-  const seller = (form.seller || '').trim();
-  const sellerName = seller ? (/campos$/i.test(seller) ? seller : `${seller} Campos`) : '—';
+  const sellerName = (form.seller || '').trim() || '—';
   const sendDate = format(new Date(), 'dd/MM/yyyy');
 
   const store: StoreInfo = STORE_INFO[form.company] ?? {

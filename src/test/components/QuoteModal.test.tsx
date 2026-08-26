@@ -138,6 +138,99 @@ describe('QuoteModal — create mode', () => {
   });
 });
 
+// ─── Seller name in print template ───────────────────────────────────────────
+
+describe('QuoteModal — seller name in print document', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('shows Alcides Campos in the signature when seller is "Alcides Campos"', () => {
+    render(
+      <QuoteModal
+        open
+        quote={{ ...existingQuote, seller: 'Alcides Campos' as any }}
+        onClose={vi.fn()}
+        onSave={vi.fn()}
+        nextIndex={() => 'COT-001'}
+      />
+    );
+    const signatureNodes = document.querySelectorAll('.qp-sign-name');
+    expect(signatureNodes.length).toBeGreaterThan(0);
+    signatureNodes.forEach(node => expect(node.textContent).toBe('Alcides Campos'));
+  });
+
+  it('shows J. Lucas Campos in the signature — not "Lucas Campos"', () => {
+    render(
+      <QuoteModal
+        open
+        quote={{ ...existingQuote, seller: 'J. Lucas Campos' as any }}
+        onClose={vi.fn()}
+        onSave={vi.fn()}
+        nextIndex={() => 'COT-001'}
+      />
+    );
+    const signatureNodes = document.querySelectorAll('.qp-sign-name');
+    expect(signatureNodes.length).toBeGreaterThan(0);
+    signatureNodes.forEach(node => {
+      expect(node.textContent).toBe('J. Lucas Campos');
+      expect(node.textContent).not.toBe('Lucas Campos');
+    });
+  });
+
+  it('shows J. Pedro Campos in the signature — not "Pedro Campos"', () => {
+    render(
+      <QuoteModal
+        open
+        quote={{ ...existingQuote, seller: 'J. Pedro Campos' as any }}
+        onClose={vi.fn()}
+        onSave={vi.fn()}
+        nextIndex={() => 'COT-001'}
+      />
+    );
+    const signatureNodes = document.querySelectorAll('.qp-sign-name');
+    expect(signatureNodes.length).toBeGreaterThan(0);
+    signatureNodes.forEach(node => {
+      expect(node.textContent).toBe('J. Pedro Campos');
+      expect(node.textContent).not.toBe('Pedro Campos');
+    });
+  });
+
+  it('shows "—" in the signature when seller is empty', () => {
+    render(
+      <QuoteModal
+        open
+        quote={{ ...existingQuote, seller: '' as any }}
+        onClose={vi.fn()}
+        onSave={vi.fn()}
+        nextIndex={() => 'COT-001'}
+      />
+    );
+    const signatureNodes = document.querySelectorAll('.qp-sign-name');
+    expect(signatureNodes.length).toBeGreaterThan(0);
+    signatureNodes.forEach(node => expect(node.textContent).toBe('—'));
+  });
+
+  it('shows same seller name in Liner field and in signature', () => {
+    render(
+      <QuoteModal
+        open
+        quote={{ ...existingQuote, seller: 'J. Lucas Campos' as any }}
+        onClose={vi.fn()}
+        onSave={vi.fn()}
+        nextIndex={() => 'COT-001'}
+      />
+    );
+    const linerNodes  = document.querySelectorAll('.qp-info b');
+    const signNodes   = document.querySelectorAll('.qp-sign-name');
+
+    const linerTexts = Array.from(linerNodes).map(n => n.textContent);
+    expect(linerTexts).toContain('J. Lucas Campos');
+
+    signNodes.forEach(node => expect(node.textContent).toBe('J. Lucas Campos'));
+  });
+});
+
+// ─── Edit mode ───────────────────────────────────────────────────────────────
+
 describe('QuoteModal — edit mode', () => {
   beforeEach(() => vi.clearAllMocks());
 
