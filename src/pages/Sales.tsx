@@ -4,6 +4,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useOrdersQuery, OrderFilters, PedidoListItem, FreteApiItem } from '@/hooks/use-orders-query';
+import { useVendedores, type VendedorItem } from '@/hooks/useVendedores';
 import { useQuotes as useQuotesAPI, useDeleteQuote } from '@/api/hooks/useQuotes';
 import { useRmas } from '@/api/hooks/useRma';
 import { useUpdateItemStatus, useUpdateOrderStatusInline } from '@/api/hooks/useOrders';
@@ -28,7 +29,7 @@ import {
   Quote, DirectSupplyQuoteItem, QuotePhaseKey, QUOTE_PHASE_LABELS, QUOTE_PHASE_COLORS,
   getHighestPhase, getPhaseDate, getDisplayValue, emptyPhases,
 } from '@/store/QuoteStore';
-import { LOJA_IDS, VENDEDOR_IDS, FORMA_PAGAMENTO_MAP } from '@/api/storeConfig';
+import { LOJA_IDS, FORMA_PAGAMENTO_MAP } from '@/api/storeConfig';
 import { OrderModal } from '@/components/OrderModal';
 import { ProductModal } from '@/components/ProductModal';
 import { QuoteModal } from '@/components/QuoteModal';
@@ -68,9 +69,6 @@ function getOrderDisplayStatus(item: PedidoListItem): ItemStatus | null {
 const LOJA_BY_ID: Record<string, string> = Object.fromEntries(
   Object.entries(LOJA_IDS).map(([name, id]) => [id, name])
 );
-const VENDEDOR_BY_ID: Record<string, string> = Object.fromEntries(
-  Object.entries(VENDEDOR_IDS).map(([name, id]) => [id, name])
-);
 
 // ── CotacaoResponse helpers ───────────────────────────────────────────────
 function getCotacaoPhase(c: CotacaoResponse): QuotePhaseKey | null {
@@ -90,7 +88,7 @@ function cleanStr(v: string | null | undefined): string {
   return s === 'string' ? '' : s;
 }
 
-function cotacaoToQuote(c: CotacaoResponse): Quote {
+function cotacaoToQuote(c: CotacaoResponse, vendedores: VendedorItem[]): Quote {
   const allItems = c.itens ?? [];
   const hasDirect = allItems.some(i => i.is_direct_supply);
   return {
@@ -106,7 +104,7 @@ function cotacaoToQuote(c: CotacaoResponse): Quote {
     company: (LOJA_BY_ID[c.id_loja] ?? '') as any,
     directBilling: c.is_direct_billing || hasDirect,
     supplier: cleanStr(c.fornecedor),
-    seller: (VENDEDOR_BY_ID[c.id_vendedor] ?? '') as any,
+    seller: (vendedores.find(v => v.id === c.id_vendedor)?.nome ?? '') as any,
     value: parseFloat(c.valor_total ?? '0') || 0,
     items: allItems.filter(i => !i.is_direct_supply).map(i => ({
       id: i.id,
@@ -406,6 +404,9 @@ export default function Sales() {
   const { mutate: updateItemStatusApi } = useUpdateItemStatus();
   const { mutate: updateOrderStatusInline, isPending: isStatusUpdating } = useUpdateOrderStatusInline();
 
+  const { data: vendedoresData } = useVendedores();
+  const vendedores = vendedoresData?.items ?? [];
+
   const displayedOrders = useMemo<PedidoListItem[]>(() => {
     if (orderView === 'rma') return [];
 
@@ -523,7 +524,7 @@ export default function Sales() {
         (qt.numero_requisicao ?? '').toLowerCase().includes(q) ||
         (qt.b2b_company ?? '').toLowerCase().includes(q) ||
         (LOJA_BY_ID[qt.id_loja] ?? '').toLowerCase().includes(q) ||
-        (VENDEDOR_BY_ID[qt.id_vendedor] ?? '').toLowerCase().includes(q)
+        (vendedores.find(v => v.id === qt.id_vendedor)?.nome ?? '').toLowerCase().includes(q)
       )) return false;
       if (quoteRange.from && quoteDateField === 'phaseDate') {
         if (!qt.data_validade || !isInRange(qt.data_validade, quoteRange)) return false;
@@ -782,12 +783,12 @@ export default function Sales() {
                         return (
                           <TableRow key={qt.id} className="cursor-pointer hover:bg-[#F8FAFE]"
                             style={{ borderBottom: '1px solid #EEF2F8' }}
-                            onClick={() => { setEditQuote(cotacaoToQuote(qt)); setQuoteModalOpen(true); }}>
+                            onClick={() => { setEditQuote(cotacaoToQuote(qt, vendedores)); setQuoteModalOpen(true); }}>
                             <TableCell className="font-medium" style={{ padding: '15px 18px' }}>{qt.b2b_company?.trim() || qt.cliente}</TableCell>
                             <TableCell style={{ padding: '15px 18px' }}>{fmtDate(qt.data_cotacao)}</TableCell>
                             <TableCell style={{ padding: '15px 18px' }}>{qt.numero_requisicao || '—'}</TableCell>
                             <TableCell style={{ padding: '15px 18px' }}>{LOJA_BY_ID[qt.id_loja] || '—'}</TableCell>
-                            <TableCell style={{ padding: '15px 18px' }}>{VENDEDOR_BY_ID[qt.id_vendedor] || '—'}</TableCell>
+                            <TableCell style={{ padding: '15px 18px' }}>{vendedores.find(v => v.id === qt.id_vendedor)?.nome || '—'}</TableCell>
                             <TableCell style={{ padding: '15px 18px' }}>
                               {highest ? (
                                 <span className={cn('px-2 py-0.5 rounded text-xs font-semibold border', QUOTE_PHASE_COLORS[highest])}>
