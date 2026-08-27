@@ -6,6 +6,7 @@ export interface VendedorItem {
   id: string
   nome: string
   email: string | null
+  phone: string | null
   id_loja: string
 }
 

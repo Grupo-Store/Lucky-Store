@@ -17,6 +17,9 @@ class VendedorOut(BaseModel):
     id: UUID
     nome: str
     email: Optional[str] = None
+    # A coluna ja existia em vendedores; so nao era devolvida. O rodape da
+    # cotacao da BTech mostra o contato do vendedor e precisa dela.
+    phone: Optional[str] = None
     id_loja: UUID
 
 

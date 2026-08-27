@@ -135,6 +135,20 @@ const QUOTE_PRINT_CSS = `
   /* min-height preenche uma página para o rodapé ficar no fim mesmo com pouco conteúdo */
   .qp-body{min-height:248mm}
 
+
+  /* Cartao de contato do rodape (BTech). Reproduz o timbrado: caixa clara com o
+     logo a esquerda e o contato do vendedor a direita, e abaixo a faixa azul.
+     A Lucky nao usa isto — o cartao dela esta dentro de quote-footer.png. */
+  .qp-fcard{width:540px;max-width:100%;margin:0 auto;text-align:left}
+  .qp-fcard-top{display:flex;align-items:center;gap:14px;background:#eef0f2;
+    border-radius:6px 6px 0 0;padding:10px 14px}
+  .qp-fcard-logo{width:58px;height:auto;background:#fff;border-radius:4px;padding:4px;flex:none}
+  .qp-fcard-nome{font-size:12.5px;font-weight:700;color:#1f2d3d;line-height:1.35}
+  .qp-fcard-linha{font-size:11.5px;color:#3f4d5e;line-height:1.45}
+  .qp-fcard-bar{background:#1f7fb5;color:#fff;font-size:10px;font-weight:700;
+    letter-spacing:.12em;text-transform:uppercase;text-align:center;padding:5px 14px;
+    border-radius:0 0 6px 6px}
+
   /* Rodapé (texto + imagem, quando houver) */
   .qp-footer{text-align:center;padding:6mm 14mm 8mm}
   .qp-footer-img{display:block;margin:0 auto;max-width:100%;width:540px;max-height:38mm;height:auto}
@@ -194,6 +208,10 @@ interface StoreInfo {
   initials: string;
   header: string;
   footer?: string;
+  /** Cartao de contato montado em HTML, com logo da loja e dados do vendedor.
+   *  So a BTech usa: a Lucky tem o mesmo cartao dentro de quote-footer.png e
+   *  fica como esta. */
+  footerCard?: boolean;
   /** Linha de identificação no pé do PDF. Antes era texto fixo com os dados da
    *  Lucky Store, então uma cotação da BTech saía impressa com o CNPJ e o
    *  e-mail da outra empresa. */
@@ -208,7 +226,7 @@ const STORE_INFO: Record<string, StoreInfo> = {
   },
   'BTech': {
     label: 'BTech Store', cnpj: '54.677.704/0001-22', initials: 'BS',
-    header: '/btech-header.jpeg',
+    header: '/btech-header.jpeg', footerCard: true,
     rodape: { cnpj: '54.677.704/0001-22', endereco: ENDERECO_GRUPO, email: 'btechstore@outlook.com.br' },
   },
   'AJJ': {
@@ -222,7 +240,11 @@ const STORE_INFO: Record<string, StoreInfo> = {
 
 interface PrintRow { name: string; quantity: number; unit: number; supplier: string }
 
-function QuotePrintTemplate({ form, rows, total }: { form: Quote; rows: PrintRow[]; total: number }) {
+function QuotePrintTemplate({ form, rows, total, vendedor }: {
+  form: Quote; rows: PrintRow[]; total: number;
+  /** Registro do vendedor da cotacao — usado pelo cartao do rodape da BTech. */
+  vendedor?: { nome: string; email: string | null; phone: string | null };
+}) {
   const sellerName = (form.seller || '').trim() || '—';
   const sendDate = format(new Date(), 'dd/MM/yyyy');
 
@@ -256,7 +278,7 @@ function QuotePrintTemplate({ form, rows, total }: { form: Quote; rows: PrintRow
       </svg>
 
       {/* min-height dinâmico: a reserva do rodapé varia se a loja tem imagem */}
-      <style>{`@media print{.qp-body{min-height:${store.footer ? '212mm' : '252mm'}}}`}</style>
+      <style>{`@media print{.qp-body{min-height:${(store.footer || store.footerCard) ? '212mm' : '252mm'}}}`}</style>
 
       <table className="qp-page">
         {/* Rodapé — repetido no FIM de toda página */}
@@ -264,6 +286,19 @@ function QuotePrintTemplate({ form, rows, total }: { form: Quote; rows: PrintRow
           <tr><td>
             <div className="qp-footer">
               {store.footer && <img className="qp-footer-img" src={store.footer} alt="" />}
+              {store.footerCard && (
+                <div className="qp-fcard">
+                  <div className="qp-fcard-top">
+                    <img className="qp-fcard-logo" src={store.header} alt={store.label} />
+                    <div>
+                      <div className="qp-fcard-nome">{vendedor?.nome || sellerName}</div>
+                      {vendedor?.phone && <div className="qp-fcard-linha">{vendedor.phone}</div>}
+                      {vendedor?.email && <div className="qp-fcard-linha">e-mail: {vendedor.email}</div>}
+                    </div>
+                  </div>
+                  <div className="qp-fcard-bar">Vendas, Locações e Serviços</div>
+                </div>
+              )}
               <p className="qp-footer-text">
                 {`CNPJ ${store.rodape.cnpj} ${store.rodape.endereco} e-mail: ${store.rodape.email}`}
               </p>
@@ -688,6 +723,10 @@ export function QuoteModal({ open, onClose, quote, onSave, onDelete, nextIndex }
   /* ---------------- Presentation-only derived values ---------------- */
   const activePhases = (Object.keys(form.phases) as QuotePhaseKey[]).filter(k => form.phases[k].active);
   const marginBarW = Math.max(0, Math.min(margin, 100));
+
+  // Vendedor da cotacao, para o cartao do rodape da BTech. Casa pelo nome, que e
+  // o que o formulario guarda; sem correspondencia o cartao cai no nome digitado.
+  const vendedorDaCotacao = vendedores.find(v => v.nome === form.seller);
 
   /* ---------------- Print rows (regular + direct-supply items) ---------------- */
   const printRows: PrintRow[] = [
@@ -1141,7 +1180,7 @@ export function QuoteModal({ open, onClose, quote, onSave, onDelete, nextIndex }
       {open && printRootRef.current && createPortal(
         <>
           <style>{QUOTE_PRINT_CSS}</style>
-          <QuotePrintTemplate form={form} rows={printRows} total={allRevenue} />
+          <QuotePrintTemplate form={form} rows={printRows} total={allRevenue} vendedor={vendedorDaCotacao} />
         </>,
         printRootRef.current,
       )}
