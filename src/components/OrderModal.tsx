@@ -1,4 +1,5 @@
-import { useState, useEffect, KeyboardEvent, useMemo } from 'react';
+import { useState, useEffect, useRef, Fragment, KeyboardEvent, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -126,55 +127,6 @@ const ORDER_MODAL_CSS = `
     .opm-aside{position:static;order:-1}
     .opm-jump{display:none}
   }
-  /* ── Impressao ────────────────────────────────────────────────────────────
-     O modal e um DialogContent do Radix: position:fixed, centralizado por
-     translate, com h-[90vh] e overflow-y-auto. Nada disso sobrevive a uma
-     impressao:
-
-     - altura fixa + overflow:auto => o navegador desenha so o trecho visivel
-       da caixa e descarta o resto. Era o corte no meio da pagina.
-     - position:fixed => elemento fixo imprime apenas na primeira folha, entao
-       o conteudo nem chegava a paginar.
-
-     As classes print:max-h-none e print:max-w-full que ja existiam no JSX nao
-     resolviam: elas limpam max-height/max-width, mas height:90vh e width:90vw
-     continuavam de pe.
-
-     Aqui o modal deixa de ser caixa flutuante e vira conteudo de pagina. */
-  @media print{
-    @page{size:A4;margin:10mm}
-
-    html,body{height:auto!important;overflow:visible!important;background:#fff!important}
-
-    /* a aplicacao atras do modal e o veu escuro nao vao para o papel */
-    body>#root{display:none!important}
-    .dlg-overlay{display:none!important}
-
-    .opm-root{
-      position:static!important;
-      transform:none!important;
-      left:auto!important;top:auto!important;
-      width:100%!important;max-width:100%!important;
-      height:auto!important;max-height:none!important;
-      overflow:visible!important;
-      margin:0!important;padding:0!important;
-      border:0!important;border-radius:0!important;box-shadow:none!important;
-      background:#fff!important;
-    }
-
-    /* qualquer rolagem interna tambem corta — o .opm-card, por exemplo, tem
-       overflow:hidden para arredondar os cantos */
-    .opm-root *{overflow:visible!important;max-height:none!important}
-
-    /* o botao de fechar do Dialog nao faz sentido no papel */
-    .opm-root>button[type="button"]:has(>svg){display:none!important}
-
-    /* evita quebrar uma secao ao meio entre duas folhas */
-    .opm-card,.opm-sum{break-inside:avoid;page-break-inside:avoid}
-
-    /* o resumo e sticky na tela; no papel tem que fluir junto */
-    .opm-aside{position:static!important}
-  }
 `;
 
 interface Props {
@@ -186,6 +138,301 @@ interface Props {
   nextOS?: () => string;
   /** Optional pre-fill data when creating from a quote */
   prefill?: OrderPrefill | null;
+}
+
+
+/* ===== Documento de impressao (Imprimir -> Salvar como PDF) =================
+   Mesma mecanica do QuoteModal: o documento e montado num #opm-print-root
+   pendurado no <body>, e a impressao esconde todo o resto. Sem isso o navegador
+   imprimiria o modal como ele esta na tela — caixas de input, botoes e tudo —
+   e o DialogContent do Radix e position:fixed com altura travada, entao saia
+   cortado no meio da pagina.
+
+   Larguras de coluna sao fixas (table-layout:fixed) para a tabela nunca
+   estourar a folha. O breakpoint de celular do app fica em 700px, ABAIXO dos
+   734px uteis de uma A4, senao o papel herdaria o layout de duas colunas. */
+const ORDER_PRINT_CSS = `
+  #opm-print-root{display:none}
+  @media print{
+    @page{size:A4;margin:10mm}
+    html,body{background:#fff !important}
+    body>*{display:none !important}
+    body>#opm-print-root{display:block !important}
+  }
+  .op-doc{font-family:'IBM Plex Sans','Inter',system-ui,sans-serif;color:#16273f;
+    font-size:10.5px;line-height:1.5;background:#fff;
+    -webkit-print-color-adjust:exact;print-color-adjust:exact;
+    display:flex;flex-direction:column;gap:8px}
+
+  .op-top{display:flex;align-items:flex-start;justify-content:space-between;gap:24px;
+    padding-bottom:9px;border-bottom:2px solid #16273f}
+  .op-loja{display:flex;flex-direction:column;align-items:flex-start;gap:5px}
+  .op-logo{display:block;width:auto;max-height:42px}
+  .op-cnpj{font-size:10.5px;color:#5b6b82;font-variant-numeric:tabular-nums}
+  .op-id{text-align:right;display:flex;flex-direction:column;gap:1px;align-items:flex-end}
+  .op-tipo{font-size:10px;font-weight:600;letter-spacing:.16em;text-transform:uppercase;color:#5b6b82}
+  .op-num{font-family:'IBM Plex Mono',ui-monospace,monospace;font-size:24px;font-weight:600;
+    line-height:1;font-variant-numeric:tabular-nums}
+  .op-pill{display:inline-block;margin-top:4px;font-size:10px;font-weight:600;padding:2px 9px;
+    border-radius:999px;border:1px solid #c7e8d3;background:#e8f6ee;color:#137a42}
+
+  .op-meta{display:grid;grid-template-columns:repeat(4,1fr);gap:7px 16px}
+  .op-meta>div{display:flex;flex-direction:column;min-width:0}
+  .op-meta .k{font-size:9px;font-weight:600;letter-spacing:.11em;text-transform:uppercase;color:#93a3b6}
+  .op-meta .v{font-size:11px;font-weight:500;overflow-wrap:anywhere}
+
+  .op-sec{display:flex;flex-direction:column;gap:5px;break-inside:avoid}
+  .op-sec>h2{margin:0;font-size:9.5px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;
+    color:#15807c;display:flex;align-items:center;gap:9px}
+  .op-sec>h2::after{content:"";flex:1;height:1px;background:#d9e1ea}
+
+  .op-tbl{width:100%;border-collapse:collapse;font-size:11px;table-layout:fixed}
+  .op-tbl thead{display:table-header-group}
+  .op-tbl th{text-align:left;font-size:9px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;
+    color:#5b6b82;padding:4px 6px;background:#f3f6fa;border-bottom:1px solid #d9e1ea}
+  .op-tbl td{padding:4.5px 6px;border-bottom:1px solid #d9e1ea;vertical-align:top;overflow-wrap:anywhere}
+  .op-tbl tbody tr{break-inside:avoid}
+  .op-tbl .r{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+  .op-tbl .c{text-align:center}
+  .op-tbl tfoot td{border-bottom:none;padding-top:5px;font-weight:600}
+  .op-idx{font-family:'IBM Plex Mono',ui-monospace,monospace;color:#93a3b6}
+  .op-box{display:inline-block;width:12px;height:12px;border:1.5px solid #5b6b82;border-radius:2.5px}
+  /* sub-compra: recuada sob o item, sem borda propria para ler como continuacao */
+  .op-sub td{border-bottom:none;padding-top:1px;padding-bottom:1px;color:#5b6b82;font-size:10px}
+  .op-sub .op-de{padding-left:14px}
+  .op-sub-fim td{border-bottom:1px solid #d9e1ea;padding-bottom:4.5px}
+
+  .op-dupla{display:grid;grid-template-columns:1.35fr 1fr;gap:18px;align-items:start;break-inside:avoid}
+  .op-custos{display:grid;grid-template-columns:repeat(2,1fr);gap:5px 14px}
+  .op-campo{display:flex;justify-content:space-between;gap:8px;padding-bottom:3px;border-bottom:1px solid #d9e1ea}
+  .op-campo .k{font-size:9.5px;color:#5b6b82}
+  .op-campo .v{font-size:11.5px;font-weight:500;font-variant-numeric:tabular-nums;white-space:nowrap}
+
+  .op-resumo{display:flex;flex-direction:column;gap:1px;background:#d9e1ea;border:1px solid #d9e1ea;
+    border-radius:6px;overflow:hidden}
+  .op-resumo>div{background:#fff;padding:6px 10px;display:flex;justify-content:space-between;
+    align-items:baseline;gap:10px}
+  .op-resumo .k{font-size:9.5px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:#93a3b6}
+  .op-resumo .v{font-size:13px;font-weight:600;font-variant-numeric:tabular-nums}
+  .op-resumo .op-destaque{background:#0f5f5c;color:#eafaf6}
+  .op-resumo .op-destaque .k{color:#9fd9d4}
+  .op-resumo .op-destaque .v{font-size:16px}
+
+  .op-obs{font-size:11px;color:#5b6b82;border:1px solid #d9e1ea;border-radius:6px;padding:7px 10px;min-height:30px}
+  .op-assina{display:grid;grid-template-columns:repeat(3,1fr);gap:20px;margin-top:4px;break-inside:avoid}
+  .op-assina div{border-top:1px solid #16273f;padding-top:5px;font-size:9.5px;color:#5b6b82;letter-spacing:.04em}
+  .op-foot{margin-top:4px;padding-top:8px;border-top:1px solid #d9e1ea;
+    font-size:7.5px;color:#93a3b6;line-height:1.5}
+`;
+
+
+/** Identificacao da loja no documento impresso. CNPJ e e-mail sao os mesmos que
+ *  a cotacao usa (ver STORE_INFO em QuoteModal) — mantidos aqui em paralelo por
+ *  ora; se um terceiro lugar precisar, vale extrair para storeConfig. */
+const OP_LOJA: Record<string, { logo: string; cnpj: string; rodape: string }> = {
+  'Lucky Store': {
+    logo: '/quote-header.png',
+    cnpj: '11.849.935/0001-63',
+    rodape: 'CNPJ 11849935/0001-63 · Rua Marchal Deodoro Nr 300 SL 1107, Encruzilhada Recife, PE · CEP 52.030-172 · Fone/Fax +55 81 3228.8509 · contato@luckystore.com.br',
+  },
+  'BTech': {
+    logo: '/btech-header.jpeg',
+    cnpj: '54.677.704/0001-22',
+    rodape: 'CNPJ 54.677.704/0001-22 · Rua Marchal Deodoro Nr 300 SL 1107, Encruzilhada Recife, PE · CEP 52.030-172 · Fone/Fax +55 81 3228.8509 · btechstore@outlook.com.br',
+  },
+  'AJJ': {
+    logo: '/quote-header.png',
+    cnpj: '11.849.935/0001-63',
+    rodape: 'CNPJ 11849935/0001-63 · Rua Marchal Deodoro Nr 300 SL 1107, Encruzilhada Recife, PE · CEP 52.030-172 · Fone/Fax +55 81 3228.8509 · contato@luckystore.com.br',
+  },
+};
+
+/** ItemStatus ('To Buy' | 'Bought' | 'In Stock') nao tem mapa de rotulo no
+ *  OrderStore — o Select da tela mostra o valor cru. No papel vai traduzido. */
+const OP_ITEM_STATUS: Record<ItemStatus, string> = {
+  'To Buy': 'A comprar',
+  'Bought': 'Comprado',
+  'In Stock': 'Em estoque',
+};
+
+/** Ordem de servico em papel: documento, nao captura da tela. */
+function OrderPrintTemplate({ form, valores }: {
+  /** O estado do modal e Partial<Order> — todo campo pode estar vazio enquanto
+   *  o pedido esta sendo preenchido, e o papel tem que aguentar isso. */
+  form: Partial<Order>;
+  valores: {
+    custoInicial: number; custoFinal: number; freteTotal: number;
+    creditoValor: number; debitoValor: number; impCompraValor: number; impVendaValor: number;
+    custoTotal: number; lucro: number; margem: number;
+  };
+}) {
+  const loja = OP_LOJA[form.company ?? ''] ?? OP_LOJA['Lucky Store'];
+  const itens = form.items || [];
+  const fretes = form.freight || [];
+  const pct = (v?: number) => `${(v || 0).toString().replace('.', ',')}%`;
+  // 'T12:00:00' evita que o fuso jogue a data para o dia anterior — mesmo
+  // truque que o modal ja usa nos campos de data.
+  const dt = (v?: string) => (v ? format(new Date(v + 'T12:00:00'), 'dd/MM/yyyy') : '—');
+
+  return (
+    <div className="op-doc">
+      <div className="op-top">
+        <div className="op-loja">
+          <img className="op-logo" src={loja.logo} alt={form.company} />
+          <span className="op-cnpj">CNPJ {loja.cnpj}</span>
+        </div>
+        <div className="op-id">
+          <span className="op-tipo">Ordem de Serviço</span>
+          <span className="op-num">{form.os ? `OS-${form.os}` : 'OS'}</span>
+          <span className="op-pill">{form.status ? (ORDER_STATUS_LABELS[form.status] ?? form.status) : '—'}</span>
+        </div>
+      </div>
+
+      <div className="op-meta">
+        <div><span className="k">Cliente</span><span className="v">{form.customerCompany?.trim() || form.customer || '—'}</span></div>
+        <div><span className="k">CPF/CNPJ</span><span className="v">{form.cnpj || '—'}</span></div>
+        <div><span className="k">Vendedor</span><span className="v">{form.seller || '—'}</span></div>
+        <div><span className="k">OC/AF/PED</span><span className="v">{form.ocAfPed || '—'}</span></div>
+        <div><span className="k">Data do pedido</span><span className="v">{dt(form.orderDate)}</span></div>
+        <div><span className="k">Data de entrega</span><span className="v">{dt(form.deliveryDate)}</span></div>
+        <div><span className="k">Nota fiscal</span><span className="v">{form.invoice || '—'}</span></div>
+        <div><span className="k">Faturamento direto</span><span className="v">{form.directBilling ? 'Sim' : 'Não'}</span></div>
+      </div>
+
+      <div className="op-sec">
+        <h2>Itens do pedido</h2>
+        <table className="op-tbl">
+          <colgroup>
+            <col style={{ width: '6%' }} /><col style={{ width: '5%' }} /><col style={{ width: '32%' }} />
+            <col style={{ width: '6%' }} /><col style={{ width: '14%' }} /><col style={{ width: '13%' }} />
+            <col style={{ width: '12%' }} /><col style={{ width: '12%' }} />
+          </colgroup>
+          <thead>
+            <tr>
+              <th className="c">Conf.</th><th>#</th><th>Produto</th><th className="c">Qtd</th>
+              <th>Status</th><th>Fornecedor</th><th className="r">Custo proj.</th><th className="r">Val. compra</th>
+            </tr>
+          </thead>
+          <tbody>
+            {itens.length === 0 && (
+              <tr><td colSpan={8} className="c">Nenhum item</td></tr>
+            )}
+            {itens.map((item, idx) => {
+              const subs = item.subPurchases || [];
+              return (
+                <Fragment key={item.id}>
+                  <tr>
+                    <td className="c"><span className="op-box" /></td>
+                    <td className="op-idx">{String(idx + 1).padStart(2, '0')}</td>
+                    <td>{item.name || '—'}</td>
+                    <td className="c">{item.quantity || 0}</td>
+                    <td>{OP_ITEM_STATUS[item.status] ?? item.status}</td>
+                    {/* Fornecedor mora nas sub-compras: um item pode vir de mais de uma.
+                        Sem sub-compra, nao ha fornecedor a mostrar. */}
+                    <td>{subs.length === 0 ? '—' : ''}</td>
+                    <td className="r">{toBRL((item.projectedValue || 0) * (item.quantity || 0))}</td>
+                    <td className="r">{item.purchaseValue ? toBRL(item.purchaseValue) : '—'}</td>
+                  </tr>
+                  {subs.map((sc, k) => (
+                    <tr key={sc.id} className={`op-sub${k === subs.length - 1 ? ' op-sub-fim' : ''}`}>
+                      <td /><td />
+                      <td className="op-de">↳ {sc.buyer ? `${sc.buyer} · ` : ''}{dt(sc.purchaseDate)}</td>
+                      <td className="c">{sc.selectedQuantity || 0}</td>
+                      <td>{OP_ITEM_STATUS[sc.status] ?? sc.status}</td>
+                      <td>{sc.supplier || '—'}</td>
+                      <td className="r" />
+                      <td className="r">{sc.purchaseValue ? toBRL(sc.purchaseValue) : '—'}</td>
+                    </tr>
+                  ))}
+                </Fragment>
+              );
+            })}
+          </tbody>
+          <tfoot>
+            <tr>
+              {/* Dois numeros, um por coluna: projetado x efetivamente comprado.
+                  Rotular de "Custo final do produto" confundia — parecia que os
+                  dois valores eram a mesma coisa. */}
+              <td colSpan={6} className="r">Totais</td>
+              <td className="r">{toBRL(valores.custoInicial)}</td>
+              <td className="r">{toBRL(valores.custoFinal)}</td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+
+      {fretes.length > 0 && (
+        <div className="op-sec">
+          <h2>Frete</h2>
+          <table className="op-tbl">
+            <colgroup>
+              <col style={{ width: '6%' }} /><col style={{ width: '48%' }} /><col style={{ width: '16%' }} />
+              <col style={{ width: '20%' }} /><col style={{ width: '10%' }} />
+            </colgroup>
+            <thead>
+              <tr><th>#</th><th>Entregador</th><th className="r">Valor</th><th>Data</th><th className="c">Pago</th></tr>
+            </thead>
+            <tbody>
+              {fretes.map((f, idx) => (
+                <tr key={f.id}>
+                  <td className="op-idx">{String(idx + 1).padStart(2, '0')}</td>
+                  <td>{f.deliveryPerson || '—'}</td>
+                  <td className="r">{toBRL(f.value || 0)}</td>
+                  <td>{dt(f.deliveryDate)}</td>
+                  <td className="c">{f.pago ? '✓' : <span className="op-box" />}</td>
+                </tr>
+              ))}
+            </tbody>
+            <tfoot>
+              <tr><td colSpan={2} className="r">Total</td><td className="r">{toBRL(valores.freteTotal)}</td><td colSpan={2} /></tr>
+            </tfoot>
+          </table>
+        </div>
+      )}
+
+      <div className="op-dupla">
+        <div className="op-sec">
+          <h2>Financeiro</h2>
+          <div className="op-custos">
+            <div className="op-campo"><span className="k">Custo inicial produto</span><span className="v">{toBRL(valores.custoInicial)}</span></div>
+            <div className="op-campo"><span className="k">Custo final produto</span><span className="v">{toBRL(valores.custoFinal)}</span></div>
+            <div className="op-campo"><span className="k">Custo boleto</span><span className="v">{toBRL(form.boletoCost || 0)}</span></div>
+            <div className="op-campo"><span className="k">Frete</span><span className="v">{toBRL(valores.freteTotal)}</span></div>
+            <div className="op-campo"><span className="k">Brinde</span><span className="v">{toBRL(form.giftCost || 0)}</span></div>
+            <div className="op-campo"><span className="k">Crédito · {pct(form.creditCostPercent)}</span><span className="v">{toBRL(valores.creditoValor)}</span></div>
+            <div className="op-campo"><span className="k">Débito · {pct(form.debitCostPercent)}</span><span className="v">{toBRL(valores.debitoValor)}</span></div>
+            <div className="op-campo"><span className="k">Imp. compra · {pct(form.purchaseTaxPercent)}</span><span className="v">{toBRL(valores.impCompraValor)}</span></div>
+          </div>
+        </div>
+        <div className="op-sec">
+          <h2>Resumo</h2>
+          <div className="op-resumo">
+            <div><span className="k">Valor de venda</span><span className="v">{toBRL(form.salesValue || 0)}</span></div>
+            <div><span className="k">Custo total</span><span className="v">{toBRL(valores.custoTotal)}</span></div>
+            <div><span className="k">Margem</span><span className="v">{(form.salesValue || 0) > 0 ? `${valores.margem.toFixed(1)}%` : '—'}</span></div>
+            <div className="op-destaque"><span className="k">Lucro do pedido</span><span className="v">{toBRL(valores.lucro)}</span></div>
+          </div>
+        </div>
+      </div>
+
+      <div className="op-sec">
+        <h2>Pagamento e observações</h2>
+        <div className="op-meta">
+          <div><span className="k">Forma</span><span className="v">{form.paymentMethod || form.paymentMethods?.join(', ') || '—'}</span></div>
+          <div><span className="k">Parcelas</span><span className="v">{form.paymentInstallments || form.installments || 1}</span></div>
+          <div><span className="k">Data pagamento</span><span className="v">{dt(form.paymentDate)}</span></div>
+          <div><span className="k">Multa · Juros</span><span className="v">{toBRL(form.penaltyValue || 0)} · {toBRL(form.interestValue || 0)}</span></div>
+        </div>
+        <div className="op-obs">{form.observations?.trim() || '—'}</div>
+      </div>
+
+      <div className="op-assina">
+        <div>Separado por</div><div>Conferido por</div><div>Data</div>
+      </div>
+
+      <div className="op-foot">{loja.rodape}</div>
+    </div>
+  );
 }
 
 export function OrderModal({ open, onClose, order, onSave, nextOS, prefill }: Props) {
@@ -710,6 +957,38 @@ export function OrderModal({ open, onClose, order, onSave, nextOS, prefill }: Pr
   const partialProfit = (form.salesValue || 0) - partialCost;
   const partialMarginPct = (form.salesValue || 0) > 0 ? (partialProfit / (form.salesValue || 1)) * 100 : 0;
   const partialMarginBarW = Math.max(0, Math.min(partialMarginPct, 100));
+
+  // Container do documento impresso: uma instancia no <body>, recriada a cada
+  // montagem e limpando qualquer "#opm-print-root" orfao (hot-reload deixa um
+  // com dados antigos). Mesma abordagem do QuoteModal.
+  const printRootRef = useRef<HTMLDivElement | null>(null);
+  if (printRootRef.current === null && typeof document !== 'undefined') {
+    const el = document.createElement('div');
+    el.id = 'opm-print-root';
+    printRootRef.current = el;
+  }
+  useEffect(() => {
+    const el = printRootRef.current;
+    if (!el) return;
+    document.querySelectorAll('#opm-print-root').forEach(n => { if (n !== el) n.remove(); });
+    document.body.appendChild(el);
+    return () => { el.remove(); };
+  }, []);
+
+  // Os mesmos numeros que os cartoes da tela mostram — o papel nao pode divergir
+  // do que o vendedor acabou de ver.
+  const valoresImpressao = {
+    custoInicial: derivedInitialProductCost,
+    custoFinal: derivedFinalProductCost,
+    freteTotal: derivedFreightTotal,
+    creditoValor: computed.creditCostValue,
+    debitoValor: computed.debitCostValue,
+    impCompraValor: computed.purchaseTaxValue,
+    impVendaValor: computed.salesTaxValue,
+    custoTotal: finalCost,
+    lucro: profit,
+    margem: marginPct,
+  };
 
   return (
     <Dialog open={open} onOpenChange={v => !v && onClose()}>
@@ -1279,6 +1558,15 @@ export function OrderModal({ open, onClose, order, onSave, nextOS, prefill }: Pr
 
         </div>{/* /opm-editor */}
       </DialogContent>
+
+      {/* Documento de impressao — montado no <body>; so ele vai para o papel */}
+      {open && printRootRef.current && createPortal(
+        <>
+          <style>{ORDER_PRINT_CSS}</style>
+          <OrderPrintTemplate form={form} valores={valoresImpressao} />
+        </>,
+        printRootRef.current,
+      )}
     </Dialog>
   );
 }
