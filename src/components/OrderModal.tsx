@@ -126,6 +126,55 @@ const ORDER_MODAL_CSS = `
     .opm-aside{position:static;order:-1}
     .opm-jump{display:none}
   }
+  /* ── Impressao ────────────────────────────────────────────────────────────
+     O modal e um DialogContent do Radix: position:fixed, centralizado por
+     translate, com h-[90vh] e overflow-y-auto. Nada disso sobrevive a uma
+     impressao:
+
+     - altura fixa + overflow:auto => o navegador desenha so o trecho visivel
+       da caixa e descarta o resto. Era o corte no meio da pagina.
+     - position:fixed => elemento fixo imprime apenas na primeira folha, entao
+       o conteudo nem chegava a paginar.
+
+     As classes print:max-h-none e print:max-w-full que ja existiam no JSX nao
+     resolviam: elas limpam max-height/max-width, mas height:90vh e width:90vw
+     continuavam de pe.
+
+     Aqui o modal deixa de ser caixa flutuante e vira conteudo de pagina. */
+  @media print{
+    @page{size:A4;margin:10mm}
+
+    html,body{height:auto!important;overflow:visible!important;background:#fff!important}
+
+    /* a aplicacao atras do modal e o veu escuro nao vao para o papel */
+    body>#root{display:none!important}
+    .dlg-overlay{display:none!important}
+
+    .opm-root{
+      position:static!important;
+      transform:none!important;
+      left:auto!important;top:auto!important;
+      width:100%!important;max-width:100%!important;
+      height:auto!important;max-height:none!important;
+      overflow:visible!important;
+      margin:0!important;padding:0!important;
+      border:0!important;border-radius:0!important;box-shadow:none!important;
+      background:#fff!important;
+    }
+
+    /* qualquer rolagem interna tambem corta — o .opm-card, por exemplo, tem
+       overflow:hidden para arredondar os cantos */
+    .opm-root *{overflow:visible!important;max-height:none!important}
+
+    /* o botao de fechar do Dialog nao faz sentido no papel */
+    .opm-root>button[type="button"]:has(>svg){display:none!important}
+
+    /* evita quebrar uma secao ao meio entre duas folhas */
+    .opm-card,.opm-sum{break-inside:avoid;page-break-inside:avoid}
+
+    /* o resumo e sticky na tela; no papel tem que fluir junto */
+    .opm-aside{position:static!important}
+  }
 `;
 
 interface Props {
