@@ -198,9 +198,11 @@ const QUOTE_PRINT_CSS = `
   .qp-sign-name{font-size:12px;color:#1f2d3d}
 `;
 
-/** Endereço e telefone são os mesmos para as lojas do grupo — só CNPJ e e-mail mudam. */
+/** Endereço e telefone são os mesmos para as lojas do grupo — só CNPJ e e-mail mudam.
+ *  CEP sem ponto (52030-172): é o formato oficial dos Correios. Estava escrito
+ *  como 52.030-172, com um ponto que não existe na norma. */
 const ENDERECO_GRUPO =
-  'Rua Marchal Deodoro Nr 300 SL 1107, Encruzilhada Recife, PE CEP: 52.030-172 Fone/Fax: +55 81 3228.8509';
+  'Rua Marchal Deodoro Nr 300 SL 1107, Encruzilhada Recife, PE CEP: 52030-172 Fone/Fax: +55 81 3228.8509';
 
 interface StoreInfo {
   label: string;
@@ -222,7 +224,7 @@ const STORE_INFO: Record<string, StoreInfo> = {
   'Lucky Store': {
     label: 'Lucky Store', cnpj: '11.849.935/0001-63', initials: 'LS',
     header: '/quote-header.png', footer: '/quote-footer.png',
-    rodape: { cnpj: '11849935/0001-63', endereco: ENDERECO_GRUPO, email: 'contato@luckystore.com.br' },
+    rodape: { cnpj: '11.849.935/0001-63', endereco: ENDERECO_GRUPO, email: 'contato@luckystore.com.br' },
   },
   'BTech': {
     label: 'BTech Store', cnpj: '54.677.704/0001-22', initials: 'BS',
@@ -234,7 +236,7 @@ const STORE_INFO: Record<string, StoreInfo> = {
     header: '/quote-header.png', footer: '/quote-footer.png',
     // A AJJ opera sob o CNPJ e o e-mail da Lucky Store — decisao do negocio, nao
     // omissao. Se um dia ela tiver dados proprios, e so trocar aqui.
-    rodape: { cnpj: '11849935/0001-63', endereco: ENDERECO_GRUPO, email: 'contato@luckystore.com.br' },
+    rodape: { cnpj: '11.849.935/0001-63', endereco: ENDERECO_GRUPO, email: 'contato@luckystore.com.br' },
   },
 };
 
