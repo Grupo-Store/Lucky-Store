@@ -531,8 +531,26 @@ export function QuoteModal({ open, onClose, quote, onSave, onDelete, nextIndex }
     return s + (lineDiff - custoFornecedor);
   }, 0);
   const grossProfit = regularGrossProfit + dsInternalProfit;
-  const profitBTech = grossProfit * (1 - taxBTech / 100);
-  const profitLucky = grossProfit * (1 - taxLucky / 100);
+
+  /**
+   * Base do imposto, diferente por tipo de venda:
+   *
+   * - venda normal: incide sobre a RECEITA. A empresa faturou a mercadoria ao
+   *   cliente, entao o imposto acompanha o valor faturado.
+   * - fornecimento direto: incide sobre o LUCRO da operacao. Quem fatura a
+   *   mercadoria ao cliente e o fornecedor; a empresa so registra a comissao,
+   *   e e sobre ela que o imposto cai.
+   *
+   * Antes a conta era `grossProfit x (1 - tax%)`, ou seja, o imposto incidia
+   * sobre o lucro TAMBEM na venda normal. Isso subestimava o imposto e inflava
+   * o lucro liquido: numa venda de R$ 19.500 com lucro bruto de R$ 1.500 e 20%,
+   * descontava R$ 300 em vez de R$ 3.900.
+   */
+  const baseImposto = totalRevenue + dsInternalProfit;
+  const taxValueBTech = baseImposto * (taxBTech / 100);
+  const taxValueLucky = baseImposto * (taxLucky / 100);
+  const profitBTech = grossProfit - taxValueBTech;
+  const profitLucky = grossProfit - taxValueLucky;
 
   // Auto-sync closed phase value to sum of all Valor Final
   useEffect(() => {
@@ -1130,11 +1148,11 @@ export function QuoteModal({ open, onClose, quote, onSave, onDelete, nextIndex }
                 </div>
                 <div className="qm-stores">
                   <div className="qm-store">
-                    <span className="k"><span className="sdot" style={{ background: '#3f5bd9' }} />Lucro BTech<span className="tax">(−{taxBTech}%)</span></span>
+                    <span className="k"><span className="sdot" style={{ background: '#3f5bd9' }} />Lucro BTech<span className="tax" title={`${taxBTech}% sobre ${toBRL(baseImposto)}`}>(−{toBRL(taxValueBTech)})</span></span>
                     <span className="v">{toBRL(profitBTech)}</span>
                   </div>
                   <div className="qm-store">
-                    <span className="k"><span className="sdot" style={{ background: '#1f9d57' }} />Lucro Lucky<span className="tax">(−{taxLucky}%)</span></span>
+                    <span className="k"><span className="sdot" style={{ background: '#1f9d57' }} />Lucro Lucky<span className="tax" title={`${taxLucky}% sobre ${toBRL(baseImposto)}`}>(−{toBRL(taxValueLucky)})</span></span>
                     <span className="v">{toBRL(profitLucky)}</span>
                   </div>
                 </div>
