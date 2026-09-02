@@ -42,10 +42,27 @@ apiClient.interceptors.response.use(
       }
     }
 
-    // Retry on network errors (no response)
+    /* Reenvio automatico em erro de rede — SO para metodos que nao alteram dados.
+     *
+     * Antes valia para qualquer metodo, inclusive POST. Duas consequencias, as
+     * duas medidas contra o backend real:
+     *
+     * 1. Numero de OS desperdicado. O numero vem de nextval, que nao volta no
+     *    rollback. Uma criacao de pedido recusada pelo banco e reenviada 3x
+     *    queimava 4 numeros de uma vez — a origem dos saltos na numeracao.
+     * 2. Pedido duplicado. Se a criacao deu certo e apenas a RESPOSTA se perdeu
+     *    (Railway reiniciando, conexao caindo), o reenvio criava um segundo
+     *    pedido identico. Nao ha chave de idempotencia no projeto para impedir.
+     *
+     * GET, HEAD e OPTIONS continuam sendo reenviados: sao idempotentes, entao
+     * repetir e inofensivo, e isso mantem listagens e dashboard resistentes a
+     * oscilacao de rede.
+     */
+    const METODOS_REENVIAVEIS = ['get', 'head', 'options'];
     const isNetworkError = !error.response;
+    const podeReenviar = METODOS_REENVIAVEIS.includes((original.method || 'get').toLowerCase());
     original._retryCount = original._retryCount ?? 0;
-    if (isNetworkError && original._retryCount < MAX_NETWORK_RETRIES) {
+    if (isNetworkError && podeReenviar && original._retryCount < MAX_NETWORK_RETRIES) {
       original._retryCount += 1;
       const delay = 2 ** original._retryCount * 500;
       await new Promise((resolve) => setTimeout(resolve, delay));
