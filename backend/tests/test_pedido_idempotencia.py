@@ -18,6 +18,7 @@ from unittest.mock import patch
 import sqlalchemy as sa
 
 from app.models.pedido import Pedido
+from app.services.pedido import _numero_provisorio
 from app.api.routes.pedidos import router as pedidos_router
 
 from tests.test_routes_pedidos import _fake_pedido, _PEDIDO_PAYLOAD
@@ -67,6 +68,55 @@ def test_busca_pela_chave_vem_antes_do_nextval():
         "a busca pela chave precisa acontecer antes de _generate_numero_os; "
         "depois dele o numero de OS ja foi consumido"
     )
+
+
+# ── Ordem: o numero da OS sai depois do INSERT ────────────────────────────────
+
+def test_numero_definitivo_sai_depois_do_insert():
+    """O ponto que fecha a corrida.
+
+    O INSERT e onde o banco decide quem ganhou: o perdedor toma IntegrityError
+    ali. Pedindo o numero antes dele, o perdedor gastava um numero sem criar
+    pedido nenhum — medido, 4 requisicoes simultaneas com a mesma chave criavam
+    1 pedido e queimavam 4 numeros. Pedindo depois, quem perde nem chega la.
+    """
+    corpo = _corpo_do_create()
+    pos_flush = corpo.find("db.flush()")
+    pos_nextval = corpo.find("_generate_numero_os(")
+    assert pos_flush != -1 and pos_nextval != -1
+    assert pos_flush < pos_nextval, (
+        "_generate_numero_os precisa vir DEPOIS do primeiro db.flush(); antes "
+        "dele, toda insercao recusada pelo banco queima um numero de OS"
+    )
+
+
+def test_pedido_e_inserido_com_numero_provisorio():
+    """Corolario do teste acima: se a linha nao nasce com um numero de rascunho,
+    e porque o numero de verdade voltou para antes do INSERT."""
+    corpo = _corpo_do_create()
+    construcao = corpo.split("db.add(pedido)")[0]
+    assert "_numero_provisorio(" in construcao
+    assert "_generate_numero_os(" not in construcao
+
+
+def test_auditoria_registra_o_numero_definitivo():
+    """O audit_log guarda numero_os. Registrado antes da troca, ele gravaria o
+    rascunho — e a trilha apontaria para uma OS que nao existe."""
+    corpo = _corpo_do_create()
+    assert corpo.find("_generate_numero_os(") < corpo.find("_audit(")
+
+
+def test_numero_provisorio_cabe_na_coluna():
+    provisorio = _numero_provisorio(uuid.uuid4())
+    limite = Pedido.__table__.columns["numero_os"].type.length
+    assert len(provisorio) <= limite, f"{len(provisorio)} > {limite}"
+
+
+def test_numero_provisorio_nao_se_parece_com_uma_os():
+    """Se um rascunho vazasse para o banco, casar com o formato OS-### o faria
+    entrar no MAX da migration de reparo da sequence e pular a numeracao."""
+    provisorio = _numero_provisorio(uuid.uuid4())
+    assert not re.match(r"^OS-[0-9]+$", provisorio)
 
 
 def test_conflito_de_indice_devolve_o_pedido_existente():

@@ -2,7 +2,7 @@ import math
 from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Optional
-from uuid import UUID
+from uuid import UUID, uuid4
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import asc, desc, text
 from sqlalchemy.exc import IntegrityError
@@ -78,6 +78,21 @@ def _pedido_da_tentativa(db: Session, current_user_id: UUID,
     return pedido
 
 
+def _numero_provisorio(pedido_id: UUID) -> str:
+    """numero_os de rascunho, que so existe dentro da transacao.
+
+    numero_os e NOT NULL, entao a linha precisa de algum valor para ser
+    inserida. Este e o valor que ela leva ate o INSERT passar; logo depois o
+    numero de verdade entra por cima, no mesmo commit. Se a transacao nao
+    vingar, a linha inteira desaparece — este texto nunca chega ao banco.
+
+    Derivado do id do pedido so por rastreabilidade: nao ha UNIQUE em numero_os,
+    entao dois rascunhos nunca colidiriam de qualquer jeito. Cabe nos 50
+    caracteres da coluna (4 + 36).
+    """
+    return f"TMP-{pedido_id}"
+
+
 def _generate_numero_os(db: Session) -> str:
     num = db.execute(text("SELECT nextval('pedido_os_seq')")).scalar()
     return f"OS-{str(num).zfill(3)}"
@@ -130,12 +145,17 @@ class PedidoService:
         _validar_referencias(db, data.id_loja, data.id_vendedor)
 
         id_cliente = _get_or_create_cliente(db, data.nome_cliente, data.cpf_cnpj)
+
+        # O numero da OS NAO sai aqui. Ele so e pedido depois que o INSERT
+        # passou, mais abaixo — ver o comentario no try.
+        pedido_id = uuid4()
         pedido = Pedido(
+            id=pedido_id,
             id_loja=data.id_loja,
             id_vendedor=data.id_vendedor,
             id_cliente=id_cliente,
             id_cotacao=data.id_cotacao,
-            numero_os=data.numero_os or _generate_numero_os(db),
+            numero_os=data.numero_os or _numero_provisorio(pedido_id),
             numero_nf=data.numero_nf,
             numero_oc=data.numero_oc,
             data_pedido=data.data_pedido,
@@ -166,8 +186,23 @@ class PedidoService:
         # achar nada. Quem segura ai e o indice unico
         # (created_by, idempotency_key) — o segundo INSERT toma IntegrityError,
         # e aqui ele vira "devolve o que o primeiro criou".
+        #
+        # E por isso que o numero da OS so e pedido DEPOIS deste flush. O INSERT
+        # e o ponto em que o banco decide quem ganhou a corrida; quem perdeu nem
+        # chega ao nextval, e nao gasta numero. Antes desta ordem, cada perdedor
+        # abria um buraco permanente na numeracao mesmo sem criar pedido nenhum
+        # — medido: 4 requisicoes simultaneas com a mesma chave criavam 1 pedido
+        # e queimavam 4 numeros.
+        #
+        # Vale tambem para violacao que _validar_referencias nao cobre: cotacao
+        # de origem apagada (id_cotacao) ou usuario removido (created_by)
+        # estouram neste INSERT, e agora sem custo na numeracao.
         try:
-            db.flush()  # get id before commit
+            db.flush()  # INSERT — e o arbitro da corrida
+
+            if not data.numero_os:
+                pedido.numero_os = _generate_numero_os(db)
+                db.flush()
 
             for fp in data.formas_pagamento:
                 db.add(PedidoFormaPagamento(id_pedido=pedido.id, forma=fp.forma))
