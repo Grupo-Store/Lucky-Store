@@ -14,6 +14,7 @@ sys.path.insert(0, os.path.dirname(__file__))
 
 from sqlalchemy import text
 from app.database import engine
+from app.models.item_rma import ItemRmaStatus
 
 MIGRATIONS = [
     ("Repaired",  "Repaired Received"),
@@ -22,11 +23,18 @@ MIGRATIONS = [
     ("Cancelled", "Not Received"),
 ]
 
-NEW_VALUES = [
-    "Not Received", "Received", "Sent for Repair", "In Repair",
-    "Repaired Not Received", "Repaired Received", "To Pack",
-    "Ready for Delivery", "Out for Delivery", "Delivered",
-]
+# Derivado do enum, nao copiado dele.
+#
+# Esta lista era escrita a mao e ficou para tras: o status "Estorno" entrou no
+# ItemRmaStatus (e no banco, pela migration f1a2b3c4d5e6) e ninguem lembrou
+# daqui. Como o script DERRUBA e RECRIA o item_rma_status_check, roda-lo depois
+# disso recriaria a trava sem o "Estorno" — e todo item de RMA estornado passaria
+# a ser rejeitado pelo banco. Ele nao roda sozinho, entao era bomba com pino;
+# ainda assim, o pino estava solto desde entao.
+#
+# Lendo do enum, a lista nao tem como divergir de novo: o proximo status entra
+# aqui no mesmo instante em que entra no codigo.
+NEW_VALUES = [status.value for status in ItemRmaStatus]
 
 def run():
     with engine.connect() as conn:

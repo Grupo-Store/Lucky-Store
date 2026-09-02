@@ -49,8 +49,16 @@ class TestMigrationMappings:
 
 class TestNewValues:
 
-    def test_new_values_has_ten_entries(self):
-        assert len(NEW_VALUES) == 10
+    def test_new_values_e_derivada_do_enum(self):
+        """Substitui um `assert len(NEW_VALUES) == 10`.
+
+        Aquele numero fixo passava enquanto a lista era escrita a mao — e
+        continuou passando depois que o "Estorno" entrou no enum e ficou de fora
+        da lista, que era justamente o problema. Numero fixo nao detecta
+        divergencia: ele CONGELA a versao errada.
+
+        Comparando com o enum, na ordem, a lista so pode estar certa."""
+        assert NEW_VALUES == [status.value for status in ItemRmaStatus]
 
     def test_new_values_matches_enum_count(self):
         assert len(NEW_VALUES) == len(ItemRmaStatus)
