@@ -22,7 +22,7 @@ from app.models.pedido import Frete
 from app.schemas.audit_log import AuditLogResponse
 from app.schemas.status_history import StatusHistoryResponse
 from app.services.pedido import PedidoService
-from app.utils.errors import NotFoundException, BusinessLogicException, to_http_exception
+from app.utils.errors import NotFoundException, BusinessLogicException, to_http_exception, erro_http
 from app.api.routes.auth import get_current_user_dep
 from pydantic import BaseModel
 
@@ -109,7 +109,7 @@ def create_pedido(
             ip_address=ip, user_agent=ua, idempotency_key=chave,
         )
     except Exception as exc:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+        raise erro_http(exc, "criar o pedido")
     if getattr(pedido, "idempotent_replay", False):
         response.headers["Idempotent-Replay"] = "true"
     return pedido
@@ -237,7 +237,7 @@ def update_pedido(
     except NotFoundException as exc:
         raise to_http_exception(exc)
     except Exception as exc:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+        raise erro_http(exc, "salvar o pedido")
 
 
 @router.patch("/{pedido_id}/status", response_model=PedidoResponse)

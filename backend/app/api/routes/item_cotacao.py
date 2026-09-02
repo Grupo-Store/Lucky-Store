@@ -6,7 +6,7 @@ from app.database import get_db
 from app.models.user import User
 from app.schemas.cotacao import ItemCotacaoCreate, ItemCotacaoResponse
 from app.services.item_cotacao import ItemCotacaoService
-from app.utils.errors import NotFoundException, to_http_exception
+from app.utils.errors import NotFoundException, to_http_exception, erro_http
 from app.api.routes.auth import get_current_user_dep
 
 router = APIRouter(prefix="/quotes", tags=["quote-items"])
@@ -24,7 +24,7 @@ def add_item(
     except NotFoundException as exc:
         raise to_http_exception(exc)
     except Exception as exc:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+        raise erro_http(exc, "adicionar o item à cotação")
 
 
 @router.delete("/{quote_id}/items/{item_id}", status_code=status.HTTP_204_NO_CONTENT)

@@ -1,3 +1,4 @@
+import logging
 import math
 from datetime import datetime, timezone
 from decimal import Decimal
@@ -17,6 +18,8 @@ from app.models.audit_log import AuditLog, AuditAction
 from app.schemas.pedido import PedidoCreate, PedidoUpdate
 from app.utils.errors import NotFoundException, BusinessLogicException
 from app.services.cliente_identidade import obter_ou_criar_cliente
+
+logger = logging.getLogger("app.pedido")
 
 
 def _validar_referencias(db: Session, id_loja: UUID, id_vendedor: UUID) -> None:
@@ -44,13 +47,24 @@ def _validar_referencias(db: Session, id_loja: UUID, id_vendedor: UUID) -> None:
         Loja.id == id_loja, Loja.deleted_at.is_(None)
     ).first()
     if not existe_loja:
-        raise NotFoundException(f"Loja {id_loja} nao encontrada")
+        # O UUID vai para o log, nao para a tela: para o vendedor ele nao quer
+        # dizer nada, e para investigar (variavel de ambiente errada no Vercel,
+        # loja excluida) e exatamente o que interessa.
+        logger.warning("id_loja inexistente ou excluida: %s", id_loja)
+        raise NotFoundException(
+            "Empresa não encontrada. Ela pode ter sido excluída — "
+            "recarregue a página e selecione de novo."
+        )
 
     existe_vendedor = db.query(Vendedor.id).filter(
         Vendedor.id == id_vendedor, Vendedor.deleted_at.is_(None)
     ).first()
     if not existe_vendedor:
-        raise NotFoundException(f"Vendedor {id_vendedor} nao encontrado")
+        logger.warning("id_vendedor inexistente ou excluido: %s", id_vendedor)
+        raise NotFoundException(
+            "Vendedor não encontrado. Ele pode ter sido excluído — "
+            "recarregue a página e selecione de novo."
+        )
 
 
 def _pedido_da_tentativa(db: Session, current_user_id: UUID,

@@ -5,7 +5,7 @@ from app.database import get_db
 from app.models.user import User
 from app.schemas.pedido import CustoPedidoIn, CustoComFinancialsOut
 from app.services.custo_pedido import CustoPedidoService
-from app.utils.errors import NotFoundException, BusinessLogicException, to_http_exception
+from app.utils.errors import NotFoundException, BusinessLogicException, to_http_exception, erro_http
 from app.api.routes.auth import get_current_user_dep
 
 router = APIRouter(prefix="/pedidos", tags=["custos-pedido"])
@@ -25,7 +25,7 @@ def create_costs(
     except BusinessLogicException as exc:
         raise to_http_exception(exc)
     except Exception as exc:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+        raise erro_http(exc, "salvar os custos do pedido")
 
 
 @router.put("/{pedido_id}/costs", response_model=CustoComFinancialsOut)
@@ -42,4 +42,4 @@ def update_costs(
     except BusinessLogicException as exc:
         raise to_http_exception(exc)
     except Exception as exc:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+        raise erro_http(exc, "salvar os custos do pedido")

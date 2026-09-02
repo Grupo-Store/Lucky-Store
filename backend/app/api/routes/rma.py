@@ -15,7 +15,7 @@ from app.schemas.rma import (
 from app.schemas.audit_log import AuditLogResponse
 from app.schemas.status_history import StatusHistoryResponse
 from app.services.rma import RmaService
-from app.utils.errors import NotFoundException, BusinessLogicException, to_http_exception
+from app.utils.errors import NotFoundException, BusinessLogicException, to_http_exception, erro_http
 from app.api.routes.auth import get_current_user_dep
 
 
@@ -38,7 +38,7 @@ def create_rma(
     except (NotFoundException, BusinessLogicException) as exc:
         raise to_http_exception(exc)
     except Exception as exc:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+        raise erro_http(exc, "criar o RMA")
 
 
 @router.get("", response_model=RmaListResponse)

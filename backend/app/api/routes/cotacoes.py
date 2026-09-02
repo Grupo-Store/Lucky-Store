@@ -15,7 +15,7 @@ from app.schemas.cotacao import (
 from app.schemas.status_history import StatusHistoryResponse
 from app.schemas.audit_log import AuditLogResponse
 from app.services.cotacao import CotacaoService
-from app.utils.errors import NotFoundException, BusinessLogicException, to_http_exception
+from app.utils.errors import NotFoundException, BusinessLogicException, to_http_exception, erro_http
 from app.api.routes.auth import get_current_user_dep
 
 
@@ -36,7 +36,7 @@ def create_quote(
     try:
         return CotacaoService.create(db, data, current_user.id)
     except Exception as exc:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+        raise erro_http(exc, "criar a cotação")
 
 
 @router.get("", response_model=CotacaoListResponse)
@@ -90,7 +90,7 @@ def update_quote(
     except NotFoundException as exc:
         raise to_http_exception(exc)
     except Exception as exc:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+        raise erro_http(exc, "salvar a cotação")
 
 
 @router.patch("/{quote_id}/phase", response_model=CotacaoResponse)

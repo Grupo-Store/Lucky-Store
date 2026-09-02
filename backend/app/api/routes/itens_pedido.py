@@ -12,7 +12,7 @@ from app.schemas.produto import ProdutoCreate, ProdutoUpdate, ProdutoStatusUpdat
 from app.schemas.status_history import StatusHistoryResponse
 from app.schemas.audit_log import AuditLogResponse
 from app.services.item_pedido import ItemPedidoService
-from app.utils.errors import NotFoundException, to_http_exception
+from app.utils.errors import NotFoundException, to_http_exception, erro_http
 from app.api.routes.auth import get_current_user_dep
 
 
@@ -36,7 +36,7 @@ def add_item(
     except NotFoundException as exc:
         raise to_http_exception(exc)
     except Exception as exc:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+        raise erro_http(exc, "adicionar o item ao pedido")
 
 
 @router.put("/{pedido_id}/items/{item_id}", response_model=ProdutoResponse)
@@ -52,7 +52,7 @@ def update_item(
     except NotFoundException as exc:
         raise to_http_exception(exc)
     except Exception as exc:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+        raise erro_http(exc, "salvar o item")
 
 
 @router.patch("/{pedido_id}/items/{item_id}/status", response_model=ProdutoResponse)
@@ -68,7 +68,7 @@ def update_item_status(
     except NotFoundException as exc:
         raise to_http_exception(exc)
     except Exception as exc:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+        raise erro_http(exc, "mudar o status do item")
 
 
 @router.get("/{pedido_id}/items/{item_id}/history", response_model=ItemHistoryResponse)

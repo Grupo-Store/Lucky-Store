@@ -70,6 +70,18 @@ def test_busca_pela_chave_vem_antes_do_nextval():
     )
 
 
+def test_referencia_invalida_nao_mostra_uuid_na_tela():
+    """A mensagem vai direto para a tela do vendedor. Um UUID ali nao ajuda
+    ninguem — ele vai para o log, onde e o que interessa para investigar."""
+    fonte = SERVICO.read_text(encoding="utf-8")
+    corpo = fonte.split("def _validar_referencias(")[1].split("\ndef ")[0]
+    mensagens = re.findall(r"NotFoundException\(\s*(.+?)\s*\)", corpo, re.S)
+    assert mensagens, "nenhuma mensagem encontrada"
+    for m in mensagens:
+        assert "id_loja" not in m and "id_vendedor" not in m, f"UUID na tela: {m}"
+    assert "logger.warning" in corpo, "o UUID precisa ir para o log"
+
+
 # ── Ordem: o numero da OS sai depois do INSERT ────────────────────────────────
 
 def test_numero_definitivo_sai_depois_do_insert():
