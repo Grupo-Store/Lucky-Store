@@ -186,11 +186,15 @@ describe('OrderModal — create mode', () => {
     // so a resposta ter se perdido. Se o segundo clique gerasse chave nova, o
     // backend nao teria como reconhecer a tentativa e criaria pedido duplicado,
     // gastando outro numero de OS.
+    type Callbacks = {
+      onSuccess?: (d: { id: string }) => void;
+      onError?: (e: Error) => void;
+    };
     mockCreateOrder
-      .mockImplementationOnce((_vars: any, callbacks: any) => {
+      .mockImplementationOnce((_vars: unknown, callbacks: Callbacks) => {
         callbacks?.onError?.(new Error('Network Error'));
       })
-      .mockImplementationOnce((_vars: any, callbacks: any) => {
+      .mockImplementationOnce((_vars: unknown, callbacks: Callbacks) => {
         callbacks?.onSuccess?.({ id: 'new-backend-id-xyz' });
       });
 
