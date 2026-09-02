@@ -1,5 +1,5 @@
 from decimal import Decimal
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, Response, status
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 from typing import Optional, List
@@ -60,19 +60,59 @@ def _batch_total_estornado(db: Session, pedido_ids: list) -> dict:
 router = APIRouter(prefix="/pedidos", tags=["pedidos"])
 
 
+MAX_IDEMPOTENCY_KEY = 64
+
+
+def _chave_idempotencia(bruta: Optional[str]) -> Optional[str]:
+    """Header opcional; ausente, o comportamento e o de antes."""
+    if bruta is None:
+        return None
+    chave = bruta.strip()
+    if not chave:
+        return None
+    if len(chave) > MAX_IDEMPOTENCY_KEY:
+        # Barra aqui em vez de deixar o banco truncar/estourar: chave cortada
+        # deixaria de bater com a da tentativa anterior e o efeito seria criar o
+        # pedido duplicado que ela existe para impedir.
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"Idempotency-Key deve ter no maximo {MAX_IDEMPOTENCY_KEY} caracteres",
+        )
+    return chave
+
+
 @router.post("", response_model=PedidoResponse, status_code=status.HTTP_201_CREATED)
 def create_pedido(
     request: Request,
+    response: Response,
     data: PedidoCreate,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user_dep),
+    idempotency_key: Optional[str] = Header(default=None, alias="Idempotency-Key"),
 ):
+    """Cria pedido. Com Idempotency-Key, repetir a chamada nao cria outro.
+
+    A tela manda uma chave por tentativa de salvar. Se a mesma chave voltar — o
+    pedido entrou mas a resposta se perdeu, e o vendedor clicou de novo — a
+    resposta e o pedido que ja existe, sem consumir outro numero de OS.
+
+    Continua 201 no reenvio, e nao 200: para a tela o resultado e o mesmo
+    ("o pedido esta criado, aqui esta ele") e diferenciar so criaria um segundo
+    caminho no onSuccess. Quem precisa distinguir le o header Idempotent-Replay.
+    """
+    chave = _chave_idempotencia(idempotency_key)
     ip = request.client.host if request.client else None
     ua = request.headers.get("user-agent")
     try:
-        return PedidoService.create(db, data, current_user.id, ip_address=ip, user_agent=ua)
+        pedido = PedidoService.create(
+            db, data, current_user.id,
+            ip_address=ip, user_agent=ua, idempotency_key=chave,
+        )
     except Exception as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+    if getattr(pedido, "idempotent_replay", False):
+        response.headers["Idempotent-Replay"] = "true"
+    return pedido
 
 
 @router.get("", response_model=PedidoListResponse)

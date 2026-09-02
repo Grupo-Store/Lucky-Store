@@ -5,6 +5,7 @@ from typing import Optional
 from uuid import UUID
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import asc, desc, text
+from sqlalchemy.exc import IntegrityError
 from app.models.pedido import Pedido, PedidoFormaPagamento, CustoPedido
 from app.models.cliente import Cliente
 from app.models.produto import Produto
@@ -52,6 +53,31 @@ def _validar_referencias(db: Session, id_loja: UUID, id_vendedor: UUID) -> None:
         raise NotFoundException(f"Vendedor {id_vendedor} nao encontrado")
 
 
+def _pedido_da_tentativa(db: Session, current_user_id: UUID,
+                         idempotency_key: Optional[str]) -> Optional[Pedido]:
+    """O pedido que ESTA tentativa de salvar ja criou, se criou.
+
+    A chave vem no header Idempotency-Key e identifica o clique em "Criar
+    Pedido", nao o pedido: a tela gera uma por tentativa e reusa a mesma se
+    precisar tentar de novo. Achando pedido com ela, a resposta certa e devolver
+    aquele — nao criar outro.
+
+    Nao filtra deleted_at de proposito. Pedido criado e depois apagado ja gastou
+    o numero da OS; recria-lo aqui seria justamente a duplicata que a chave
+    existe para impedir. Quem quer mesmo um pedido novo abre o formulario de
+    novo, e o formulario gera outra chave.
+    """
+    if not idempotency_key:
+        return None
+    pedido = db.query(Pedido).filter(
+        Pedido.created_by == current_user_id,
+        Pedido.idempotency_key == idempotency_key,
+    ).first()
+    if pedido is not None:
+        pedido.economia = _economia(pedido)
+    return pedido
+
+
 def _generate_numero_os(db: Session) -> str:
     num = db.execute(text("SELECT nextval('pedido_os_seq')")).scalar()
     return f"OS-{str(num).zfill(3)}"
@@ -89,7 +115,16 @@ class PedidoService:
 
     @staticmethod
     def create(db: Session, data: PedidoCreate, current_user_id: UUID,
-               ip_address: str = None, user_agent: str = None) -> Pedido:
+               ip_address: str = None, user_agent: str = None,
+               idempotency_key: Optional[str] = None) -> Pedido:
+        # Antes de TUDO, inclusive do nextval: se esta mesma tentativa de salvar
+        # ja criou pedido, devolve aquele. E o caso da resposta perdida — o
+        # pedido entrou, a tela nao soube, o vendedor clicou de novo.
+        ja_criado = _pedido_da_tentativa(db, current_user_id, idempotency_key)
+        if ja_criado is not None:
+            ja_criado.idempotent_replay = True
+            return ja_criado
+
         # Antes de qualquer escrita: sem isto, uma loja ou vendedor inexistente
         # so era descoberto no flush, com o numero da OS ja gasto.
         _validar_referencias(db, data.id_loja, data.id_vendedor)
@@ -122,32 +157,51 @@ class PedidoService:
             plano_parcelas=data.plano_parcelas,
             plano_parcelas_pedido=data.plano_parcelas_pedido,
             created_by=current_user_id,
+            idempotency_key=idempotency_key,
         )
         db.add(pedido)
-        db.flush()  # get id before commit
 
-        for fp in data.formas_pagamento:
-            db.add(PedidoFormaPagamento(id_pedido=pedido.id, forma=fp.forma))
+        # A busca la em cima nao cobre duas requisicoes com a mesma chave em voo
+        # ao mesmo tempo (duplo clique, dois dispositivos): as duas passam sem
+        # achar nada. Quem segura ai e o indice unico
+        # (created_by, idempotency_key) — o segundo INSERT toma IntegrityError,
+        # e aqui ele vira "devolve o que o primeiro criou".
+        try:
+            db.flush()  # get id before commit
 
-        if data.custo:
-            db.add(CustoPedido(id_pedido=pedido.id, **data.custo.model_dump()))
+            for fp in data.formas_pagamento:
+                db.add(PedidoFormaPagamento(id_pedido=pedido.id, forma=fp.forma))
 
-        _audit(db, AuditAction.CREATE, pedido.id, current_user_id,
-               new_values={"status": pedido.status, "numero_os": pedido.numero_os},
-               ip_address=ip_address, user_agent=user_agent)
+            if data.custo:
+                db.add(CustoPedido(id_pedido=pedido.id, **data.custo.model_dump()))
 
-        db.add(StatusHistory(
-            entity_type=EntityType.PEDIDO,
-            entity_id=pedido.id,
-            old_status=None,
-            new_status=pedido.status,
-            changed_by=current_user_id,
-            reason="Pedido criado",
-        ))
+            _audit(db, AuditAction.CREATE, pedido.id, current_user_id,
+                   new_values={"status": pedido.status, "numero_os": pedido.numero_os},
+                   ip_address=ip_address, user_agent=user_agent)
 
-        db.commit()
+            db.add(StatusHistory(
+                entity_type=EntityType.PEDIDO,
+                entity_id=pedido.id,
+                old_status=None,
+                new_status=pedido.status,
+                changed_by=current_user_id,
+                reason="Pedido criado",
+            ))
+
+            db.commit()
+        except IntegrityError:
+            db.rollback()
+            concorrente = _pedido_da_tentativa(db, current_user_id, idempotency_key)
+            if concorrente is None:
+                # Violacao de outra restricao (FK, NOT NULL). Nada a ver com
+                # idempotencia — deixa subir, a rota traduz em 400.
+                raise
+            concorrente.idempotent_replay = True
+            return concorrente
+
         db.refresh(pedido)
         pedido.economia = _economia(pedido)
+        pedido.idempotent_replay = False
         return pedido
 
     @staticmethod

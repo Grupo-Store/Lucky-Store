@@ -50,11 +50,50 @@ describe('useCreateOrder', () => {
     };
 
     await act(async () => {
-      result.current.mutate(payload);
+      result.current.mutate({ payload });
     });
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
-    expect(mockPost).toHaveBeenCalledWith('/pedidos', payload);
+    const [url, corpo] = mockPost.mock.calls[0];
+    expect(url).toBe('/pedidos');
+    expect(corpo).toEqual(payload);
+  });
+
+  it('manda a chave da tentativa no header Idempotency-Key', async () => {
+    mockPost.mockResolvedValueOnce({ data: mockOrder });
+    const { result } = renderHook(() => useCreateOrder(), { wrapper: makeWrapper() });
+
+    await act(async () => {
+      result.current.mutate({
+        payload: {
+          id_loja: 'loja-1', id_vendedor: 'vendedor-1', nome_cliente: 'X',
+          data_pedido: '2026-05-11', data_entrega: '2026-05-20', status: 'To Buy' as const,
+        },
+        idempotencyKey: 'chave-da-tentativa-1',
+      });
+    });
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    const [, , config] = mockPost.mock.calls[0];
+    expect(config.headers['Idempotency-Key']).toBe('chave-da-tentativa-1');
+  });
+
+  it('sem chave, nao inventa header — o backend segue como antes', async () => {
+    mockPost.mockResolvedValueOnce({ data: mockOrder });
+    const { result } = renderHook(() => useCreateOrder(), { wrapper: makeWrapper() });
+
+    await act(async () => {
+      result.current.mutate({
+        payload: {
+          id_loja: 'loja-1', id_vendedor: 'vendedor-1', nome_cliente: 'X',
+          data_pedido: '2026-05-11', data_entrega: '2026-05-20', status: 'To Buy' as const,
+        },
+      });
+    });
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    const [, , config] = mockPost.mock.calls[0];
+    expect(config?.headers).toBeUndefined();
   });
 
   it('returns the created order data on success', async () => {
@@ -64,7 +103,7 @@ describe('useCreateOrder', () => {
     let data: typeof mockOrder | undefined;
     await act(async () => {
       result.current.mutate(
-        { id_loja: '', id_vendedor: '', nome_cliente: 'X', data_pedido: '', data_entrega: '', status: 'To Buy' },
+        { payload: { id_loja: '', id_vendedor: '', nome_cliente: 'X', data_pedido: '', data_entrega: '', status: 'To Buy' } },
         { onSuccess: (d) => { data = d as any; } },
       );
     });
@@ -78,7 +117,7 @@ describe('useCreateOrder', () => {
     const { result } = renderHook(() => useCreateOrder(), { wrapper: makeWrapper() });
 
     await act(async () => {
-      result.current.mutate({ id_loja: '', id_vendedor: '', nome_cliente: '', data_pedido: '', data_entrega: '', status: 'To Buy' });
+      result.current.mutate({ payload: { id_loja: '', id_vendedor: '', nome_cliente: '', data_pedido: '', data_entrega: '', status: 'To Buy' } });
     });
 
     await waitFor(() => expect(result.current.isError).toBe(true));

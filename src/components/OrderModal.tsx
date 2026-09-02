@@ -435,6 +435,18 @@ function OrderPrintTemplate({ form, valores }: {
   );
 }
 
+/** Chave da tentativa de salvar, mandada no header Idempotency-Key.
+ *
+ * crypto.randomUUID exige contexto seguro (https ou localhost). Em producao
+ * sempre tem; o fallback e para nao ficar sem chave num http de rede interna,
+ * onde o valor seria `undefined` e a protecao simplesmente sumiria. Nao precisa
+ * ser criptografico: precisa nao repetir. */
+function novaChaveIdempotencia(): string {
+  const c = globalThis.crypto;
+  if (typeof c?.randomUUID === 'function') return c.randomUUID();
+  return `os-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`;
+}
+
 export function OrderModal({ open, onClose, order, onSave, nextOS, prefill }: Props) {
   const [form, setForm] = useState<Partial<Order>>(() => emptyOrder(nextOS?.() || ''));
   const [sourceQuoteId, setSourceQuoteId] = useState<string | undefined>(undefined);
@@ -457,6 +469,19 @@ export function OrderModal({ open, onClose, order, onSave, nextOS, prefill }: Pr
   const [editingDsValue, setEditingDsValue] = useState('');
   const [orderDateOpen, setOrderDateOpen] = useState(false);
   const [deliveryDateOpen, setDeliveryDateOpen] = useState(false);
+
+  /* Chave da tentativa de salvar em curso. Nasce no primeiro clique em "Criar
+   * Pedido" e sobrevive a falha, de proposito: se o pedido foi criado e so a
+   * resposta se perdeu, o segundo clique manda a MESMA chave e o backend
+   * devolve o pedido que ja existe, em vez de abrir outro e gastar mais um
+   * numero de OS.
+   *
+   * Zerada em dois pontos, e os dois importam. No sucesso, porque o proximo
+   * pedido e outro pedido. E na troca de formulario (o useEffect abaixo),
+   * porque senao uma tentativa que ficou em duvida contaminaria o pedido
+   * SEGUINTE: o vendedor abriria um pedido novo, salvaria, e receberia de volta
+   * o pedido antigo. */
+  const chaveTentativa = useRef<string | null>(null);
 
   useEffect(() => {
     if (order) {
@@ -484,6 +509,7 @@ export function OrderModal({ open, onClose, order, onSave, nextOS, prefill }: Pr
       setSourceQuoteId(undefined);
     }
     setEditingField(null);
+    chaveTentativa.current = null;
   }, [order, open, nextOS, prefill]);
 
   const set = (k: keyof Order, v: any) => setForm(prev => ({ ...prev, [k]: v }));
@@ -850,8 +876,10 @@ export function OrderModal({ open, onClose, order, onSave, nextOS, prefill }: Pr
         custo: custoPayload,
         ...pagamentoPayload,
       };
-      createOrder(payload, {
+      if (!chaveTentativa.current) chaveTentativa.current = novaChaveIdempotencia();
+      createOrder({ payload, idempotencyKey: chaveTentativa.current }, {
         onSuccess: async (data) => {
+          chaveTentativa.current = null;
           const newId = data.id;
           const vendedorId = String(data.id_vendedor);
           let savedItems = o.items;

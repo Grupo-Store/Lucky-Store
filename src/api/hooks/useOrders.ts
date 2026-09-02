@@ -67,12 +67,31 @@ export function useOrder(id: string) {
 
 // ─── Mutations ────────────────────────────────────────────────────────────────
 
+/** Variaveis de `useCreateOrder`: o pedido e a chave da tentativa de salvar. */
+export interface CreateOrderVars {
+  payload: CreatePedidoPayload;
+  /**
+   * Idempotency-Key. Identifica a TENTATIVA de salvar, nao o pedido: quem
+   * chama gera uma por clique em "Criar Pedido" e manda a mesma se precisar
+   * tentar de novo. Vendo uma chave que ja criou pedido, o backend devolve
+   * aquele em vez de criar outro — e o que impede pedido duplicado e numero de
+   * OS queimado quando a criacao da certo mas a resposta se perde.
+   *
+   * Opcional: sem ela, o backend se comporta como antes.
+   */
+  idempotencyKey?: string;
+}
+
 /** Cria um novo pedido. Invalida a listagem ao ter sucesso. */
 export function useCreateOrder() {
   const qc = useQueryClient();
-  return useMutation<PedidoResponse, Error, CreatePedidoPayload>({
-    mutationFn: (payload) =>
-      apiClient.post('/pedidos', payload).then((r) => r.data),
+  return useMutation<PedidoResponse, Error, CreateOrderVars>({
+    mutationFn: ({ payload, idempotencyKey }) =>
+      apiClient
+        .post('/pedidos', payload, {
+          headers: idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : undefined,
+        })
+        .then((r) => r.data),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: orderKeys.lists() });
     },

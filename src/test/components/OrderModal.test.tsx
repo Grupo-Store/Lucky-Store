@@ -170,14 +170,51 @@ describe('OrderModal — create mode', () => {
 
     await waitFor(() => expect(mockCreateOrder).toHaveBeenCalled());
 
-    const [payload] = mockCreateOrder.mock.calls[0];
-    expect(payload.nome_cliente).toBe('Test Client');
-    expect(payload.numero_oc).toBe('OC-0001');
+    const [vars] = mockCreateOrder.mock.calls[0];
+    expect(vars.payload.nome_cliente).toBe('Test Client');
+    expect(vars.payload.numero_oc).toBe('OC-0001');
+    expect(vars.idempotencyKey).toBeTruthy();
 
     expect(onSave).toHaveBeenCalledWith(
       expect.objectContaining({ id: 'new-backend-id-xyz' }),
     );
     expect(onClose).toHaveBeenCalled();
+  });
+
+  it('reenvia a MESMA chave depois de uma falha', async () => {
+    // O caso que a chave existe para resolver: o pedido pode ter sido criado e
+    // so a resposta ter se perdido. Se o segundo clique gerasse chave nova, o
+    // backend nao teria como reconhecer a tentativa e criaria pedido duplicado,
+    // gastando outro numero de OS.
+    mockCreateOrder
+      .mockImplementationOnce((_vars: any, callbacks: any) => {
+        callbacks?.onError?.(new Error('Network Error'));
+      })
+      .mockImplementationOnce((_vars: any, callbacks: any) => {
+        callbacks?.onSuccess?.({ id: 'new-backend-id-xyz' });
+      });
+
+    render(
+      <OrderModal open onClose={vi.fn()} onSave={vi.fn()} nextOS={() => '1007'} />,
+      { wrapper: makeWrapper() }
+    );
+
+    const textboxes = screen.getAllByRole('textbox');
+    fireEvent.change(textboxes[1], { target: { value: 'Test Client' } });
+    fireEvent.change(screen.getByPlaceholderText('Ex: OC-1234'), { target: { value: 'OC-0002' } });
+    await escolherNoSelect(/Empresa/, /Lucky Store/);
+    await escolherNoSelect(/Vendedor/, /Alcides/);
+
+    fireEvent.click(screen.getByRole('button', { name: /Criar Pedido/i }));
+    await waitFor(() => expect(mockCreateOrder).toHaveBeenCalledTimes(1));
+
+    fireEvent.click(screen.getByRole('button', { name: /Criar Pedido/i }));
+    await waitFor(() => expect(mockCreateOrder).toHaveBeenCalledTimes(2));
+
+    const [primeira] = mockCreateOrder.mock.calls[0];
+    const [segunda] = mockCreateOrder.mock.calls[1];
+    expect(primeira.idempotencyKey).toBeTruthy();
+    expect(segunda.idempotencyKey).toBe(primeira.idempotencyKey);
   });
 });
 

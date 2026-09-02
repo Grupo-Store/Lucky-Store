@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime, timezone
-from sqlalchemy import Column, String, Boolean, Integer, Date, DateTime, Text, Numeric, ForeignKey, Sequence  # type: ignore[import]
+from sqlalchemy import Column, String, Boolean, Integer, Date, DateTime, Text, Numeric, ForeignKey, Sequence, Index  # type: ignore[import]
 from sqlalchemy.dialects.postgresql import UUID, JSONB  # type: ignore[import]
 from sqlalchemy.orm import relationship
 from app.database import Base
@@ -62,6 +62,29 @@ class Pedido(Base):
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
     updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc), nullable=False)
     deleted_at = Column(DateTime(timezone=True), nullable=True)
+
+    # Chave de idempotencia: identifica a TENTATIVA de salvar, nao o pedido.
+    # A tela gera uma por clique em "Criar Pedido" e reusa a mesma se precisar
+    # tentar de novo; o backend, ao ver uma chave que ja criou pedido, devolve
+    # aquele pedido em vez de criar outro.
+    #
+    # E o que fecha o buraco que sobrou depois de _validar_referencias: quando a
+    # criacao da certo mas a RESPOSTA se perde (Railway reiniciando, 4G caindo),
+    # a tela nao tem como saber se gravou. Sem a chave, tentar de novo criava um
+    # segundo pedido identico e queimava mais um numero de OS.
+    idempotency_key = Column(String(64), nullable=True)
+
+    __table_args__ = (
+        # Unico POR USUARIO: dois vendedores nao compartilham chave, entao a de
+        # um nunca devolve o pedido do outro. Em Postgres NULL != NULL, entao
+        # pedido sem chave (conversao de cotacao, seed, import) nao colide.
+        #
+        # A exclusividade e o que segura a corrida: se dois cliques identicos
+        # chegarem ao mesmo tempo, os dois passam pela busca sem achar nada, mas
+        # so um INSERT sobrevive — o outro toma IntegrityError e o service o
+        # traduz em "devolve o que ja existe".
+        Index("ux_pedidos_idempotency", "created_by", "idempotency_key", unique=True),
+    )
 
     loja = relationship("Loja", back_populates="pedidos")
     vendedor = relationship("Vendedor", back_populates="pedidos", foreign_keys=[id_vendedor])
