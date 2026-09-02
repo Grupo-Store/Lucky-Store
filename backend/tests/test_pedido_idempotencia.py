@@ -25,6 +25,7 @@ from tests.test_routes_pedidos import _fake_pedido, _PEDIDO_PAYLOAD
 
 BACKEND = Path(__file__).resolve().parents[1]
 SERVICO = BACKEND / "app" / "services" / "pedido.py"
+CONVERSAO = BACKEND / "app" / "services" / "conversao_cotacao.py"
 MIGRATION = BACKEND / "alembic" / "versions" / "b7c8d9e0f1a2_add_idempotency_key_to_pedidos.py"
 
 
@@ -129,6 +130,52 @@ def test_numero_provisorio_nao_se_parece_com_uma_os():
     entrar no MAX da migration de reparo da sequence e pular a numeracao."""
     provisorio = _numero_provisorio(uuid.uuid4())
     assert not re.match(r"^OS-[0-9]+$", provisorio)
+
+
+# ── A conversão de cotação segue a mesma ordem ────────────────────────────────
+#
+# É o outro caminho que cria pedido e chama nextval. Ele não precisa de chave de
+# idempotência: a cotação de origem já é a chave, e o service segura a corrida
+# com with_for_update() na cotação mais a checagem de pedido existente. O que
+# faltava era a ordem — o número saía antes do INSERT.
+
+def _corpo_da_conversao() -> str:
+    fonte = CONVERSAO.read_text(encoding="utf-8")
+    return fonte.split("def convert_to_pedido(")[1]
+
+
+def test_conversao_tira_o_numero_depois_do_insert():
+    corpo = _corpo_da_conversao()
+    pos_flush = corpo.find("db.flush()")
+    pos_nextval = corpo.find("_generate_numero_os(")
+    assert pos_flush != -1 and pos_nextval != -1
+    assert pos_flush < pos_nextval, (
+        "na conversão o número da OS também precisa sair depois do INSERT"
+    )
+
+
+def test_conversao_insere_com_numero_provisorio():
+    construcao = _corpo_da_conversao().split("db.add(pedido)")[0]
+    assert "_numero_provisorio(" in construcao
+    assert "_generate_numero_os(" not in construcao
+
+
+def test_conversao_ja_protegia_contra_duplicata():
+    """Não mexi nisto — registro para que não se perca numa refatoração.
+
+    `with_for_update()` serializa duas conversões simultâneas da mesma cotação,
+    e a busca por pedido existente barra a segunda. Juntas, valem mais que um
+    header de idempotência: a chave aqui é a própria cotação."""
+    corpo = _corpo_da_conversao()
+    assert "with_for_update()" in corpo
+    assert "existing_pedido" in corpo
+
+
+def test_rota_de_conversao_trata_erro_de_banco():
+    """Ela não tinha `except Exception` e ficou de fora da tradução — erro de
+    banco virava 500 cru."""
+    rota = (BACKEND / "app" / "api" / "routes" / "conversao_cotacao.py").read_text(encoding="utf-8")
+    assert "except Exception" in rota and "erro_http(" in rota
 
 
 def test_conflito_de_indice_devolve_o_pedido_existente():

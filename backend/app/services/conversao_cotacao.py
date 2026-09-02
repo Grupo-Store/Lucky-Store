@@ -1,5 +1,5 @@
 from datetime import date
-from uuid import UUID
+from uuid import UUID, uuid4
 from sqlalchemy.orm import Session
 
 from app.models.cotacao import Cotacao
@@ -10,7 +10,7 @@ from app.models.pedido import Pedido
 from app.models.produto import Produto
 from app.models.status_history import StatusHistory, EntityType
 from app.models.audit_log import AuditLog, AuditAction
-from app.services.pedido import _generate_numero_os
+from app.services.pedido import _generate_numero_os, _numero_provisorio
 from app.utils.errors import NotFoundException, BusinessLogicException
 
 
@@ -46,14 +46,15 @@ class ConversaoCotacaoService:
         # cliente aqui e clientes diferentes na criacao de pedido.
         cliente = obter_ou_criar_cliente(db, cotacao.cliente, cotacao.cnpj_cliente)
 
-        numero_os = _generate_numero_os(db)
-
+        # O numero da OS NAO sai aqui — ver o comentario depois do db.add.
+        pedido_id = uuid4()
         pedido = Pedido(
+            id=pedido_id,
             id_loja=cotacao.id_loja,
             id_vendedor=cotacao.id_vendedor,
             id_cliente=cliente.id,
             id_cotacao=cotacao.id,
-            numero_os=numero_os,
+            numero_os=_numero_provisorio(pedido_id),
             numero_nf=None,
             data_pedido=date.today(),
             data_entrega=cotacao.data_prevista_fechamento or date.today(),
@@ -64,6 +65,15 @@ class ConversaoCotacaoService:
             created_by=current_user_id,
         )
         db.add(pedido)
+
+        # Mesma ordem da criacao normal de pedido (app/services/pedido.py): o
+        # numero vem de nextval, que nao volta no rollback, entao pedi-lo antes
+        # do INSERT faz toda insercao recusada pelo banco abrir um buraco
+        # permanente na numeracao. Aqui a recusa e plausivel — id_loja e
+        # id_vendedor vem da cotacao e podem apontar para loja ou vendedor
+        # excluido depois que a cotacao foi criada.
+        db.flush()
+        pedido.numero_os = numero_os = _generate_numero_os(db)
         db.flush()
 
         itens_cotacao = db.query(ItemCotacao).filter(ItemCotacao.id_cotacao == cotacao_id).all()

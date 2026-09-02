@@ -6,7 +6,9 @@ from app.database import get_db
 from app.models.user import User
 from app.schemas.cotacao import ConversaoResponse
 from app.services.conversao_cotacao import ConversaoCotacaoService
-from app.utils.errors import NotFoundException, BusinessLogicException, to_http_exception
+from app.utils.errors import (
+    NotFoundException, BusinessLogicException, to_http_exception, erro_http,
+)
 from app.api.routes.auth import get_current_user_dep
 
 router = APIRouter(prefix="/quotes", tags=["quote-conversion"])
@@ -28,3 +30,7 @@ def convert_to_pedido(
         raise to_http_exception(exc)
     except BusinessLogicException as exc:
         raise to_http_exception(exc)
+    except Exception as exc:
+        # Sem isto, erro de banco aqui virava 500 cru — esta rota nao tinha
+        # `except Exception` e ficou de fora da traducao de mensagens.
+        raise erro_http(exc, "converter a cotação em pedido")
