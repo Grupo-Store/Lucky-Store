@@ -70,7 +70,7 @@ def update_expense(
         .first()
     )
     if not expense:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Expense not found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Despesa não encontrada")
 
     for field, value in data.model_dump(exclude_unset=True).items():
         setattr(expense, field, value)
@@ -92,7 +92,7 @@ def delete_expense(
         .first()
     )
     if not expense:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Expense not found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Despesa não encontrada")
 
     expense.deleted_at = datetime.now(timezone.utc)
     db.commit()

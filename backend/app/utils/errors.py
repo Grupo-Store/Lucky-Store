@@ -16,7 +16,7 @@ class OrderlyHubException(Exception):
 class AuthenticationException(OrderlyHubException):
     """Authentication error."""
     
-    def __init__(self, detail: str = "Invalid credentials"):
+    def __init__(self, detail: str = "Credenciais inválidas"):
         self.detail = detail
         self.status_code = status.HTTP_401_UNAUTHORIZED
 
@@ -24,7 +24,7 @@ class AuthenticationException(OrderlyHubException):
 class AuthorizationException(OrderlyHubException):
     """Authorization error."""
     
-    def __init__(self, detail: str = "Insufficient permissions"):
+    def __init__(self, detail: str = "Permissão insuficiente"):
         self.detail = detail
         self.status_code = status.HTTP_403_FORBIDDEN
 
@@ -32,7 +32,7 @@ class AuthorizationException(OrderlyHubException):
 class NotFoundException(OrderlyHubException):
     """Resource not found."""
     
-    def __init__(self, detail: str = "Resource not found"):
+    def __init__(self, detail: str = "Registro não encontrado"):
         self.detail = detail
         self.status_code = status.HTTP_404_NOT_FOUND
 
@@ -40,7 +40,7 @@ class NotFoundException(OrderlyHubException):
 class ValidationException(OrderlyHubException):
     """Validation error."""
     
-    def __init__(self, detail: str = "Validation failed"):
+    def __init__(self, detail: str = "Dados inválidos"):
         self.detail = detail
         self.status_code = status.HTTP_422_UNPROCESSABLE_ENTITY
 
@@ -48,7 +48,7 @@ class ValidationException(OrderlyHubException):
 class BusinessLogicException(OrderlyHubException):
     """Business logic violation."""
     
-    def __init__(self, detail: str = "Business logic violation"):
+    def __init__(self, detail: str = "Operação não permitida"):
         self.detail = detail
         self.status_code = status.HTTP_400_BAD_REQUEST
 

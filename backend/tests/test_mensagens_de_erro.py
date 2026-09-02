@@ -243,6 +243,52 @@ def test_erro_http_mantem_o_status_da_rota():
     assert "Cotação de origem" in resposta.detail
 
 
+# ── Regressão: mensagem em inglês na cara do usuário ──────────────────────────
+
+# Estas linhas chegam inteiras na tela: "Invalid email or password" era o que o
+# vendedor lia ao errar a senha. Palavras que denunciam que alguem escreveu uma
+# mensagem nova sem traduzir.
+PALAVRAS_EM_INGLES = [
+    "invalid", "not found", "already exists", "inactive", "revoked",
+    "not authenticated", "permissions", "failed", "expired", "credentials",
+    "user with", "not initiated", "unauthorized", "forbidden",
+]
+
+ARQUIVOS_COM_MENSAGEM = [
+    Path(__file__).resolve().parents[1] / "app" / "services" / "auth.py",
+    Path(__file__).resolve().parents[1] / "app" / "core" / "dependencies.py",
+    Path(__file__).resolve().parents[1] / "app" / "utils" / "errors.py",
+    ROTAS / "auth.py",
+    ROTAS / "users.py",
+    ROTAS / "expenses.py",
+]
+
+# detail="...", AuthenticationException("..."), ValueError("..."), etc.
+_MENSAGEM = re.compile(
+    r'(?:detail\s*=\s*|(?:Authentication|Authorization|NotFound|Validation|BusinessLogic)Exception\(\s*|ValueError\(\s*)'
+    r'f?"([^"]{4,})"'
+)
+
+
+@pytest.mark.parametrize(
+    "arquivo", ARQUIVOS_COM_MENSAGEM,
+    # dois arquivos se chamam auth.py (rota e service); sem o pai, o id do
+    # teste nao diz qual dos dois falhou.
+    ids=lambda p: f"{p.parent.name}/{p.name}",
+)
+def test_nenhuma_mensagem_de_auth_em_ingles(arquivo):
+    achados = []
+    for mensagem in _MENSAGEM.findall(arquivo.read_text(encoding="utf-8")):
+        baixa = mensagem.lower()
+        for palavra in PALAVRAS_EM_INGLES:
+            if palavra in baixa:
+                achados.append(f"{mensagem!r} (contém {palavra!r})")
+                break
+    assert not achados, (
+        f"mensagem em inglês em {arquivo.name}: " + "; ".join(achados)
+    )
+
+
 # ── Regressão: o padrão antigo não pode voltar ────────────────────────────────
 
 def test_nenhuma_rota_devolve_str_exc_em_except_generico():

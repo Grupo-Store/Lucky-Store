@@ -30,7 +30,7 @@ class AuthService:
     def register_user(db: Session, user_data: UserCreate) -> User:
         existing = db.query(User).filter(User.email == user_data.email).first()
         if existing:
-            raise ValueError(f"User with email {user_data.email} already exists")
+            raise ValueError(f"Já existe um usuário com o e-mail {user_data.email}")
 
         user = User(
             email=user_data.email,
@@ -47,16 +47,18 @@ class AuthService:
     def authenticate_user(db: Session, email: str, password: str) -> User:
         user = db.query(User).filter(User.email == email).first()
         if not user or not verify_password(password, user.password_hash):
-            raise AuthenticationException("Invalid email or password")
+            raise AuthenticationException("E-mail ou senha incorretos")
         if not user.is_active:
-            raise AuthenticationException("User is inactive")
+            raise AuthenticationException(
+                "Usuário desativado. Procure um administrador."
+            )
         return user
 
     @staticmethod
     def get_user_by_id(db: Session, user_id: str) -> User:
         user = db.query(User).filter(User.id == user_id).first()
         if not user:
-            raise NotFoundException(f"User {user_id} not found")
+            raise NotFoundException("Usuário não encontrado")
         return user
 
     # ── Email 2FA ────────────────────────────────────────────────────────────
@@ -83,7 +85,7 @@ class AuthService:
         """Valida o código de email e retorna o usuário se correto."""
         user = db.query(User).filter(User.email == email).first()
         if not user:
-            raise AuthenticationException("Invalid email or code")
+            raise AuthenticationException("E-mail ou código inválido")
 
         now = datetime.now(timezone.utc)
         record = (
@@ -98,7 +100,7 @@ class AuthService:
             .first()
         )
         if not record:
-            raise AuthenticationException("Invalid or expired code")
+            raise AuthenticationException("Código inválido ou expirado. Peça um novo.")
 
         record.used = True
         db.commit()
@@ -118,10 +120,10 @@ class AuthService:
     def refresh_access_token(refresh_token: str) -> dict:
         from app.core.blacklist import blacklist_token, is_blacklisted
         if is_blacklisted(refresh_token):
-            raise AuthenticationException("Refresh token revogado")
+            raise AuthenticationException("Sessão encerrada. Faça login de novo.")
         user_id = verify_token(refresh_token, expected_type="refresh")
         if not user_id:
-            raise AuthenticationException("Invalid or expired refresh token")
+            raise AuthenticationException("Sessão expirada. Faça login de novo.")
         blacklist_token(refresh_token)
         return {
             "access_token": create_access_token(subject=user_id),
@@ -173,9 +175,9 @@ class AuthService:
     def verify_totp_setup(db: Session, user_id: str, token: str) -> bool:
         user = AuthService.get_user_by_id(db, user_id)
         if not user.totp_secret:
-            raise ValueError("TOTP setup not initiated")
+            raise ValueError("A verificação em duas etapas ainda não foi iniciada")
         if not verify_totp(user.totp_secret, token):
-            raise AuthenticationException("Invalid TOTP token")
+            raise AuthenticationException("Código de verificação inválido")
         user.totp_enabled = True
         db.commit()
         return True

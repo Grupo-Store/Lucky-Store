@@ -53,15 +53,15 @@ def register(
     user_count = db.query(User).count()
     if user_count > 0:
         if not authorization or not authorization.startswith("Bearer "):
-            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Não autenticado")
         from app.core.blacklist import is_blacklisted
         from app.utils.security import verify_token
         token = authorization.removeprefix("Bearer ")
         if is_blacklisted(token):
-            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token revoked")
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Sessão encerrada. Faça login de novo.")
         user_id = verify_token(token, expected_type="access")
         if not user_id:
-            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid or expired token")
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Sessão expirada. Faça login de novo.")
     try:
         return AuthService.register_user(db, user_data)
     except ValueError as exc:

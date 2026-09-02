@@ -69,7 +69,7 @@ def export_user_data(
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Acesso negado")
     user = db.query(User).filter(User.id == user_id, User.deleted_at.is_(None)).first()
     if not user:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Usuário não encontrado")
 
     audit_logs = (
         db.query(AuditLog)
