@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Response, status
 from sqlalchemy.orm import Session
 from typing import Optional, List
 from uuid import UUID
@@ -17,6 +17,7 @@ from app.schemas.audit_log import AuditLogResponse
 from app.services.cotacao import CotacaoService
 from app.utils.errors import NotFoundException, BusinessLogicException, to_http_exception, erro_http
 from app.api.routes.auth import get_current_user_dep
+from app.utils.idempotencia import normalizar_chave
 
 
 class QuoteHistoryResponse(BaseModel):
@@ -29,14 +30,26 @@ router = APIRouter(prefix="/quotes", tags=["quotes"])
 
 @router.post("", response_model=CotacaoResponse, status_code=status.HTTP_201_CREATED)
 def create_quote(
+    response: Response,
     data: CotacaoCreate,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user_dep),
+    idempotency_key: Optional[str] = Header(default=None, alias="Idempotency-Key"),
 ):
+    """Cria cotação. Com Idempotency-Key, repetir a chamada não cria outra.
+
+    Continua 201 no reenvio, e não 200: para a tela o resultado é o mesmo
+    ("a cotação está criada, aqui está ela"). Quem precisa distinguir lê o
+    header Idempotent-Replay.
+    """
+    chave = normalizar_chave(idempotency_key)
     try:
-        return CotacaoService.create(db, data, current_user.id)
+        cotacao = CotacaoService.create(db, data, current_user.id, idempotency_key=chave)
     except Exception as exc:
         raise erro_http(exc, "criar a cotação")
+    if getattr(cotacao, "idempotent_replay", False):
+        response.headers["Idempotent-Replay"] = "true"
+    return cotacao
 
 
 @router.get("", response_model=CotacaoListResponse)

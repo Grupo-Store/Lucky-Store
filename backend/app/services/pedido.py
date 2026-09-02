@@ -18,53 +18,14 @@ from app.models.audit_log import AuditLog, AuditAction
 from app.schemas.pedido import PedidoCreate, PedidoUpdate
 from app.utils.errors import NotFoundException, BusinessLogicException
 from app.services.cliente_identidade import obter_ou_criar_cliente
+from app.services.referencias import validar_loja_e_vendedor
 
 logger = logging.getLogger("app.pedido")
 
 
-def _validar_referencias(db: Session, id_loja: UUID, id_vendedor: UUID) -> None:
-    """Confere loja e vendedor ANTES de a OS ser numerada.
-
-    O numero da OS vem de nextval('pedido_os_seq'), e sequence no Postgres e
-    nao-transacional de proposito: uma vez tirado, o rollback NAO devolve o
-    numero. Como a violacao de chave estrangeira so estoura no db.flush() — que
-    acontece depois de o numero ja ter sido pego — cada tentativa com loja ou
-    vendedor inexistente abria um buraco permanente na numeracao.
-
-    Medido contra Postgres real, com o backend rodando: em 8 requisicoes, 2
-    pedidos foram criados (OS-001 e OS-004) e 2 numeros se perderam para
-    ForeignKeyViolation. As demais falhas eram do Pydantic (422) e nao queimavam,
-    porque barram antes daqui.
-
-    Conferindo aqui, esses dois casos passam a falhar ANTES do nextval — e ainda
-    com mensagem legivel, em vez do dump do psycopg2 que a rota devolvia.
-
-    Nao cobre tudo: falha no proprio commit (conexao caindo, container
-    reiniciando) continua queimando, e isso nenhuma abordagem com sequence
-    resolve.
-    """
-    existe_loja = db.query(Loja.id).filter(
-        Loja.id == id_loja, Loja.deleted_at.is_(None)
-    ).first()
-    if not existe_loja:
-        # O UUID vai para o log, nao para a tela: para o vendedor ele nao quer
-        # dizer nada, e para investigar (variavel de ambiente errada no Vercel,
-        # loja excluida) e exatamente o que interessa.
-        logger.warning("id_loja inexistente ou excluida: %s", id_loja)
-        raise NotFoundException(
-            "Empresa não encontrada. Ela pode ter sido excluída — "
-            "recarregue a página e selecione de novo."
-        )
-
-    existe_vendedor = db.query(Vendedor.id).filter(
-        Vendedor.id == id_vendedor, Vendedor.deleted_at.is_(None)
-    ).first()
-    if not existe_vendedor:
-        logger.warning("id_vendedor inexistente ou excluido: %s", id_vendedor)
-        raise NotFoundException(
-            "Vendedor não encontrado. Ele pode ter sido excluído — "
-            "recarregue a página e selecione de novo."
-        )
+# Mora em app/services/referencias.py desde que a cotacao passou a precisar da
+# mesma checagem pelo mesmo motivo. O apelido mantem o nome usado aqui dentro.
+_validar_referencias = validar_loja_e_vendedor
 
 
 def _pedido_da_tentativa(db: Session, current_user_id: UUID,

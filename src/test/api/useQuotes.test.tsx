@@ -48,11 +48,44 @@ describe('useCreateQuote', () => {
     };
 
     await act(async () => {
-      result.current.mutate(payload);
+      result.current.mutate({ payload });
     });
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
-    expect(mockPost).toHaveBeenCalledWith('/quotes', payload);
+    const [url, corpo] = mockPost.mock.calls[0];
+    expect(url).toBe('/quotes');
+    expect(corpo).toEqual(payload);
+  });
+
+  it('manda a chave da tentativa no header Idempotency-Key', async () => {
+    mockPost.mockResolvedValueOnce({ data: mockQuote });
+    const { result } = renderHook(() => useCreateQuote(), { wrapper: makeWrapper() });
+
+    await act(async () => {
+      result.current.mutate({
+        payload: { id_loja: 'loja-1', id_vendedor: 'vendedor-1', cliente: 'X', data_cotacao: '2026-05-11' },
+        idempotencyKey: 'chave-da-tentativa-1',
+      });
+    });
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    const [, , config] = mockPost.mock.calls[0];
+    expect(config.headers['Idempotency-Key']).toBe('chave-da-tentativa-1');
+  });
+
+  it('sem chave, nao inventa header — o backend segue como antes', async () => {
+    mockPost.mockResolvedValueOnce({ data: mockQuote });
+    const { result } = renderHook(() => useCreateQuote(), { wrapper: makeWrapper() });
+
+    await act(async () => {
+      result.current.mutate({
+        payload: { id_loja: 'loja-1', id_vendedor: 'vendedor-1', cliente: 'X', data_cotacao: '2026-05-11' },
+      });
+    });
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    const [, , config] = mockPost.mock.calls[0];
+    expect(config?.headers).toBeUndefined();
   });
 
   it('returns the created quote with backend id', async () => {
@@ -62,7 +95,7 @@ describe('useCreateQuote', () => {
     let receivedData: any;
     await act(async () => {
       result.current.mutate(
-        { id_loja: '', id_vendedor: '', cliente: 'X', data_cotacao: '' },
+        { payload: { id_loja: '', id_vendedor: '', cliente: 'X', data_cotacao: '' } },
         { onSuccess: (d) => { receivedData = d; } },
       );
     });
@@ -76,7 +109,7 @@ describe('useCreateQuote', () => {
     const { result } = renderHook(() => useCreateQuote(), { wrapper: makeWrapper() });
 
     await act(async () => {
-      result.current.mutate({ id_loja: '', id_vendedor: '', cliente: '', data_cotacao: '' });
+      result.current.mutate({ payload: { id_loja: '', id_vendedor: '', cliente: '', data_cotacao: '' } });
     });
 
     await waitFor(() => expect(result.current.isError).toBe(true));

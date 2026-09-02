@@ -131,10 +131,11 @@ describe('QuoteModal — create mode', () => {
 
     await waitFor(() => expect(mockCreateQuote).toHaveBeenCalled());
 
-    const [payload] = mockCreateQuote.mock.calls[0];
-    expect(payload).toHaveProperty('id_loja');
-    expect(payload).toHaveProperty('id_vendedor');
-    expect(payload).toHaveProperty('data_cotacao');
+    const [vars] = mockCreateQuote.mock.calls[0];
+    expect(vars.payload).toHaveProperty('id_loja');
+    expect(vars.payload).toHaveProperty('id_vendedor');
+    expect(vars.payload).toHaveProperty('data_cotacao');
+    expect(vars.idempotencyKey).toBeTruthy();
   });
 });
 

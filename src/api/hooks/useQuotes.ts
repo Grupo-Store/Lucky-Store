@@ -56,12 +56,31 @@ export function useQuote(id: string) {
 
 // ─── Mutations ────────────────────────────────────────────────────────────────
 
+/** Variáveis de `useCreateQuote`: a cotação e a chave da tentativa de salvar. */
+export interface CreateQuoteVars {
+  payload: CreateCotacaoPayload;
+  /**
+   * Idempotency-Key. Identifica a TENTATIVA de salvar, não a cotação: quem
+   * chama gera uma por clique em "Criar Cotação" e manda a mesma se precisar
+   * tentar de novo. Vendo uma chave que já criou cotação, o backend devolve
+   * aquela em vez de criar outra — é o que impede cotação duplicada e número
+   * queimado quando a criação dá certo mas a resposta se perde.
+   *
+   * Opcional: sem ela, o backend se comporta como antes.
+   */
+  idempotencyKey?: string;
+}
+
 /** Cria uma nova cotação com itens opcionais. */
 export function useCreateQuote() {
   const qc = useQueryClient();
-  return useMutation<CotacaoResponse, Error, CreateCotacaoPayload>({
-    mutationFn: (payload) =>
-      apiClient.post('/quotes', payload).then((r) => r.data),
+  return useMutation<CotacaoResponse, Error, CreateQuoteVars>({
+    mutationFn: ({ payload, idempotencyKey }) =>
+      apiClient
+        .post('/quotes', payload, {
+          headers: idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : undefined,
+        })
+        .then((r) => r.data),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: quoteKeys.lists() });
     },

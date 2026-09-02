@@ -5,6 +5,7 @@ from typing import Optional
 from uuid import UUID
 from sqlalchemy.orm import Session
 from sqlalchemy import asc, desc, text, func
+from sqlalchemy.exc import IntegrityError
 
 from app.models.cotacao import Cotacao
 from app.models.item_cotacao import ItemCotacao
@@ -14,10 +15,27 @@ from app.models.audit_log import AuditLog, AuditAction
 from app.models.status_history import StatusHistory, EntityType
 from app.schemas.cotacao import CotacaoCreate, CotacaoUpdate, PhaseUpdate
 from app.utils.errors import NotFoundException
+from app.services.referencias import validar_loja_e_vendedor
 
 
 def _generate_numero(db: Session) -> int:
     return db.execute(text("SELECT nextval('cotacao_numero_seq')")).scalar()
+
+
+def _cotacao_da_tentativa(db: Session, current_user_id: UUID,
+                          idempotency_key: Optional[str]) -> Optional[Cotacao]:
+    """A cotacao que ESTA tentativa de salvar ja criou, se criou.
+
+    Mesma logica de _pedido_da_tentativa em app/services/pedido.py. Nao filtra
+    deleted_at de proposito: cotacao criada e depois apagada ja gastou o numero,
+    e recria-la seria a duplicata que a chave existe para impedir.
+    """
+    if not idempotency_key:
+        return None
+    return db.query(Cotacao).filter(
+        Cotacao.created_by == current_user_id,
+        Cotacao.idempotency_key == idempotency_key,
+    ).first()
 
 
 def _get_quote_phase(cotacao: Cotacao) -> str | None:
@@ -88,13 +106,30 @@ def _hydrate_cotacao(db: Session, cotacao: Cotacao) -> Cotacao:
 class CotacaoService:
 
     @staticmethod
-    def create(db: Session, data: CotacaoCreate, current_user_id: UUID) -> Cotacao:
+    def create(db: Session, data: CotacaoCreate, current_user_id: UUID,
+               idempotency_key: Optional[str] = None) -> Cotacao:
+        # Antes de TUDO, inclusive do nextval: se esta mesma tentativa ja criou
+        # cotacao, devolve aquela. E o caso da resposta perdida — a cotacao
+        # entrou, a tela nao soube, o vendedor clicou de novo.
+        ja_criada = _cotacao_da_tentativa(db, current_user_id, idempotency_key)
+        if ja_criada is not None:
+            ja_criada.idempotent_replay = True
+            return _hydrate_cotacao(db, ja_criada)
+
+        # Antes de qualquer escrita: sem isto, loja ou vendedor inexistente so
+        # era descoberto no flush, com o numero da cotacao ja gasto.
+        validar_loja_e_vendedor(db, data.id_loja, data.id_vendedor)
+
         _upsert_cliente(db, data.cliente, data.cnpj_cliente)
 
         cotacao = Cotacao(
             id_loja=data.id_loja,
             id_vendedor=data.id_vendedor,
-            numero=_generate_numero(db),
+            # O numero NAO sai aqui — ver o comentario depois do db.add.
+            # numero e nullable, entao aqui nem precisa de rascunho: a linha
+            # entra sem numero e recebe o definitivo no mesmo commit.
+            numero=None,
+            idempotency_key=idempotency_key,
             numero_requisicao=data.numero_requisicao,
             b2b_company=data.b2b_company,
             cliente=data.cliente,
@@ -116,7 +151,27 @@ class CotacaoService:
             created_by=current_user_id,
         )
         db.add(cotacao)
-        db.flush()
+
+        # O INSERT e o momento em que o banco decide: e ali que estoura tanto a
+        # uq_cotacao (loja + vendedor + data + nº de requisicao repetidos)
+        # quanto o indice de idempotencia, quando dois cliques chegam juntos.
+        # Pedindo o numero antes dele, toda recusa levava um numero junto — e
+        # nextval nao volta no rollback.
+        #
+        # Foi assim que 17 numeros (10 a 26) se perderam neste banco.
+        try:
+            db.flush()
+            cotacao.numero = _generate_numero(db)
+            db.flush()
+        except IntegrityError:
+            db.rollback()
+            concorrente = _cotacao_da_tentativa(db, current_user_id, idempotency_key)
+            if concorrente is None:
+                # Violacao de outra restricao — a uq_cotacao, tipicamente. Nada
+                # a ver com idempotencia: deixa subir, a rota traduz.
+                raise
+            concorrente.idempotent_replay = True
+            return _hydrate_cotacao(db, concorrente)
 
         for item_data in data.itens:
             db.add(ItemCotacao(
@@ -145,6 +200,7 @@ class CotacaoService:
 
         db.commit()
         db.refresh(cotacao)
+        cotacao.idempotent_replay = False
         return _hydrate_cotacao(db, cotacao)
 
     @staticmethod

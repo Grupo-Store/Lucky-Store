@@ -24,6 +24,7 @@ from app.schemas.status_history import StatusHistoryResponse
 from app.services.pedido import PedidoService
 from app.utils.errors import NotFoundException, BusinessLogicException, to_http_exception, erro_http
 from app.api.routes.auth import get_current_user_dep
+from app.utils.idempotencia import normalizar_chave
 from pydantic import BaseModel
 
 
@@ -60,27 +61,6 @@ def _batch_total_estornado(db: Session, pedido_ids: list) -> dict:
 router = APIRouter(prefix="/pedidos", tags=["pedidos"])
 
 
-MAX_IDEMPOTENCY_KEY = 64
-
-
-def _chave_idempotencia(bruta: Optional[str]) -> Optional[str]:
-    """Header opcional; ausente, o comportamento e o de antes."""
-    if bruta is None:
-        return None
-    chave = bruta.strip()
-    if not chave:
-        return None
-    if len(chave) > MAX_IDEMPOTENCY_KEY:
-        # Barra aqui em vez de deixar o banco truncar/estourar: chave cortada
-        # deixaria de bater com a da tentativa anterior e o efeito seria criar o
-        # pedido duplicado que ela existe para impedir.
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=f"Idempotency-Key deve ter no maximo {MAX_IDEMPOTENCY_KEY} caracteres",
-        )
-    return chave
-
-
 @router.post("", response_model=PedidoResponse, status_code=status.HTTP_201_CREATED)
 def create_pedido(
     request: Request,
@@ -100,7 +80,7 @@ def create_pedido(
     ("o pedido esta criado, aqui esta ele") e diferenciar so criaria um segundo
     caminho no onSuccess. Quem precisa distinguir le o header Idempotent-Replay.
     """
-    chave = _chave_idempotencia(idempotency_key)
+    chave = normalizar_chave(idempotency_key)
     ip = request.client.host if request.client else None
     ua = request.headers.get("user-agent")
     try:

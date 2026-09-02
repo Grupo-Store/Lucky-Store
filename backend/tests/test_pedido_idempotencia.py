@@ -26,6 +26,7 @@ from tests.test_routes_pedidos import _fake_pedido, _PEDIDO_PAYLOAD
 BACKEND = Path(__file__).resolve().parents[1]
 SERVICO = BACKEND / "app" / "services" / "pedido.py"
 CONVERSAO = BACKEND / "app" / "services" / "conversao_cotacao.py"
+REFERENCIAS = BACKEND / "app" / "services" / "referencias.py"
 MIGRATION = BACKEND / "alembic" / "versions" / "b7c8d9e0f1a2_add_idempotency_key_to_pedidos.py"
 
 
@@ -74,13 +75,23 @@ def test_busca_pela_chave_vem_antes_do_nextval():
 def test_referencia_invalida_nao_mostra_uuid_na_tela():
     """A mensagem vai direto para a tela do vendedor. Um UUID ali nao ajuda
     ninguem — ele vai para o log, onde e o que interessa para investigar."""
-    fonte = SERVICO.read_text(encoding="utf-8")
-    corpo = fonte.split("def _validar_referencias(")[1].split("\ndef ")[0]
+    corpo = REFERENCIAS.read_text(encoding="utf-8")
     mensagens = re.findall(r"NotFoundException\(\s*(.+?)\s*\)", corpo, re.S)
     assert mensagens, "nenhuma mensagem encontrada"
     for m in mensagens:
         assert "id_loja" not in m and "id_vendedor" not in m, f"UUID na tela: {m}"
     assert "logger.warning" in corpo, "o UUID precisa ir para o log"
+
+
+def test_validacao_e_compartilhada_entre_pedido_e_cotacao():
+    """Pedido e cotacao precisam da mesma checagem pelo mesmo motivo. Duplicar
+    seria repetir o erro do migrate_item_rma_status, onde uma copia da lista de
+    status ficou para tras e so foi descoberta meses depois."""
+    for servico in (SERVICO, BACKEND / "app" / "services" / "cotacao.py"):
+        fonte = servico.read_text(encoding="utf-8")
+        assert "from app.services.referencias import validar_loja_e_vendedor" in fonte, (
+            f"{servico.name} nao usa a validacao compartilhada"
+        )
 
 
 # ── Ordem: o numero da OS sai depois do INSERT ────────────────────────────────

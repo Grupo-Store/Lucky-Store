@@ -33,17 +33,31 @@ def _ddl_do_create_all() -> list[str]:
             str(sql.compile(dialect=engine.dialect))
         ),
     )
-    Cotacao.__table__.create(engine, checkfirst=False)
+    # metadata inteira, e nao so esta tabela: a Sequence esta anexada a
+    # MetaData (ver o comentario da coluna `numero` no model), entao criar
+    # apenas a tabela nao emitiria o CREATE SEQUENCE.
+    from app.database import Base
+    Base.metadata.create_all(engine, checkfirst=False)
     return comandos
 
 
 def test_sequence_declarada_no_model():
-    # A Sequence anexada à coluna vira o `default` dela no SQLAlchemy.
-    default = Cotacao.__table__.c.numero.default
-    assert isinstance(default, sa.Sequence), (
-        "a coluna numero precisa ter uma Sequence como default"
+    from app.models.cotacao import cotacao_numero_seq
+    assert isinstance(cotacao_numero_seq, sa.Sequence)
+    assert cotacao_numero_seq.name == SEQ_NAME
+
+
+def test_sequence_nao_esta_presa_a_coluna():
+    """Presa à coluna, a Sequence vira o `default` dela e o SQLAlchemy chama
+    nextval sozinho a cada INSERT com numero=None — o que derrota a correção
+    que tira o número só depois do INSERT passar.
+
+    Medido contra Postgres real antes de mover: uma criação normal consumia 2
+    números, e uma corrida de 4 requisições com a mesma chave de idempotência
+    consumia 4, criando 1 cotação."""
+    assert Cotacao.__table__.c.numero.default is None, (
+        "a Sequence precisa estar na metadata, não na coluna"
     )
-    assert default.name == SEQ_NAME
 
 
 def test_create_all_emite_create_sequence():
@@ -57,9 +71,10 @@ def test_create_all_emite_create_sequence():
 
 def test_sequence_associada_a_metadata():
     """A sequence tem que pertencer à MetaData — é isso que faz o create_all
-    considerá-la ao montar o schema inteiro, e não só esta tabela."""
-    default = Cotacao.__table__.c.numero.default
-    assert default.metadata is Cotacao.__table__.metadata
+    criá-la em banco novo, onde o alembic só dá stamp e não executa nada."""
+    from app.database import Base
+    from app.models.cotacao import cotacao_numero_seq
+    assert cotacao_numero_seq.metadata is Base.metadata
 
 
 # ── Migration de reparo ───────────────────────────────────────────────────────

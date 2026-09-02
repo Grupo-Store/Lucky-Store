@@ -469,6 +469,25 @@ export function QuoteModal({ open, onClose, quote, onSave, onDelete, nextIndex }
   const { mutate: updateQuotePhase, isPending: isUpdatingPhase } = useUpdateQuotePhase(quote?.id ?? '');
   const isPending = isCreating || isUpdating || isUpdatingPhase;
 
+  /* Chave da tentativa de salvar em curso. Nasce no primeiro clique e sobrevive
+   * à falha, de propósito: se a cotação foi criada e só a resposta se perdeu, o
+   * segundo clique manda a MESMA chave e o backend devolve a que já existe, em
+   * vez de abrir outra e gastar mais um número.
+   *
+   * Zerada no sucesso e na troca de formulário (o useEffect abaixo). O segundo
+   * ponto importa tanto quanto o primeiro: sem ele, uma tentativa que ficou em
+   * dúvida contaminaria a cotação SEGUINTE. */
+  const chaveTentativa = useRef<string | null>(null);
+
+  /** crypto.randomUUID exige contexto seguro (https ou localhost). O fallback é
+   * para não ficar sem chave num http de rede interna, onde o valor seria
+   * `undefined` e a proteção sumiria. Precisa não repetir, não ser secreta. */
+  const novaChaveIdempotencia = () => {
+    const c = globalThis.crypto;
+    if (typeof c?.randomUUID === 'function') return c.randomUUID();
+    return `cot-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`;
+  };
+
   useEffect(() => {
     if (quote) {
       setForm({
@@ -482,6 +501,7 @@ export function QuoteModal({ open, onClose, quote, onSave, onDelete, nextIndex }
       setForm(emptyQuote(nextIndex()));
     }
     setDatePopover(null);
+    chaveTentativa.current = null;
   }, [quote, open, nextIndex]);
 
   const set = <K extends keyof Quote>(k: K, v: Quote[K]) => setForm(prev => ({ ...prev, [k]: v }));
@@ -686,8 +706,10 @@ export function QuoteModal({ open, onClose, quote, onSave, onDelete, nextIndex }
           })),
         ],
       };
-      createQuote(payload, {
+      if (!chaveTentativa.current) chaveTentativa.current = novaChaveIdempotencia();
+      createQuote({ payload, idempotencyKey: chaveTentativa.current }, {
         onSuccess: (data) => {
+          chaveTentativa.current = null;
           const phasePayload = buildPhasePayload(q);
           const hasPhase = q.phases.sent.active || q.phases.forClosing.active ||
             q.phases.closed.active || q.phases.dropped.active;
