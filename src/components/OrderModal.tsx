@@ -233,17 +233,17 @@ const OP_LOJA: Record<string, { logo: string; cnpj: string; rodape: string }> = 
   'Lucky Store': {
     logo: '/quote-header.png',
     cnpj: '11.849.935/0001-63',
-    rodape: 'CNPJ 11.849.935/0001-63 · Rua Marchal Deodoro Nr 300 SL 1107, Encruzilhada Recife, PE · CEP 52030-172 · Fone/Fax +55 81 3228.8509 · contato@luckystore.com.br',
+    rodape: 'CNPJ 11.849.935/0001-63 · Rua Marechal Deodoro Nr 300 SL 1107, Encruzilhada Recife, PE · CEP 52030-172 · Fone/Fax +55 81 3228.8509 · contato@luckystore.com.br',
   },
   'BTech': {
     logo: '/btech-header.jpeg',
     cnpj: '54.677.704/0001-22',
-    rodape: 'CNPJ 54.677.704/0001-22 · Rua Marchal Deodoro Nr 300 SL 1107, Encruzilhada Recife, PE · CEP 52030-172 · Fone/Fax +55 81 3228.8509 · btechstore@outlook.com.br',
+    rodape: 'CNPJ 54.677.704/0001-22 · Rua Marechal Deodoro Nr 300 SL 1107, Encruzilhada Recife, PE · CEP 52030-172 · Fone/Fax +55 81 3228.8509 · btechstore@outlook.com.br',
   },
   'AJJ': {
     logo: '/quote-header.png',
     cnpj: '11.849.935/0001-63',
-    rodape: 'CNPJ 11.849.935/0001-63 · Rua Marchal Deodoro Nr 300 SL 1107, Encruzilhada Recife, PE · CEP 52030-172 · Fone/Fax +55 81 3228.8509 · contato@luckystore.com.br',
+    rodape: 'CNPJ 11.849.935/0001-63 · Rua Marechal Deodoro Nr 300 SL 1107, Encruzilhada Recife, PE · CEP 52030-172 · Fone/Fax +55 81 3228.8509 · contato@luckystore.com.br',
   },
 };
 

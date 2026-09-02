@@ -202,7 +202,7 @@ const QUOTE_PRINT_CSS = `
  *  CEP sem ponto (52030-172): é o formato oficial dos Correios. Estava escrito
  *  como 52.030-172, com um ponto que não existe na norma. */
 const ENDERECO_GRUPO =
-  'Rua Marchal Deodoro Nr 300 SL 1107, Encruzilhada Recife, PE CEP: 52030-172 Fone/Fax: +55 81 3228.8509';
+  'Rua Marechal Deodoro Nr 300 SL 1107, Encruzilhada Recife, PE CEP: 52030-172 Fone/Fax: +55 81 3228.8509';
 
 interface StoreInfo {
   label: string;
