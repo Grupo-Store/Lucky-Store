@@ -9,11 +9,47 @@ from app.models.pedido import Pedido, PedidoFormaPagamento, CustoPedido
 from app.models.cliente import Cliente
 from app.models.produto import Produto
 from app.models.rma import Rma
+from app.models.loja import Loja
+from app.models.vendedor import Vendedor
 from app.models.status_history import StatusHistory, EntityType
 from app.models.audit_log import AuditLog, AuditAction
 from app.schemas.pedido import PedidoCreate, PedidoUpdate
 from app.utils.errors import NotFoundException, BusinessLogicException
 from app.services.cliente_identidade import obter_ou_criar_cliente
+
+
+def _validar_referencias(db: Session, id_loja: UUID, id_vendedor: UUID) -> None:
+    """Confere loja e vendedor ANTES de a OS ser numerada.
+
+    O numero da OS vem de nextval('pedido_os_seq'), e sequence no Postgres e
+    nao-transacional de proposito: uma vez tirado, o rollback NAO devolve o
+    numero. Como a violacao de chave estrangeira so estoura no db.flush() — que
+    acontece depois de o numero ja ter sido pego — cada tentativa com loja ou
+    vendedor inexistente abria um buraco permanente na numeracao.
+
+    Medido contra Postgres real, com o backend rodando: em 8 requisicoes, 2
+    pedidos foram criados (OS-001 e OS-004) e 2 numeros se perderam para
+    ForeignKeyViolation. As demais falhas eram do Pydantic (422) e nao queimavam,
+    porque barram antes daqui.
+
+    Conferindo aqui, esses dois casos passam a falhar ANTES do nextval — e ainda
+    com mensagem legivel, em vez do dump do psycopg2 que a rota devolvia.
+
+    Nao cobre tudo: falha no proprio commit (conexao caindo, container
+    reiniciando) continua queimando, e isso nenhuma abordagem com sequence
+    resolve.
+    """
+    existe_loja = db.query(Loja.id).filter(
+        Loja.id == id_loja, Loja.deleted_at.is_(None)
+    ).first()
+    if not existe_loja:
+        raise NotFoundException(f"Loja {id_loja} nao encontrada")
+
+    existe_vendedor = db.query(Vendedor.id).filter(
+        Vendedor.id == id_vendedor, Vendedor.deleted_at.is_(None)
+    ).first()
+    if not existe_vendedor:
+        raise NotFoundException(f"Vendedor {id_vendedor} nao encontrado")
 
 
 def _generate_numero_os(db: Session) -> str:
@@ -54,6 +90,10 @@ class PedidoService:
     @staticmethod
     def create(db: Session, data: PedidoCreate, current_user_id: UUID,
                ip_address: str = None, user_agent: str = None) -> Pedido:
+        # Antes de qualquer escrita: sem isto, uma loja ou vendedor inexistente
+        # so era descoberto no flush, com o numero da OS ja gasto.
+        _validar_referencias(db, data.id_loja, data.id_vendedor)
+
         id_cliente = _get_or_create_cliente(db, data.nome_cliente, data.cpf_cnpj)
         pedido = Pedido(
             id_loja=data.id_loja,
