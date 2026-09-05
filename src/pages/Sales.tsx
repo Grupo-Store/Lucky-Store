@@ -451,6 +451,26 @@ export default function Sales() {
   const { data: quotesData, isLoading: quotesLoading, isError: quotesError, refetch: quotesRefetch } =
     useQuotesAPI(quoteApiFilters);
 
+  /* A busca de cotação vai para o SERVIDOR, não filtra a página carregada.
+   *
+   * Filtrando no navegador ela só enxergava as 20 cotações da página aberta:
+   * digitar o índice 23 não achava nada se ele estivesse na página 2, e falhava
+   * em silêncio — o vendedor concluiria que a cotação não existe.
+   *
+   * O atraso de 350ms é para não disparar uma requisição por tecla digitada.
+   * Volta para a página 1 junto, senão a busca nova herdaria a página em que a
+   * anterior estava e viria vazia. */
+  useEffect(() => {
+    const t = setTimeout(() => {
+      setQuoteApiFilters(f => {
+        const termo = quoteSearch.trim();
+        if ((f.busca ?? '') === termo) return f;
+        return { ...f, busca: termo || undefined, page: 1 };
+      });
+    }, 350);
+    return () => clearTimeout(t);
+  }, [quoteSearch]);
+
   // Próximo índice (preview) da cotação: sequencial 1..N a partir das cotações carregadas.
   // O número definitivo é gerado pelo backend (sequence) ao salvar.
   const nextIndexReal = useMemo(() => {
@@ -510,28 +530,24 @@ export default function Sales() {
   };
 
   /* ---------- Quotes (API-backed, client-side search/status/phaseDate filter on top) ---------- */
+  // O texto digitado não é filtrado aqui: quem filtra é o servidor, pelo
+  // parâmetro `busca`. Refiltrar no navegador desfaria isso — o índice, por
+  // exemplo, casa exato no servidor e não apareceria em nenhum campo de texto.
+  // Sobram aqui os filtros que dependem da fase, que o servidor não conhece.
   const filteredQuotes = useMemo(() => {
     const items = quotesData?.items ?? [];
-    const q = quoteSearch.toLowerCase().trim();
     return items.filter(qt => {
       const highest = getCotacaoPhase(qt);
       if (quoteStatusFilter === 'open') {
         // "Em aberto" = ainda não fechada e não caída
         if (highest === 'closed' || highest === 'dropped') return false;
       } else if (quoteStatusFilter !== 'all' && highest !== quoteStatusFilter) return false;
-      if (q && !(
-        qt.cliente.toLowerCase().includes(q) ||
-        (qt.numero_requisicao ?? '').toLowerCase().includes(q) ||
-        (qt.b2b_company ?? '').toLowerCase().includes(q) ||
-        (LOJA_BY_ID[qt.id_loja] ?? '').toLowerCase().includes(q) ||
-        (vendedores.find(v => v.id === qt.id_vendedor)?.nome ?? '').toLowerCase().includes(q)
-      )) return false;
       if (quoteRange.from && quoteDateField === 'phaseDate') {
         if (!qt.data_validade || !isInRange(qt.data_validade, quoteRange)) return false;
       }
       return true;
     });
-  }, [quotesData, quoteSearch, quoteStatusFilter, quoteRange, quoteDateField]);
+  }, [quotesData, quoteStatusFilter, quoteRange, quoteDateField]);
 
   /* ---------- RMAs (client-side search + situação on top of API data) ---------- */
   const filteredRmas = useMemo(() => {
@@ -695,7 +711,7 @@ export default function Sales() {
                     display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap',
                   }}
                 >
-                  <SearchBar value={quoteSearch} onChange={setQuoteSearch} placeholder="Cliente, Req, Empresa, Vendedor..." className="flex-1 min-w-[160px]" />
+                  <SearchBar value={quoteSearch} onChange={setQuoteSearch} placeholder="Índice, Cliente, Req, Empresa, Vendedor..." className="flex-1 min-w-[160px]" />
                   <Select value={quoteStatusFilter} onValueChange={setQuoteStatusFilter}>
                     <SelectTrigger style={{ width: 168, background: '#FBFCFE', borderColor: '#E2E8F1', borderRadius: 10, flexShrink: 0 }}>
                       <SelectValue placeholder="Todos os Status" />

@@ -4,10 +4,12 @@ from decimal import Decimal
 from typing import Optional
 from uuid import UUID
 from sqlalchemy.orm import Session
-from sqlalchemy import asc, desc, text, func
+from sqlalchemy import asc, desc, text, func, or_, cast, String
 from sqlalchemy.exc import IntegrityError
 
 from app.models.cotacao import Cotacao
+from app.models.loja import Loja
+from app.models.vendedor import Vendedor
 from app.models.item_cotacao import ItemCotacao
 from app.models.cliente import Cliente
 from app.services.cliente_identidade import obter_ou_criar_cliente
@@ -36,6 +38,38 @@ def _cotacao_da_tentativa(db: Session, current_user_id: UUID,
         Cotacao.created_by == current_user_id,
         Cotacao.idempotency_key == idempotency_key,
     ).first()
+
+
+def _filtro_de_busca(termo: str):
+    """Uma caixa de busca so, procurando em tudo que identifica a cotacao.
+
+    Precisa ser OU, e nao "se for numero e indice": varios numeros de requisicao
+    sao numericos (5137, 3216385). Tratar todo termo numerico como indice faria
+    buscar 5137 parar de achar a cotacao cujo Nº Req. e 5137 — trocaria um
+    problema por outro.
+
+    O indice casa EXATO, o resto casa por pedaco. Assim "64" traz a cotacao de
+    indice 64 e tambem qualquer uma cujo Nº Req. contenha 64, que e o que quem
+    digita numa caixa unica espera. Casar o indice por pedaco faria "6" devolver
+    6, 16, 60..69 e a busca perderia a serventia.
+    """
+    like = f"%{termo}%"
+    condicoes = [
+        Cotacao.cliente.ilike(like),
+        Cotacao.b2b_company.ilike(like),
+        Cotacao.numero_requisicao.ilike(like),
+        # Loja e vendedor entram por relacionamento porque a tela ja buscava por
+        # eles (o placeholder diz "Cliente, Req, Empresa, Vendedor"). Sem isto, a
+        # busca passaria a achar MENOS do que achava antes.
+        Cotacao.loja.has(Loja.nome.ilike(like)),
+        Cotacao.vendedor.has(Vendedor.nome.ilike(like)),
+    ]
+    if termo.isdigit():
+        # int() so depois do isdigit: o cast e barato, mas um termo enorme
+        # viraria um numero fora do range do integer e o Postgres estouraria.
+        if len(termo) <= 9:
+            condicoes.append(Cotacao.numero == int(termo))
+    return or_(*condicoes)
 
 
 def _get_quote_phase(cotacao: Cotacao) -> str | None:
@@ -217,6 +251,7 @@ class CotacaoService:
         sort_dir: str = "desc",
         eligible_for_order: Optional[bool] = None,
         numero_requisicao: Optional[str] = None,
+        busca: Optional[str] = None,
     ):
 
         q = db.query(Cotacao).filter(Cotacao.deleted_at.is_(None))
@@ -229,6 +264,8 @@ class CotacaoService:
             q = q.filter(Cotacao.cliente.ilike(f"%{cliente}%"))
         if numero_requisicao:
             q = q.filter(Cotacao.numero_requisicao.ilike(f"%{numero_requisicao}%"))
+        if busca and busca.strip():
+            q = q.filter(_filtro_de_busca(busca.strip()))
         if data_inicio:
             q = q.filter(Cotacao.data_cotacao >= data_inicio)
         if data_fim:

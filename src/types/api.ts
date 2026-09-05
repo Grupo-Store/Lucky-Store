@@ -318,6 +318,8 @@ export interface CotacaoFilters {
   sort_by?: string;
   sort_dir?: 'asc' | 'desc';
   numero_requisicao?: string;
+  /** Procura em índice (exato), Nº de requisição, cliente, empresa e vendedor. */
+  busca?: string;
 }
 
 export interface ConversaoResponse {
