@@ -764,8 +764,8 @@ export default function Sales() {
                   <Table>
                     <TableHeader>
                       <TableRow style={{ background: '#F8FAFD', borderBottom: '1px solid #EEF2F8' }}>
-                        {['Cliente', 'Data Req.', 'Nº Req.', 'Empresa', 'Vendedor', 'Status', 'Itens', 'Valor'].map((h, i) => (
-                          <TableHead key={h} className={i === 7 ? 'text-right' : ''} style={{ fontSize: 11.5, fontWeight: 600, letterSpacing: '0.1em', textTransform: 'uppercase', color: '#5B6B82', padding: '12px 18px' }}>{h}</TableHead>
+                        {['Índice', 'Cliente', 'Data Req.', 'Nº Req.', 'Empresa', 'Vendedor', 'Status', 'Itens', 'Valor'].map((h, i) => (
+                          <TableHead key={h} className={i === 8 ? 'text-right' : ''} style={{ fontSize: 11.5, fontWeight: 600, letterSpacing: '0.1em', textTransform: 'uppercase', color: '#5B6B82', padding: '12px 18px' }}>{h}</TableHead>
                         ))}
                       </TableRow>
                     </TableHeader>
@@ -773,7 +773,7 @@ export default function Sales() {
                       {quotesLoading ? (
                         Array.from({ length: 5 }).map((_, i) => (
                           <TableRow key={i}>
-                            {Array.from({ length: 8 }).map((_, j) => (
+                            {Array.from({ length: 9 }).map((_, j) => (
                               <TableCell key={j}><Skeleton className="h-4 w-full" /></TableCell>
                             ))}
                           </TableRow>
@@ -784,6 +784,13 @@ export default function Sales() {
                           <TableRow key={qt.id} className="cursor-pointer hover:bg-[#F8FAFE]"
                             style={{ borderBottom: '1px solid #EEF2F8' }}
                             onClick={() => { setEditQuote(cotacaoToQuote(qt, vendedores)); setQuoteModalOpen(true); }}>
+                            {/* Índice: é o único identificador da cotação que não se repete.
+                                Cliente e Nº Req. repetem — a mesma empresa manda várias
+                                cotações, e o Nº Req. é digitado à mão. Sem esta coluna não
+                                havia como apontar para uma cotação específica na lista. */}
+                            <TableCell style={{ padding: '15px 18px', fontVariantNumeric: 'tabular-nums', color: '#5B6B82', fontWeight: 600 }}>
+                              {qt.numero ?? '—'}
+                            </TableCell>
                             <TableCell className="font-medium" style={{ padding: '15px 18px' }}>{qt.b2b_company?.trim() || qt.cliente}</TableCell>
                             <TableCell style={{ padding: '15px 18px' }}>{fmtDate(qt.data_cotacao)}</TableCell>
                             <TableCell style={{ padding: '15px 18px' }}>{qt.numero_requisicao || '—'}</TableCell>
@@ -804,7 +811,7 @@ export default function Sales() {
                         );
                       })}
                       {!quotesLoading && filteredQuotes.length === 0 && (
-                        <TableRow><TableCell colSpan={8} className="text-center py-8 text-muted-foreground">Nenhuma cotação encontrada</TableCell></TableRow>
+                        <TableRow><TableCell colSpan={9} className="text-center py-8 text-muted-foreground">Nenhuma cotação encontrada</TableCell></TableRow>
                       )}
                     </TableBody>
                   </Table>
