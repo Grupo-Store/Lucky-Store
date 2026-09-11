@@ -12,6 +12,44 @@ from app.services.pedido import PedidoService
 from tests.test_atomic_saves_postgres import records
 
 
+def test_product_purchase_http_updates_dashboard_for_order_from_quote(records):
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+    from app.api.routes.itens_pedido import router as items_router
+    from app.api.routes.dashboard import router as dashboard_router
+    from app.core.dependencies import get_current_user
+    from app.database import get_db
+    from app.models import Cotacao, User
+
+    db, user_id, quote_id, order_id, _, item_id, *_ = records
+    db.get(Cotacao, quote_id).cliente = 'teste'
+    order = db.get(Pedido, order_id)
+    order.id_cotacao = quote_id
+    order.custo.custo_produto_final = 0
+    db.get(Produto, item_id).valor_compra = 0
+    db.commit()
+    user = db.get(User, user_id)
+    app = FastAPI()
+    app.include_router(items_router)
+    app.include_router(dashboard_router)
+    app.dependency_overrides[get_db] = lambda: db
+    app.dependency_overrides[get_current_user] = lambda: user
+    period = {'data_inicio': date.today().isoformat(), 'data_fim': date.today().isoformat()}
+
+    with TestClient(app) as client:
+        for value in (420, 630):
+            saved = client.put(f'/pedidos/{order_id}/items/{item_id}', json={
+                'observacao': '', 'valor_compra': value, 'status': 'Bought',
+                'sub_compras': [{'purchaseValue': value, 'status': 'Bought'}],
+            })
+            assert saved.status_code == 200, saved.text
+            assert Decimal(saved.json()['valor_compra']) == value
+            dashboard = client.get('/dashboard/kpis', params=period)
+            assert dashboard.status_code == 200, dashboard.text
+            assert dashboard.json()['custo_produtos'] == value
+            assert dashboard.json()['custo'] == value + 25 + 20
+
+
 @pytest.mark.parametrize('operation', ['purchase', 'item_status', 'order_status'])
 def test_purchase_updates_persisted_cost_and_dashboard(records, operation):
     db, user, _, order_id, _, item_id, _, vendor, _ = records

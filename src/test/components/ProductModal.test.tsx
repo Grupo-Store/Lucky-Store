@@ -15,7 +15,7 @@ describe('salvar compra de produto', () => {
     const item: OrderItem = {
       id: 'item-1', name: 'Produto', quantity: 3, status: 'To Buy', projectedValue: 200,
       purchaseValue: 0, subPurchases: [{ id: 'sub-1', selectedQuantity: 3,
-        supplier: 'Fornecedor', buyer: '', purchaseValue: 420, paymentMethod: '', status: 'Bought' }],
+        supplier: 'Fornecedor', buyer: '', purchaseValue: 0, paymentMethod: '', status: 'To Buy' }],
     };
     const order = { id: 'order-1', os: 'OS-1', items: [item], purchaseTaxPercent: 10,
       directSupplyItems: [{ purchaseValue: 50, quantity: 2 }] } as Order;
@@ -27,6 +27,11 @@ describe('salvar compra de produto', () => {
     render(<QueryClientProvider client={qc}>
       <ProductModal open onClose={vi.fn()} order={order} item={item} onSave={onSave} />
     </QueryClientProvider>);
+    const purchaseInput = screen.getByText('Valor de Compra (R$)').parentElement!.querySelector('input')!;
+    fireEvent.change(purchaseInput, { target: { value: '420' } });
+    fireEvent.blur(purchaseInput);
+    fireEvent.keyDown(screen.getAllByRole('combobox')[1], { key: 'ArrowDown' });
+    fireEvent.click(await screen.findByRole('option', { name: 'Comprado' }));
     fireEvent.click(screen.getByRole('button', { name: 'Salvar Alterações' }));
     await waitFor(() => expect(onSave).toHaveBeenCalled());
     expect(apiClient.put).toHaveBeenCalledWith('/pedidos/order-1/items/item-1', expect.objectContaining({
