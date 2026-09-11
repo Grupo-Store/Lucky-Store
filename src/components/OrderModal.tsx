@@ -309,6 +309,7 @@ function OrderPrintTemplate({ form, valores, vendedor }: {
 }) {
   const loja = OP_LOJA[form.company ?? ''] ?? OP_LOJA['Lucky Store'];
   const itens = form.items || [];
+  const itensDiretos = form.directSupplyItems || [];
   const fretes = form.freight || [];
   const pct = (v?: number) => `${(v || 0).toString().replace('.', ',')}%`;
   // 'T12:00:00' evita que o fuso jogue a data para o dia anterior — mesmo
@@ -398,7 +399,7 @@ function OrderPrintTemplate({ form, valores, vendedor }: {
             </tr>
           </thead>
           <tbody>
-            {itens.length === 0 && (
+            {itens.length === 0 && itensDiretos.length === 0 && (
               <tr><td colSpan={6} className="c">Nenhum item</td></tr>
             )}
             {itens.map((item, idx) => {
@@ -431,6 +432,16 @@ function OrderPrintTemplate({ form, valores, vendedor }: {
                 </Fragment>
               );
             })}
+            {itensDiretos.map((item, idx) => (
+              <tr key={item.id}>
+                <td className="op-idx">{String(itens.length + idx + 1).padStart(2, '0')}</td>
+                <td>{item.name || '—'}<br /><small>Fornecimento direto</small></td>
+                <td className="c">{item.quantity || 0}</td>
+                <td>{item.supplier || '—'}</td>
+                <td className="r">{toBRL((item.purchaseValue || 0) * (item.quantity || 0))}</td>
+                <td className="r">{toBRL((item.closingValue || 0) * (item.quantity || 0))}</td>
+              </tr>
+            ))}
           </tbody>
           <tfoot>
             <tr>
@@ -439,8 +450,10 @@ function OrderPrintTemplate({ form, valores, vendedor }: {
                   das MESMAS linhas impressas acima — o total do rodape do
                   documento tem que fechar com o que esta na folha. */}
               <td colSpan={4} className="r">Totais</td>
-              <td className="r">{toBRL(itens.reduce((s, i) => s + calcItemFinalValue(i), 0))}</td>
-              <td className="r">{toBRL(itens.reduce((s, i) => s + (i.saleValue || 0) * (i.quantity || 0), 0))}</td>
+              <td className="r">{toBRL(itens.reduce((s, i) => s + calcItemFinalValue(i), 0)
+                + itensDiretos.reduce((s, i) => s + (i.purchaseValue || 0) * (i.quantity || 0), 0))}</td>
+              <td className="r">{toBRL(itens.reduce((s, i) => s + (i.saleValue || 0) * (i.quantity || 0), 0)
+                + itensDiretos.reduce((s, i) => s + (i.closingValue || 0) * (i.quantity || 0), 0))}</td>
             </tr>
           </tfoot>
         </table>
@@ -487,6 +500,10 @@ function OrderPrintTemplate({ form, valores, vendedor }: {
             <div className="op-campo"><span className="k">Crédito · {pct(form.creditCostPercent)}</span><span className="v">{toBRL(valores.creditoValor)}</span></div>
             <div className="op-campo"><span className="k">Débito · {pct(form.debitCostPercent)}</span><span className="v">{toBRL(valores.debitoValor)}</span></div>
             <div className="op-campo"><span className="k">Imp. compra · {pct(form.purchaseTaxPercent)}</span><span className="v">{toBRL(valores.impCompraValor)}</span></div>
+            <div className="op-campo"><span className="k">Imp. venda · {pct(form.salesTaxPercent)}</span><span className="v">{toBRL(valores.impVendaValor)}</span></div>
+            {itensDiretos.length > 0 && (
+              <div className="op-campo"><span className="k">Fornecimento direto</span><span className="v">{toBRL(calcDirectSupplyCost(itensDiretos))}</span></div>
+            )}
           </div>
         </div>
         <div className="op-sec">

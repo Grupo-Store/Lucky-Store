@@ -22,6 +22,7 @@ import { vi, describe, it, expect, beforeEach } from 'vitest';
 import { createElement } from 'react';
 import { AddOrderChooser, type OrderPrefill } from '@/components/AddOrderChooser';
 import { OrderModal } from '@/components/OrderModal';
+import { calcDirectSupplyCost, calcProfit } from '@/store/OrderStore';
 
 const { mockGet } = vi.hoisted(() => ({ mockGet: vi.fn() }));
 const { mockCreateOrder } = vi.hoisted(() => ({ mockCreateOrder: vi.fn() }));
@@ -76,7 +77,7 @@ const wrapper = () => {
 };
 
 /** Percorre a tela até confirmar, e devolve o prefill entregue ao pedido. */
-async function criarPedidoDaCotacao() {
+async function criarPedidoDaCotacao(excludedItem?: string) {
   const onChooseFromQuote = vi.fn();
   const chooser = render(
     <AddOrderChooser open onClose={vi.fn()} quotes={[]}
@@ -85,6 +86,7 @@ async function criarPedidoDaCotacao() {
   );
   fireEvent.click(screen.getByText(/Cadastrar a partir de cotação/i));
   fireEvent.click(await screen.findByText('Tech Corp'));
+  if (excludedItem) fireEvent.click(await screen.findByText(excludedItem));
   fireEvent.click(await screen.findByRole('button', { name: /Criar Pedido/i }));
   await waitFor(() => expect(onChooseFromQuote).toHaveBeenCalled());
   chooser.unmount();
@@ -97,6 +99,48 @@ beforeEach(() => {
 });
 
 describe('pedido criado a partir de uma cotação', () => {
+  it('preserva custo, venda, fornecedor e lucro do faturamento direto até salvar a OS', async () => {
+    mockGet.mockResolvedValue({ data: {
+      items: [{ ...COTACAO, numero: 86, valor_total: '2058.00', is_direct_billing: true,
+        itens: [{ ...COTACAO.itens[0], descricao: 'OFFICE PRO PLUS 21', quantidade: 3,
+          valor_unitario: '304.50', valor_fechamento: '686.00', is_direct_supply: true,
+          fornecedor: 'TECHFORM', porcentagem_fornecedor: '10', frete_fornecedor: '20.00' }],
+      }], total: 1, page: 1, pages: 1,
+    } });
+    const prefill = await criarPedidoDaCotacao();
+    expect(prefill.salesValue).toBe(2058);
+    expect(prefill.directSupplyItems[0]).toMatchObject({
+      quantity: 3, purchaseValue: 304.5, projectedValue: 304.5, closingValue: 686,
+      supplier: 'TECHFORM', supplierPct: 10, supplierFreight: 20,
+    });
+    expect(calcDirectSupplyCost(prefill.directSupplyItems)).toBeCloseTo(134.45, 2);
+    expect(calcProfit({ salesValue: prefill.salesValue, directSupplyItems: prefill.directSupplyItems,
+      finalProductCost: 913.5 })).toBeCloseTo(1010.05, 2);
+
+    render(<OrderModal open prefill={prefill} onClose={vi.fn()} onSave={vi.fn()} />,
+      { wrapper: wrapper() });
+    expect(document.querySelector('.opm-aside')).toHaveTextContent('1.010,05');
+    fireEvent.change(screen.getByPlaceholderText('Ex: OC-1234'), { target: { value: '0131146' } });
+    fireEvent.click(screen.getByRole('button', { name: /Criar Pedido/i }));
+    expect(mockCreateOrder).toHaveBeenCalledWith(expect.objectContaining({ payload: expect.objectContaining({
+      valor_venda: '2058', custo: expect.objectContaining({ custo_produto_final: '913.5' }),
+      itens: [expect.objectContaining({ preco_custo: 304.5, valor_compra: 686, quantidade: 3,
+        frete_fornecedor: '20', porcentagem_fornecedor: '10', is_direct_supply: true })],
+    }) }), expect.anything());
+  });
+
+  it('o total da OS considera apenas os itens selecionados da cotação', async () => {
+    mockGet.mockResolvedValue({ data: { items: [{ ...COTACAO, valor_total: '2158',
+      itens: [{ ...COTACAO.itens[0], quantidade: 3, valor_fechamento: '686' },
+        { ...COTACAO.itens[0], id: 'excluded', descricao: 'Item não selecionado',
+          quantidade: 1, valor_fechamento: '100', is_direct_supply: true }],
+    }], total: 1, page: 1, pages: 1 } });
+    const prefill = await criarPedidoDaCotacao('Item não selecionado');
+    expect(prefill.salesValue).toBe(2058);
+    expect(prefill.directBilling).toBe(false);
+    expect(prefill.directSupplyItems).toEqual([]);
+  });
+
   it('leva identificação, contato, vendedor e condições até o documento antes de salvar', async () => {
     const prefill = await criarPedidoDaCotacao();
     render(<OrderModal open prefill={prefill} onClose={vi.fn()} onSave={vi.fn()} />,

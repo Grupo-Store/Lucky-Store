@@ -620,7 +620,6 @@ export function QuoteModal({ open, onClose, quote, onSave, onDelete, nextIndex }
   const allRevenue = totalRevenue + dsTotalRevenue;
   // Custo Parcial = somatório do custo de cada produto × quantidade (itens normais + fornecimento direto)
   const custoParcial = allCost;
-  const margin = allCost > 0 ? ((allRevenue / allCost) - 1) * 100 : 0;
   // grossProfit = lucro interno de itens diretos + margem bruta de itens normais
   const regularGrossProfit = totalRevenue - totalCost;
   const dsInternalProfit = dsItems.reduce((s, i) => {
@@ -629,6 +628,7 @@ export function QuoteModal({ open, onClose, quote, onSave, onDelete, nextIndex }
     return s + (lineDiff - custoFornecedor);
   }, 0);
   const grossProfit = regularGrossProfit + dsInternalProfit;
+  const margin = allRevenue > 0 ? (grossProfit / allRevenue) * 100 : 0;
 
   /**
    * Base do imposto, diferente por tipo de venda:
@@ -652,14 +652,14 @@ export function QuoteModal({ open, onClose, quote, onSave, onDelete, nextIndex }
 
   // Auto-sync closed phase value to sum of all Valor Final
   useEffect(() => {
-    if ((form.phases.closed.value || 0) !== totalRevenue) {
+    if ((form.phases.closed.value || 0) !== allRevenue) {
       setForm(prev => ({
         ...prev,
-        phases: { ...prev.phases, closed: { ...prev.phases.closed, value: totalRevenue } },
+        phases: { ...prev.phases, closed: { ...prev.phases.closed, value: allRevenue } },
       }));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [totalRevenue]);
+  }, [allRevenue]);
 
   // Valor (Informações Gerais) = somatório dos valores finais dos itens (closingValue × qtd),
   // itens normais + fornecimento direto. Persistido como valor_total.

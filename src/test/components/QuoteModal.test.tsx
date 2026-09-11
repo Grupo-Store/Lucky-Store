@@ -59,6 +59,23 @@ const existingQuote: Quote = {
   taxBTech: 3,
 };
 
+it('faturamento direto mantém o valor fechado e calcula margem sobre a venda', async () => {
+  const quote: Quote = { ...existingQuote, value: 2058, directBilling: true,
+    taxLucky: 0, taxBTech: 0,
+    phases: { ...emptyPhases(), closed: { active: true, date: '2026-09-10', value: 2058 } },
+    directSupplyItems: [{ id: 'ds-86', name: 'OFFICE PRO PLUS 21', quantity: 3,
+      quoteValue: 304.5, closingValue: 686, supplier: 'TECHFORM', supplierPct: 10, supplierFreight: 20 }],
+  };
+  render(<QuoteModal open quote={quote} onClose={vi.fn()} onSave={vi.fn()} nextIndex={() => '86'} />);
+  expect(document.querySelector('.qm-result')).toHaveTextContent('1.010,05');
+  expect(document.querySelector('.qm-marg')).toHaveTextContent('49,08%');
+  fireEvent.click(screen.getByRole('button', { name: /Salvar Alterações/i }));
+  await waitFor(() => expect(mockUpdateQuote).toHaveBeenCalled());
+  expect(mockUpdateQuote.mock.calls.at(-1)?.[0]).toMatchObject({
+    valor_total: '2058', fase: { valor_fechamento: '2058' },
+  });
+});
+
 // ─── Tests ───────────────────────────────────────────────────────────────────
 
 describe('QuoteModal — create mode', () => {

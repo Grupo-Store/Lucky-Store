@@ -139,7 +139,7 @@ export function AddOrderChooser({ open, onClose, onChooseNew, onChooseFromQuote 
     const chosen = (picked.itens ?? []).filter(i => selectedItemIds.has(i.id));
     const regularItems = chosen.filter(i => !i.is_direct_supply);
     const dsItems = chosen.filter(i => i.is_direct_supply);
-    const hasDirect = picked.itens?.some(i => i.is_direct_supply) ?? false;
+    const hasDirect = dsItems.length > 0;
     const prefill: OrderPrefill = {
       sourceQuoteId: picked.id,
       sourceQuoteNumber: picked.numero,
@@ -159,7 +159,7 @@ export function AddOrderChooser({ open, onClose, onChooseNew, onChooseFromQuote 
       company: (LOJA_BY_ID[picked.id_loja] ?? '') as Quote['company'],
       seller: (vendedoresData?.items.find(v => v.id === picked.id_vendedor)?.nome
         ?? VENDEDOR_BY_ID[picked.id_vendedor] ?? '') as Quote['seller'],
-      salesValue: parseFloat(picked.valor_total ?? '0') || 0,
+      salesValue: chosen.reduce((sum, i) => sum + (parseFloat(i.valor_fechamento ?? '0') || 0) * i.quantidade, 0),
       directBilling: hasDirect,
       items: regularItems.map(i => ({
         id: crypto.randomUUID(),
@@ -169,13 +169,14 @@ export function AddOrderChooser({ open, onClose, onChooseNew, onChooseFromQuote 
         saleValue: i.valor_fechamento != null ? (parseFloat(i.valor_fechamento) || 0) : undefined,
       })),
       directSupplyItems: dsItems.map(i => {
-        const closingVal = i.valor_fechamento ? (parseFloat(i.valor_fechamento) || 0) : (parseFloat(i.valor_unitario) || 0);
+        const closingVal = parseFloat(i.valor_fechamento ?? '0') || 0;
         return {
           id: crypto.randomUUID(),
           name: i.descricao,
           quantity: i.quantidade,
           projectedValue: parseFloat(i.valor_unitario) || 0,
-          purchaseValue: 0,
+          // No fornecimento direto, o custo negociado acompanha a venda.
+          purchaseValue: parseFloat(i.valor_unitario) || 0,
           closingValue: closingVal,
           supplier: i.fornecedor || '',
           supplierPct: parseFloat(i.porcentagem_fornecedor ?? '0') || 0,

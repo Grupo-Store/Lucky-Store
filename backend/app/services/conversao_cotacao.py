@@ -1,4 +1,5 @@
 from datetime import date
+from decimal import Decimal
 from uuid import UUID, uuid4
 from sqlalchemy.orm import Session
 
@@ -6,7 +7,7 @@ from app.models.cotacao import Cotacao
 from app.models.cliente import Cliente
 from app.services.cliente_identidade import obter_ou_criar_cliente
 from app.models.item_cotacao import ItemCotacao
-from app.models.pedido import Pedido
+from app.models.pedido import Pedido, CustoPedido
 from app.models.produto import Produto
 from app.models.status_history import StatusHistory, EntityType
 from app.models.audit_log import AuditLog, AuditAction
@@ -83,6 +84,16 @@ class ConversaoCotacaoService:
         db.flush()
 
         itens_cotacao = db.query(ItemCotacao).filter(ItemCotacao.id_cotacao == cotacao_id).all()
+        pedido.valor_venda = sum(((item.valor_fechamento or Decimal(0)) * item.quantidade
+                                 for item in itens_cotacao), Decimal(0))
+        pedido.is_direct_billing = cotacao.is_direct_billing or any(item.is_direct_supply for item in itens_cotacao)
+        db.add(CustoPedido(
+            id_pedido=pedido.id,
+            custo_produto_inicial=sum((item.valor_unitario * item.quantidade
+                                       for item in itens_cotacao), Decimal(0)),
+            custo_produto_final=sum((item.valor_unitario * item.quantidade
+                                     for item in itens_cotacao if item.is_direct_supply), Decimal(0)),
+        ))
         for item in itens_cotacao:
             db.add(Produto(
                 id_pedido=pedido.id,
@@ -104,6 +115,7 @@ class ConversaoCotacaoService:
                 # item_pedido.add_item) e e dele que saem a margem e o custo do
                 # fornecedor. Esvaziar zeraria essas contas.
                 valor_compra=item.valor_fechamento if item.is_direct_supply else None,
+                preco_custo=item.valor_unitario if item.is_direct_supply else None,
                 fornecedor=item.fornecedor,
                 is_direct_supply=item.is_direct_supply,
                 porcentagem_fornecedor=item.porcentagem_fornecedor,
