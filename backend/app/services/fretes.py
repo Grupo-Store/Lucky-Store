@@ -12,6 +12,31 @@ from app.models.pedido import Frete, Pedido, PEDIDO_ATIVO
 
 class FretesService:
     @staticmethod
+    def _entregador_key():
+        return func.coalesce(func.nullif(func.trim(Frete.entregador), ""), "—")
+
+    @staticmethod
+    def _filter_entregador(query, entregador):
+        # Summary, details and payment share the same case-insensitive grouping.
+        return query.filter(func.lower(FretesService._entregador_key()) == (entregador.strip() or "—").lower())
+
+    @staticmethod
+    def confirm_payment(db: Session, entregador: str, id_loja=None, data_inicio=None, data_fim=None):
+        query = FretesService._apply_filters(
+            FretesService._base_query(db), id_loja, data_inicio, data_fim
+        )
+        query = FretesService._filter_entregador(query, entregador)
+        try:
+            rows = query.filter(Frete.pago.is_(False)).with_for_update(of=Frete).all()
+            for frete, _pedido in rows:
+                frete.pago = True
+            db.commit()
+        except Exception:
+            db.rollback()
+            raise
+        return {"confirmados": len(rows)}
+
+    @staticmethod
     def _base_query(db: Session):
         return (
             db.query(Frete, Pedido)
@@ -44,10 +69,13 @@ class FretesService:
         rows = query.all()
 
         agg: dict = defaultdict(
-            lambda: {"qtd": 0, "total": Decimal("0"), "a_pagar": Decimal("0")}
+            lambda: {"nome": None, "qtd": 0, "total": Decimal("0"), "a_pagar": Decimal("0")}
         )
         for frete, _pedido in rows:
-            key = frete.entregador.strip() if frete.entregador else "—"
+            name = (frete.entregador or "").strip() or "—"
+            key = name.lower()
+            # Pick a stable spelling from the saved names without rewriting them.
+            agg[key]["nome"] = min(agg[key]["nome"] or name, name)
             agg[key]["qtd"] += 1
             agg[key]["total"] += Decimal(str(frete.valor))
             if not frete.pago:
@@ -56,7 +84,7 @@ class FretesService:
         por_entregador = sorted(
             [
                 {
-                    "entregador": k,
+                    "entregador": v["nome"],
                     "qtd_entregas": v["qtd"],
                     "valor_total": v["total"],
                     "a_pagar": v["a_pagar"],
@@ -90,13 +118,7 @@ class FretesService:
             FretesService._base_query(db), id_loja, data_inicio, data_fim
         )
         if entregador is not None:
-            cleaned = entregador.strip()
-            if cleaned in ("—", ""):
-                query = query.filter(
-                    (Frete.entregador.is_(None)) | (Frete.entregador == "")
-                )
-            else:
-                query = query.filter(func.lower(Frete.entregador) == cleaned.lower())
+            query = FretesService._filter_entregador(query, entregador)
 
         rows = query.order_by(Frete.data_frete.desc()).all()
 
@@ -106,7 +128,7 @@ class FretesService:
                 "id_pedido": pedido.id,
                 "numero_os": pedido.numero_os,
                 "nome_cliente": pedido.cliente.nome if pedido.cliente else None,
-                "entregador": frete.entregador.strip() if frete.entregador else "—",
+                "entregador": (frete.entregador or "").strip() or "—",
                 "data_frete": frete.data_frete,
                 "valor": Decimal(str(frete.valor)),
                 "pago": frete.pago,

@@ -112,3 +112,18 @@ export function useToggleFretePago() {
     },
   })
 }
+
+export function useConfirmFretesPayment() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (payload: FreteFilters & { entregador: string }) =>
+      apiClient.patch('/fretes/pagamento', payload).then(r => r.data),
+    onSuccess: async () => {
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: orderKeys.lists() }),
+        qc.invalidateQueries({ queryKey: freteKeys.all }),
+        qc.invalidateQueries({ queryKey: ['financial-orders'] }),
+      ])
+    },
+  })
+}

@@ -115,6 +115,30 @@ def test_summary_invalid_date_format(make_test_client):
     assert r.status_code == 422
 
 
+def test_confirm_payment_passes_selected_row_and_period(make_test_client):
+    client = make_test_client(router)
+    with patch("app.api.routes.fretes.FretesService.confirm_payment") as service:
+        service.return_value = {"confirmados": 2}
+        response = client.patch("/fretes/pagamento", json={
+            "entregador": "MARCOS", "data_inicio": "2026-09-01", "data_fim": "2026-09-30",
+        })
+    assert response.status_code == 200
+    assert response.json() == {"confirmados": 2}
+    assert service.call_args.kwargs == dict(entregador="MARCOS", id_loja=None,
+                                           data_inicio=date(2026, 9, 1), data_fim=date(2026, 9, 30))
+
+
+def test_confirm_payment_requires_auth(mock_db):
+    assert _no_auth_client(mock_db).patch("/fretes/pagamento", json={"entregador": "MARCOS"}).status_code == 401
+
+
+@pytest.mark.parametrize("payload", [{}, {"entregador": ""}, {
+    "entregador": "MARCOS", "data_inicio": "2026-09-30", "data_fim": "2026-09-01",
+}])
+def test_confirm_payment_rejects_invalid_selection(make_test_client, payload):
+    assert make_test_client(router).patch("/fretes/pagamento", json=payload).status_code == 422
+
+
 # ── GET /fretes/detail ────────────────────────────────────────────────────────
 
 def test_detail_returns_fretes_for_entregador(make_test_client):

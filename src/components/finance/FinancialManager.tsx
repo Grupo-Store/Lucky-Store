@@ -36,7 +36,7 @@ import {
 import { useOrders, calcTotal, Order } from '@/store/OrderStore';
 import { useFinancialOrders } from '@/hooks/use-financial-orders';
 import { useRmas } from '@/api/hooks/useRma';
-import { useToggleFretePago, useFretesSummary, useFretesDetail } from '@/hooks/useFretes';
+import { useToggleFretePago, useFretesSummary, useFretesDetail, useConfirmFretesPayment } from '@/hooks/useFretes';
 import { ExpenseModal } from './ExpenseModal';
 import { OrderModal } from '@/components/OrderModal';
 import { RmaEditModal } from '@/components/RmaEditModal';
@@ -78,6 +78,7 @@ export function FinancialManager() {
   const { updateOrder, deleteOrder, nextOS } = useOrders();
   const qc = useQueryClient();
   const { mutate: togglePago, isPending: paymentPending, variables: paymentVariables } = useToggleFretePago();
+  const confirmFretes = useConfirmFretesPayment();
   const [view, setView] = useState<ViewMode>('all');
   const [layout, setLayout] = useState<Layout>('calendar');
   const [typeFilter, setTypeFilter] = useState<TypeFilter>('all');
@@ -630,7 +631,7 @@ export function FinancialManager() {
                     <Card><CardContent className="pt-4"><p className="text-xs text-muted-foreground">Total de Entregas</p><p className="text-xl font-bold text-[#2F6BFF]" style={{ fontFamily: "'Space Grotesk', sans-serif" }}>{summaryData?.total_entregas ?? 0}</p></CardContent></Card>
                     <Card><CardContent className="pt-4"><p className="text-xs text-muted-foreground">Entregadores Ativos</p><p className="text-xl font-bold text-[#2F6BFF]" style={{ fontFamily: "'Space Grotesk', sans-serif" }}>{freightAggregated.length}</p></CardContent></Card>
                     <Card><CardContent className="pt-4"><p className="text-xs text-muted-foreground">Valor Total</p><p className="text-xl font-bold text-green-700">{BRL(parseFloat(String(summaryData?.valor_total ?? 0)))}</p></CardContent></Card>
-                    <Card><CardContent className="pt-4"><p className="text-xs text-muted-foreground">A Pagar</p><p className="text-xl font-bold text-red-600">{BRL(parseFloat(String(summaryData?.a_pagar ?? 0)))}</p></CardContent></Card>
+                    <Card><CardContent className="pt-4"><p className="text-xs text-muted-foreground">A Pagar</p><p className={cn('text-xl font-bold', Number(summaryData?.a_pagar) > 0 ? 'text-red-600' : 'text-green-700')}>{Number(summaryData?.a_pagar) > 0 ? BRL(Number(summaryData?.a_pagar)) : 'Pago'}</p></CardContent></Card>
                   </>
                 )}
               </div>
@@ -639,7 +640,7 @@ export function FinancialManager() {
                 <Table>
                   <TableHeader>
                     <TableRow style={{ background: '#F8FAFD', borderBottom: '1px solid #EEF2F8' }}>
-                      {['Entregador', 'Qtd. Entregas', 'Soma dos Valores', 'A Pagar', 'Pagamentos'].map((h, i) => (
+                      {['Entregador', 'Qtd. Entregas', 'Total', 'A Pagar', 'Pagamentos'].map((h, i) => (
                         <TableHead key={h} className={i > 0 ? 'text-right' : ''} style={{ fontSize: 11.5, fontWeight: 600, letterSpacing: '0.1em', textTransform: 'uppercase', color: '#5B6B82', padding: '12px 18px' }}>{h}</TableHead>
                       ))}
                     </TableRow>
@@ -661,12 +662,26 @@ export function FinancialManager() {
                             <TableCell className="font-medium">{row.entregador}</TableCell>
                             <TableCell className="text-right">{row.qtd_entregas}</TableCell>
                             <TableCell className="text-right font-semibold text-green-700">{BRL(parseFloat(String(row.valor_total)))}</TableCell>
-                            <TableCell className="text-right font-semibold text-red-600">{parseFloat(String(row.a_pagar)) > 0 ? BRL(parseFloat(String(row.a_pagar))) : '—'}</TableCell>
+                            <TableCell className={cn('text-right font-semibold', Number(row.a_pagar) > 0 ? 'text-red-600' : 'text-green-700')}>
+                              {Number(row.a_pagar) > 0 ? BRL(Number(row.a_pagar)) : 'Pago'}
+                            </TableCell>
                             <TableCell className="text-right">
-                              <Button variant="outline" size="sm" onClick={event => {
-                                event.stopPropagation();
-                                setFreightDetail({ open: true, person: row.entregador, personKey: row.entregador.trim().toLowerCase() });
-                              }}>Confirmar pagamento</Button>
+                              <div className="flex justify-end gap-2">
+                                <Button variant="outline" size="sm"
+                                  disabled={confirmFretes.isPending || paymentPending || Number(row.a_pagar) <= 0}
+                                  onClick={event => {
+                                    event.stopPropagation();
+                                    confirmFretes.mutate({ entregador: row.entregador, ...freightApiFilters }, {
+                                      onSuccess: () => toast.success('Pagamento confirmado. Fretes baixados do A pagar.'),
+                                      onError: err => toast.error(getApiError(err)),
+                                    });
+                                  }}>{confirmFretes.isPending && confirmFretes.variables?.entregador === row.entregador
+                                    ? 'Salvando...' : 'Confirmar pagamento'}</Button>
+                                <Button variant="ghost" size="sm" onClick={event => {
+                                  event.stopPropagation();
+                                  setFreightDetail({ open: true, person: row.entregador, personKey: row.entregador.trim().toLowerCase() });
+                                }}>Detalhes</Button>
+                              </div>
                             </TableCell>
                           </TableRow>
                         ))}
@@ -749,7 +764,7 @@ export function FinancialManager() {
                           <Button
                             size="sm"
                             variant={r.pago ? 'ghost' : 'default'}
-                            disabled={paymentPending}
+                            disabled={paymentPending || confirmFretes.isPending}
                             onClick={(e) => {
                               e.stopPropagation();
                               togglePago({ pedidoId: String(r.id_pedido), freteId: String(r.id), pago: !r.pago }, {

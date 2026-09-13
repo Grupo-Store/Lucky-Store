@@ -40,8 +40,8 @@ beforeEach(() => {
     if (path === '/pedidos') return { items: [], pages: 1 };
     throw new Error(`Unexpected request: ${path}`);
   });
-  vi.mocked(apiClient.patch).mockImplementation(async (_url, body) => {
-    paid = (body as { pago: boolean }).pago;
+  vi.mocked(apiClient.patch).mockImplementation(async (url, body) => {
+    paid = url === '/fretes/pagamento' ? true : (body as { pago: boolean }).pago;
     return { data: freight() };
   });
 });
@@ -50,7 +50,7 @@ afterEach(() => { cleanup(); client.clear(); });
 async function openPayments() {
   render(<QueryClientProvider client={client}><FinancialManager /></QueryClientProvider>);
   fireEvent.mouseDown(screen.getByRole('tab', { name: 'Fretes' }), { button: 0, ctrlKey: false });
-  fireEvent.click(await screen.findByRole('button', { name: 'Confirmar pagamento' }));
+  fireEvent.click(await screen.findByRole('button', { name: 'Detalhes' }));
   const dialog = within(screen.getByRole('dialog'));
   await dialog.findByRole('button', { name: 'Confirmar pagamento' });
   return dialog;
@@ -87,4 +87,32 @@ it('aguarda a gravacao e mantem o frete pendente se o servidor rejeitar', async 
   expect(toast.success).not.toHaveBeenCalled();
   expect(await dialog.findByRole('button', { name: 'Confirmar pagamento' })).toBeEnabled();
   expect(dialog.getByText('A Pagar').parentElement).toHaveTextContent(/R\$\s*30,00/);
+});
+
+it('o botao da tabela confirma diretamente, atualiza o saldo e mostra Pago sem alterar o Total', async () => {
+  render(<QueryClientProvider client={client}><FinancialManager /></QueryClientProvider>);
+  fireEvent.mouseDown(screen.getByRole('tab', { name: 'Fretes' }), { button: 0, ctrlKey: false });
+  const confirm = await screen.findByRole('button', { name: 'Confirmar pagamento' });
+  expect(screen.getByRole('columnheader', { name: 'Total' })).toBeInTheDocument();
+  fireEvent.click(confirm);
+  await waitFor(() => expect(toast.success).toHaveBeenCalledWith('Pagamento confirmado. Fretes baixados do A pagar.'));
+  expect(apiClient.patch).toHaveBeenCalledWith('/fretes/pagamento', { entregador: 'Alfredo', data_inicio: undefined, data_fim: undefined });
+  expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  const row = within(screen.getByText('Alfredo').closest('tr')!);
+  expect(row.getByRole('cell', { name: 'Pago' })).toBeInTheDocument();
+  expect(row.getByRole('button', { name: 'Confirmar pagamento' })).toBeDisabled();
+  expect(row.getByRole('cell', { name: /R\$\s*30,00/ })).toBeInTheDocument();
+  expect(screen.getByText('A Pagar', { selector: 'p' }).parentElement).toHaveTextContent('Pago');
+});
+
+it('nao da baixa na tabela se a confirmacao do entregador falhar', async () => {
+  vi.mocked(apiClient.patch).mockRejectedValue(new Error('Servidor indisponível'));
+  render(<QueryClientProvider client={client}><FinancialManager /></QueryClientProvider>);
+  fireEvent.mouseDown(screen.getByRole('tab', { name: 'Fretes' }), { button: 0, ctrlKey: false });
+  fireEvent.click(await screen.findByRole('button', { name: 'Confirmar pagamento' }));
+  await waitFor(() => expect(toast.error).toHaveBeenCalledWith('Servidor indisponível'));
+  const row = within(screen.getByText('Alfredo').closest('tr')!);
+  expect(row.queryByRole('cell', { name: 'Pago' })).not.toBeInTheDocument();
+  expect(row.getAllByRole('cell', { name: /R\$\s*30,00/ })).toHaveLength(2);
+  expect(toast.success).not.toHaveBeenCalled();
 });

@@ -60,6 +60,57 @@ def quote_item(item_id, **changes):
     return dict(id=item_id, descricao='Atualizado', quantidade=2, valor_unitario=150, **changes)
 
 
+@pytest.mark.parametrize('selected_name', ['MARCOS', 'Marcos', 'marcos'])
+def test_freight_payment_groups_case_variations_and_respects_period(records, selected_name):
+    from app.services.fretes import FretesService
+    db, _, _, order, _, _, freight_id, _, loja = records
+    original = db.get(Frete, freight_id)
+    original.entregador = ' MARCOS '
+    original.pago = False
+    original.data_frete = date(2026, 9, 10)
+    others = [
+        Frete(id_pedido=order, entregador='MARCOS', valor=10, data_frete=date(2026, 9, 12), pago=False),
+        Frete(id_pedido=order, entregador='Marcos', valor=13, data_frete=date(2026, 9, 12), pago=False),
+        Frete(id_pedido=order, entregador='MARCOS', valor=17, data_frete=date(2026, 8, 12), pago=False),
+        Frete(id_pedido=order, entregador='MARCOS', valor=19, data_frete=date(2026, 9, 12), pago=True),
+        Frete(id_pedido=order, entregador=' marcos ', valor=5, data_frete=date(2026, 9, 12), pago=False),
+        Frete(id_pedido=order, entregador='Rafael', valor=6, data_frete=date(2026, 9, 12), pago=False),
+    ]
+    db.add_all(others); db.commit()
+    filters = dict(id_loja=loja, data_inicio=date(2026, 9, 1), data_fim=date(2026, 9, 30))
+    before = FretesService.get_summary(db, **filters)
+    assert before['entregadores_ativos'] == 2
+    grouped = next(row for row in before['por_entregador'] if row['entregador'] == 'MARCOS')
+    assert grouped == dict(entregador='MARCOS', qtd_entregas=5, valor_total=Decimal('67'), a_pagar=Decimal('48'))
+    assert len(FretesService.get_detail(db, entregador=selected_name, **filters)['items']) == 5
+    assert FretesService.confirm_payment(db, selected_name, **filters) == {'confirmados': 4}
+    db.expire_all()
+    assert original.pago and all(others[i].pago for i in [0, 1, 3, 4])
+    assert not others[2].pago and not others[5].pago
+    after = FretesService.get_summary(db, **filters)
+    assert after['valor_total'] == before['valor_total']
+    assert after['a_pagar'] == before['a_pagar'] - Decimal('48')
+    assert next(row for row in after['por_entregador'] if row['entregador'] == 'MARCOS')['a_pagar'] == 0
+    assert FretesService.confirm_payment(db, 'MARCOS', **filters) == {'confirmados': 0}
+
+
+def test_freight_payment_supports_unnamed_rows_and_excludes_cancelled_orders(records):
+    from app.services.fretes import FretesService
+    db, _, _, order, _, _, freight_id, *_ = records
+    original = db.get(Frete, freight_id)
+    original.entregador = None
+    original.pago = False
+    blank = Frete(id_pedido=order, entregador='   ', valor=15, data_frete=date.today(), pago=False)
+    db.add(blank); db.commit()
+    assert len(FretesService.get_detail(db, entregador='—')['items']) == 2
+    assert FretesService.confirm_payment(db, '—') == {'confirmados': 2}
+    original.pago = False
+    db.get(Pedido, order).status = 'Cancelled'
+    db.commit()
+    assert FretesService.confirm_payment(db, '—') == {'confirmados': 0}
+    assert original.pago is False
+
+
 def order_item(item_id, vendor_id, **changes):
     result = dict(id=item_id, id_vendedor=vendor_id, descricao='Atualizado', quantidade=2, valor_projetado=50)
     result.update(changes)

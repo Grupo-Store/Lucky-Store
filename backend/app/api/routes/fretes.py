@@ -4,7 +4,7 @@ from typing import Optional, List
 from datetime import date
 from uuid import UUID
 from decimal import Decimal
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, model_validator
 
 from app.database import get_db
 from app.models.user import User
@@ -47,6 +47,31 @@ class FretesDetailResponse(BaseModel):
 # ── Router ────────────────────────────────────────────────────────────────────
 
 router = APIRouter(prefix="/fretes", tags=["fretes"])
+
+class FretePaymentRequest(BaseModel):
+    entregador: str = Field(min_length=1)
+    id_loja: Optional[UUID] = None
+    data_inicio: Optional[date] = None
+    data_fim: Optional[date] = None
+
+    @model_validator(mode="after")
+    def valid_period(self):
+        if self.data_inicio and self.data_fim and self.data_inicio > self.data_fim:
+            raise ValueError("O início do período deve ser anterior ao fim.")
+        return self
+
+
+class FretePaymentResponse(BaseModel):
+    confirmados: int
+
+
+@router.patch("/pagamento", response_model=FretePaymentResponse)
+def confirm_fretes_payment(
+    payload: FretePaymentRequest,
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_user_dep),
+):
+    return FretesService.confirm_payment(db, **payload.model_dump())
 
 
 @router.get("/summary", response_model=FretesSummaryResponse)
