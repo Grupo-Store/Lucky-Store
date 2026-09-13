@@ -103,9 +103,12 @@ export function useToggleFretePago() {
       apiClient
         .patch(`/pedidos/${pedidoId}/fretes/${freteId}/pago`, { pago })
         .then((r) => r.data),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: orderKeys.lists() })
-      qc.invalidateQueries({ queryKey: freteKeys.all })
+    onSuccess: async () => {
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: orderKeys.lists() }),
+        qc.invalidateQueries({ queryKey: freteKeys.all }),
+        qc.invalidateQueries({ queryKey: ['financial-orders'] }),
+      ])
     },
   })
 }

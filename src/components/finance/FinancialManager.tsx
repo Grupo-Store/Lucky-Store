@@ -1,4 +1,6 @@
 import { useMemo, useState } from 'react';
+import { toast } from 'sonner';
+import { getApiError } from '@/api/client';
 import { useQueryClient } from '@tanstack/react-query';
 import {
   format, startOfMonth, endOfMonth, eachDayOfInterval, addMonths, subMonths,
@@ -9,7 +11,7 @@ import {
 import { ptBR } from 'date-fns/locale';
 import {
   ChevronLeft, ChevronRight, Plus, Printer, CalendarDays, Table as TableIcon,
-  Search, Truck, X, CheckCircle2, Circle,
+  Search, Truck, X, CheckCircle2,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -75,7 +77,7 @@ export function FinancialManager() {
   const rmas = rmasData?.items ?? [];
   const { updateOrder, deleteOrder, nextOS } = useOrders();
   const qc = useQueryClient();
-  const { mutate: togglePago } = useToggleFretePago();
+  const { mutate: togglePago, isPending: paymentPending, variables: paymentVariables } = useToggleFretePago();
   const [view, setView] = useState<ViewMode>('all');
   const [layout, setLayout] = useState<Layout>('calendar');
   const [typeFilter, setTypeFilter] = useState<TypeFilter>('all');
@@ -637,7 +639,7 @@ export function FinancialManager() {
                 <Table>
                   <TableHeader>
                     <TableRow style={{ background: '#F8FAFD', borderBottom: '1px solid #EEF2F8' }}>
-                      {['Entregador', 'Qtd. Entregas', 'Soma dos Valores', 'A Pagar'].map((h, i) => (
+                      {['Entregador', 'Qtd. Entregas', 'Soma dos Valores', 'A Pagar', 'Pagamentos'].map((h, i) => (
                         <TableHead key={h} className={i > 0 ? 'text-right' : ''} style={{ fontSize: 11.5, fontWeight: 600, letterSpacing: '0.1em', textTransform: 'uppercase', color: '#5B6B82', padding: '12px 18px' }}>{h}</TableHead>
                       ))}
                     </TableRow>
@@ -646,7 +648,7 @@ export function FinancialManager() {
                     {summaryLoading ? (
                       Array.from({ length: 3 }).map((_, i) => (
                         <TableRow key={i}>
-                          {Array.from({ length: 4 }).map((__, j) => (
+                          {Array.from({ length: 5 }).map((__, j) => (
                             <TableCell key={j}><div className="h-4 bg-muted animate-pulse rounded w-24" /></TableCell>
                           ))}
                         </TableRow>
@@ -660,10 +662,16 @@ export function FinancialManager() {
                             <TableCell className="text-right">{row.qtd_entregas}</TableCell>
                             <TableCell className="text-right font-semibold text-green-700">{BRL(parseFloat(String(row.valor_total)))}</TableCell>
                             <TableCell className="text-right font-semibold text-red-600">{parseFloat(String(row.a_pagar)) > 0 ? BRL(parseFloat(String(row.a_pagar))) : '—'}</TableCell>
+                            <TableCell className="text-right">
+                              <Button variant="outline" size="sm" onClick={event => {
+                                event.stopPropagation();
+                                setFreightDetail({ open: true, person: row.entregador, personKey: row.entregador.trim().toLowerCase() });
+                              }}>Confirmar pagamento</Button>
+                            </TableCell>
                           </TableRow>
                         ))}
                         {freightAggregated.length === 0 && (
-                          <TableRow><TableCell colSpan={4} className="text-center py-8 text-muted-foreground">Nenhum frete encontrado no período</TableCell></TableRow>
+                          <TableRow><TableCell colSpan={5} className="text-center py-8 text-muted-foreground">Nenhum frete encontrado no período</TableCell></TableRow>
                         )}
                       </>
                     )}
@@ -717,7 +725,7 @@ export function FinancialManager() {
                 <Table>
                   <TableHeader>
                     <TableRow style={{ background: '#F8FAFD', borderBottom: '1px solid #EEF2F8' }}>
-                      {['Data', 'OS', 'Cliente', 'Valor', 'Pago?'].map((h, i) => (
+                      {['Data', 'OS', 'Cliente', 'Valor', 'Pagamento'].map((h, i) => (
                         <TableHead key={h} className={i === 3 ? 'text-right' : i === 4 ? 'text-center' : ''}
                           style={{ fontSize: 11.5, fontWeight: 600, letterSpacing: '0.1em', textTransform: 'uppercase', color: '#5B6B82', padding: '12px 18px' }}>{h}</TableHead>
                       ))}
@@ -733,18 +741,27 @@ export function FinancialManager() {
                         <TableCell style={{ padding: '12px 18px' }}>{r.nome_cliente ?? '—'}</TableCell>
                         <TableCell className="text-right font-semibold" style={{ padding: '12px 18px', fontVariantNumeric: 'tabular-nums' }}>{BRL(parseFloat(String(r.valor)))}</TableCell>
                         <TableCell className="text-center" style={{ padding: '12px 18px' }}>
-                          <button
-                            title={r.pago ? 'Pago' : 'Não pago'}
-                            className="inline-flex items-center justify-center p-1 rounded hover:bg-muted"
+                          {r.pago && (
+                            <span className="mb-1 flex items-center justify-center gap-1 text-sm font-medium text-green-700">
+                              <CheckCircle2 className="h-4 w-4" /> Pago
+                            </span>
+                          )}
+                          <Button
+                            size="sm"
+                            variant={r.pago ? 'ghost' : 'default'}
+                            disabled={paymentPending}
                             onClick={(e) => {
                               e.stopPropagation();
-                              togglePago({ pedidoId: String(r.id_pedido), freteId: String(r.id), pago: !r.pago });
+                              togglePago({ pedidoId: String(r.id_pedido), freteId: String(r.id), pago: !r.pago }, {
+                                onSuccess: () => toast.success(r.pago ? 'Pagamento desfeito. Frete voltou ao A pagar.' : 'Pagamento confirmado. Frete baixado do A pagar.'),
+                                onError: err => toast.error(getApiError(err)),
+                              });
                             }}
                           >
-                            {r.pago
-                              ? <CheckCircle2 className="h-5 w-5 text-green-600" />
-                              : <Circle className="h-5 w-5 text-muted-foreground" />}
-                          </button>
+                            {paymentPending && paymentVariables?.freteId === String(r.id)
+                              ? 'Salvando...'
+                              : r.pago ? 'Desfazer pagamento' : 'Confirmar pagamento'}
+                          </Button>
                         </TableCell>
                       </TableRow>
                     ))}

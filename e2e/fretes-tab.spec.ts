@@ -214,9 +214,8 @@ test.describe('Fretes tab', () => {
     const dialog = page.getByRole('dialog');
     await expect(dialog).toBeVisible();
 
-    // OS042 is not paid — should show circle (empty) icon
-    // OS043 is paid — should show check icon
-    // We verify both rows appear
+    await expect(dialog.getByRole('button', { name: 'Confirmar pagamento' })).toBeVisible();
+    await expect(dialog.getByRole('button', { name: 'Desfazer pagamento' })).toBeVisible();
     await expect(dialog.getByText('OS042')).toBeVisible();
     await expect(dialog.getByText('OS043')).toBeVisible();
   });
@@ -242,7 +241,7 @@ test.describe('Fretes tab', () => {
     await expect(dialog).toBeVisible();
 
     // Click the toggle button on the first row (OS042, pago=false)
-    const toggleButtons = dialog.getByTitle('Não pago');
+    const toggleButtons = dialog.getByRole('button', { name: 'Confirmar pagamento' });
     await toggleButtons.first().click();
 
     await page.waitForTimeout(300);
