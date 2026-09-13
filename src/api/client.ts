@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { clearAuthSession, saveAuthTokens } from '@/lib/auth-session';
 
 const MAX_NETWORK_RETRIES = 3;
 
@@ -10,35 +11,67 @@ export const apiClient = axios.create({
 });
 
 apiClient.interceptors.request.use((config) => {
-  const token = localStorage.getItem('access_token');
+  const token = sessionStorage.getItem('access_token');
   if (token) config.headers.Authorization = `Bearer ${token}`;
   return config;
 });
+
+// All requests in this tab share one refresh: the server invalidates the old
+// refresh token as soon as it issues a new pair.
+let refreshing: Promise<string> | null = null;
+function refreshSession(): Promise<string> {
+  if (refreshing) return refreshing;
+  const refresh = sessionStorage.getItem('refresh_token');
+  refreshing = axios.post(`${BASE_URL}/auth/refresh-token`, { refresh_token: refresh })
+    .then(({ data }) => {
+      // A late response must not log the user back in after clicking "Sair".
+      if (sessionStorage.getItem('refresh_token') !== refresh) throw new Error('Sessão alterada.');
+      saveAuthTokens(data);
+      return data.access_token as string;
+    })
+    .catch(error => {
+      if ([401, 403].includes(error.response?.status) && sessionStorage.getItem('refresh_token') === refresh) {
+        clearAuthSession();
+      }
+      throw error;
+    })
+    .finally(() => { refreshing = null; });
+  return refreshing;
+}
 
 apiClient.interceptors.response.use(
   (res) => res,
   async (error) => {
     const original = error.config;
+    if (!original) return Promise.reject(error);
+
+    if (error.response?.status === 401 && original._retry &&
+        original.headers.Authorization === `Bearer ${sessionStorage.getItem('access_token')}`) {
+      clearAuthSession();
+      return Promise.reject(error);
+    }
 
     if (error.response?.status === 401 && !original._retry) {
       original._retry = true;
-      const refresh = localStorage.getItem('refresh_token');
+      const currentToken = sessionStorage.getItem('access_token');
+      // Another request may already have renewed the token before this 401 arrived.
+      if (currentToken && original.headers.Authorization !== `Bearer ${currentToken}`) {
+        original.headers.Authorization = `Bearer ${currentToken}`;
+        return apiClient(original);
+      }
+      const refresh = sessionStorage.getItem('refresh_token');
       if (!refresh) {
-        localStorage.clear();
-        window.location.replace('/');
+        clearAuthSession();
         return Promise.reject(error);
       }
       try {
-        const { data } = await axios.post(`${BASE_URL}/auth/refresh-token`, {
-          refresh_token: refresh,
-        });
-        localStorage.setItem('access_token', data.access_token);
-        original.headers.Authorization = `Bearer ${data.access_token}`;
+        const token = await refreshSession();
+        original.headers.Authorization = `Bearer ${token}`;
         return apiClient(original);
-      } catch {
-        localStorage.clear();
-        window.location.replace('/');
-        return Promise.reject(error);
+      } catch (refreshError) {
+        // Report network/5xx failures as such, rather than the initial 401.
+        // Otherwise AuthProvider would mistake an outage for a rejected login.
+        return Promise.reject(refreshError);
       }
     }
 
