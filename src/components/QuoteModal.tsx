@@ -1003,6 +1003,7 @@ export function QuoteModal({ open, onClose, quote, onSave, onDelete, nextIndex }
                     <div className="grid gap-2 items-start" style={{ gridTemplateColumns: 'repeat(19, minmax(0, 1fr))' }}>
                       <div style={{ gridColumn: 'span 4' }}>
                         <Input placeholder="Nome do Item" className="bg-[#FBFCFE] border-[#E2E8F1]"
+                          title={item.name || undefined}
                           value={item.name || ''} onChange={e => updateDsItem(item.id, 'name', e.target.value)} onKeyDown={handleEnterBlur} />
                         <span className="text-[10px] text-muted-foreground">Nome</span>
                       </div>
@@ -1082,6 +1083,7 @@ export function QuoteModal({ open, onClose, quote, onSave, onDelete, nextIndex }
               return (
                 <div key={item.id} className="grid gap-2 items-center border border-[#E2E8F1] rounded-lg p-2 bg-[#F8FAFD]" style={{ gridTemplateColumns: 'repeat(17, minmax(0, 1fr))' }}>
                   <Input placeholder="Nome do Item" className="bg-[#FBFCFE] border-[#E2E8F1]" style={{ gridColumn: 'span 3' }}
+                    title={item.name || undefined}
                     value={item.name || ''} onChange={e => updateItem(item.id, 'name', e.target.value)} onKeyDown={handleEnterBlur} />
                   <Input type="number" min={1} placeholder="Qtd" className="bg-[#FBFCFE] border-[#E2E8F1] qm-noarrows" style={{ gridColumn: 'span 2' }}
                     value={item.quantity || ''} onChange={e => updateItem(item.id, 'quantity', e.target.value === '' ? 0 : parseInt(e.target.value) || 0)} onBlur={() => { if (!item.quantity) updateItem(item.id, 'quantity', 1); }} onKeyDown={handleEnterBlur} />
