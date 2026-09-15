@@ -23,25 +23,37 @@ vi.mock('@/store/OrderStore', async importOriginal => ({
 }));
 
 let paid: boolean;
+let paidValue: number;
+let total: number;
 let client: QueryClient;
 const freight = () => ({ id: 'frete-1', id_pedido: 'pedido-1', numero_os: 'OS-042',
-  nome_cliente: 'Hospital', entregador: 'Alfredo', data_frete: '2026-09-13', valor: '30.00', pago: paid });
+  nome_cliente: 'Hospital', entregador: 'Alfredo', data_frete: '2026-09-13', valor: String(total), pago: paid, valor_pago: paidValue });
 
 beforeEach(() => {
   vi.resetAllMocks();
   paid = false;
+  paidValue = 0;
+  total = 30;
   client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
   vi.mocked(apiFetch).mockImplementation(async path => {
     if (path === '/fretes/summary') return {
-      total_entregas: 1, entregadores_ativos: 1, valor_total: 30, a_pagar: paid ? 0 : 30,
-      por_entregador: [{ entregador: 'Alfredo', qtd_entregas: 1, valor_total: 30, a_pagar: paid ? 0 : 30 }],
+      total_entregas: 1, entregadores_ativos: 1, valor_total: total, a_pagar: total - paidValue,
+      por_entregador: [{ entregador: 'Alfredo', qtd_entregas: 1, valor_total: total, a_pagar: total - paidValue,
+        valor_pago: paidValue, pendentes: paid ? 0 : 1, pagos: paid || paidValue > 0 ? 1 : 0 }],
     };
     if (path === '/fretes/detail') return { items: [freight()] };
     if (path === '/pedidos') return { items: [], pages: 1 };
     throw new Error(`Unexpected request: ${path}`);
   });
   vi.mocked(apiClient.patch).mockImplementation(async (url, body) => {
-    paid = url === '/fretes/pagamento' ? true : (body as { pago: boolean }).pago;
+    if (url === '/fretes/pagamento') {
+      const payload = body as { valor: string; desfazer: boolean };
+      paidValue += Number(payload.valor) * (payload.desfazer ? -1 : 1);
+      paid = total > 0 ? paidValue === total : !payload.desfazer;
+    } else {
+      paid = (body as { pago: boolean }).pago;
+      paidValue = paid ? total : 0;
+    }
     return { data: freight() };
   });
 });
@@ -89,14 +101,15 @@ it('aguarda a gravacao e mantem o frete pendente se o servidor rejeitar', async 
   expect(dialog.getByText('A Pagar').parentElement).toHaveTextContent(/R\$\s*30,00/);
 });
 
-it('o botao da tabela confirma diretamente, atualiza o saldo e mostra Pago sem alterar o Total', async () => {
+it('registra o valor informado, atualiza o saldo e mostra Pago sem alterar o Total', async () => {
   render(<QueryClientProvider client={client}><FinancialManager /></QueryClientProvider>);
   fireEvent.mouseDown(screen.getByRole('tab', { name: 'Fretes' }), { button: 0, ctrlKey: false });
   const confirm = await screen.findByRole('button', { name: 'Confirmar pagamento' });
-  expect(screen.getByRole('columnheader', { name: 'Total' })).toBeInTheDocument();
+  expect(screen.getByRole('columnheader', { name: 'Total a pagar' })).toBeInTheDocument();
   fireEvent.click(confirm);
-  await waitFor(() => expect(toast.success).toHaveBeenCalledWith('Pagamento confirmado. Fretes baixados do A pagar.'));
-  expect(apiClient.patch).toHaveBeenCalledWith('/fretes/pagamento', { entregador: 'Alfredo', data_inicio: undefined, data_fim: undefined });
+  fireEvent.click(screen.getByRole('button', { name: 'Registrar pagamento' }));
+  await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+  expect(apiClient.patch).toHaveBeenCalledWith('/fretes/pagamento', { entregador: 'Alfredo', data_inicio: undefined, data_fim: undefined, valor: '30.00', desfazer: false });
   expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   const row = within(screen.getByText('Alfredo').closest('tr')!);
   expect(row.getByRole('cell', { name: 'Pago' })).toBeInTheDocument();
@@ -110,9 +123,40 @@ it('nao da baixa na tabela se a confirmacao do entregador falhar', async () => {
   render(<QueryClientProvider client={client}><FinancialManager /></QueryClientProvider>);
   fireEvent.mouseDown(screen.getByRole('tab', { name: 'Fretes' }), { button: 0, ctrlKey: false });
   fireEvent.click(await screen.findByRole('button', { name: 'Confirmar pagamento' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Registrar pagamento' }));
   await waitFor(() => expect(toast.error).toHaveBeenCalledWith('Servidor indisponível'));
+  expect(screen.getByLabelText('Valor a pagar agora (R$)')).toHaveValue('30,00');
+  fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Close' }));
   const row = within(screen.getByText('Alfredo').closest('tr')!);
   expect(row.queryByRole('cell', { name: 'Pago' })).not.toBeInTheDocument();
   expect(row.getAllByRole('cell', { name: /R\$\s*30,00/ })).toHaveLength(2);
   expect(toast.success).not.toHaveBeenCalled();
+});
+
+it('permite pagar 10 de 30 e desfazer parte do pagamento pela propria linha', async () => {
+  render(<QueryClientProvider client={client}><FinancialManager /></QueryClientProvider>);
+  fireEvent.mouseDown(screen.getByRole('tab', { name: 'Fretes' }), { button: 0, ctrlKey: false });
+  fireEvent.click(await screen.findByRole('button', { name: 'Confirmar pagamento' }));
+  fireEvent.change(screen.getByLabelText('Valor a pagar agora (R$)'), { target: { value: '10,00' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Registrar pagamento' }));
+  await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+  expect(within(screen.getByText('Alfredo').closest('tr')!).getByRole('cell', { name: /R\$\s*20,00/ })).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Desfazer pagamento' }));
+  expect(screen.getByLabelText('Valor a desfazer (R$)')).toHaveValue('10,00');
+  fireEvent.change(screen.getByLabelText('Valor a desfazer (R$)'), { target: { value: '5,00' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Desfazer valor' }));
+  await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+  expect(paidValue).toBe(5);
+  expect(within(screen.getByText('Alfredo').closest('tr')!).getByRole('cell', { name: /R\$\s*25,00/ })).toBeInTheDocument();
+});
+
+it('permite desfazer a confirmacao mesmo de um frete de valor zero', async () => {
+  total = 0; paid = true;
+  render(<QueryClientProvider client={client}><FinancialManager /></QueryClientProvider>);
+  fireEvent.mouseDown(screen.getByRole('tab', { name: 'Fretes' }), { button: 0, ctrlKey: false });
+  fireEvent.click(await screen.findByRole('button', { name: 'Desfazer pagamento' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Desfazer valor' }));
+  await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+  expect(paid).toBe(false);
+  expect(screen.getByRole('button', { name: 'Confirmar pagamento' })).toBeEnabled();
 });

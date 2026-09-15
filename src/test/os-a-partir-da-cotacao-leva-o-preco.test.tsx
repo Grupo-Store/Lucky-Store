@@ -77,7 +77,7 @@ const wrapper = () => {
 };
 
 /** Percorre a tela até confirmar, e devolve o prefill entregue ao pedido. */
-async function criarPedidoDaCotacao(excludedItem?: string) {
+async function criarPedidoDaCotacao(excludedItem?: string, editItems?: () => void) {
   const onChooseFromQuote = vi.fn();
   const chooser = render(
     <AddOrderChooser open onClose={vi.fn()} quotes={[]}
@@ -86,6 +86,7 @@ async function criarPedidoDaCotacao(excludedItem?: string) {
   );
   fireEvent.click(screen.getByText(/Cadastrar a partir de cotação/i));
   fireEvent.click(await screen.findByText('Tech Corp'));
+  editItems?.();
   if (excludedItem) fireEvent.click(await screen.findByText(excludedItem));
   fireEvent.click(await screen.findByRole('button', { name: /Criar Pedido/i }));
   await waitFor(() => expect(onChooseFromQuote).toHaveBeenCalled());
@@ -99,6 +100,38 @@ beforeEach(() => {
 });
 
 describe('pedido criado a partir de uma cotação', () => {
+  it('salva faturamento direto com os valores editados e exclui o item desmarcado', async () => {
+    const quote = { ...COTACAO, itens: [
+      { ...COTACAO.itens[0], descricao: 'OFFICE', quantidade: 3,
+        valor_unitario: '304.50', valor_fechamento: '686.00', is_direct_supply: true,
+        fornecedor: 'TECHFORM', porcentagem_fornecedor: '10', frete_fornecedor: '20' },
+      { ...COTACAO.itens[0], id: 'excluded', descricao: 'Descartado' },
+    ] };
+    const original = JSON.stringify(quote);
+    mockGet.mockResolvedValue({ data: { items: [quote], total: 1, page: 1, pages: 1 } });
+    const prefill = await criarPedidoDaCotacao(undefined, () => {
+      fireEvent.change(screen.getByRole('textbox', { name: 'Quantidade de OFFICE' }), { target: { value: '2' } });
+      fireEvent.change(screen.getByRole('textbox', { name: 'Custo unitário de OFFICE' }), { target: { value: '300,50' } });
+      fireEvent.change(screen.getByRole('textbox', { name: 'Venda unitária de OFFICE' }), { target: { value: '700' } });
+      fireEvent.change(screen.getByRole('textbox', { name: 'Quantidade de Descartado' }), { target: { value: '0' } });
+      fireEvent.click(screen.getByRole('checkbox', { name: 'Incluir Descartado' }));
+    });
+    expect(prefill.salesValue).toBe(1400);
+    expect(prefill.items).toEqual([]);
+    expect(prefill.directSupplyItems).toEqual([expect.objectContaining({
+      quantity: 2, projectedValue: 300.5, purchaseValue: 300.5, closingValue: 700,
+    })]);
+    expect(JSON.stringify(quote)).toBe(original);
+    render(<OrderModal open prefill={prefill} onClose={vi.fn()} onSave={vi.fn()} />, { wrapper: wrapper() });
+    fireEvent.change(screen.getByPlaceholderText('Ex: OC-1234'), { target: { value: 'OC-EDITADA' } });
+    fireEvent.click(screen.getByRole('button', { name: /Criar Pedido/i }));
+    expect(mockCreateOrder).toHaveBeenCalledWith(expect.objectContaining({ payload: expect.objectContaining({
+      valor_venda: '1400', custo: expect.objectContaining({ custo_produto_final: '601' }),
+      itens: [expect.objectContaining({ preco_custo: 300.5, valor_compra: 700, quantidade: 2,
+        is_direct_supply: true })],
+    }) }), expect.anything());
+  });
+
   it('preserva custo, venda, fornecedor e lucro do faturamento direto até salvar a OS', async () => {
     mockGet.mockResolvedValue({ data: {
       items: [{ ...COTACAO, numero: 86, valor_total: '2058.00', is_direct_billing: true,

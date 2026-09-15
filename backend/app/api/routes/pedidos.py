@@ -22,6 +22,7 @@ from app.models.pedido import Frete
 from app.schemas.audit_log import AuditLogResponse
 from app.schemas.status_history import StatusHistoryResponse
 from app.services.pedido import PedidoService
+from app.services.frete_payment import payment_fields
 from app.utils.errors import NotFoundException, BusinessLogicException, to_http_exception, erro_http
 from app.api.routes.auth import get_current_user_dep
 from app.utils.idempotencia import normalizar_chave
@@ -296,10 +297,15 @@ def update_frete(
     frete = db.query(Frete).filter(Frete.id == frete_id, Frete.id_pedido == pedido_id).first()
     if not frete:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Frete não encontrado")
+    try:
+        payment = payment_fields(frete, data.model_dump())
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     frete.entregador = data.entregador
     frete.valor = data.valor
     frete.data_frete = data.data_frete
-    frete.pago = data.pago
+    frete.pago = payment['pago']
+    frete.valor_pago = payment['valor_pago']
     db.commit()
     db.refresh(frete)
     return FreteOut.model_validate(frete)
@@ -317,6 +323,7 @@ def toggle_frete_pago(
     if not frete:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Frete não encontrado")
     frete.pago = data.pago
+    frete.valor_pago = frete.valor if data.pago else Decimal('0')
     db.commit()
     db.refresh(frete)
     return FreteOut.model_validate(frete)

@@ -8,6 +8,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.models.pedido import Frete, Pedido, PEDIDO_ATIVO
+from app.services.frete_payment import paid_amount
 
 
 class FretesService:
@@ -21,20 +22,39 @@ class FretesService:
         return query.filter(func.lower(FretesService._entregador_key()) == (entregador.strip() or "—").lower())
 
     @staticmethod
-    def confirm_payment(db: Session, entregador: str, id_loja=None, data_inicio=None, data_fim=None):
+    def confirm_payment(db: Session, entregador: str, id_loja=None, data_inicio=None, data_fim=None,
+                        valor=None, desfazer=False):
         query = FretesService._apply_filters(
             FretesService._base_query(db), id_loja, data_inicio, data_fim
         )
         query = FretesService._filter_entregador(query, entregador)
         try:
-            rows = query.filter(Frete.pago.is_(False)).with_for_update(of=Frete).all()
+            rows = query.order_by(Frete.data_frete, Frete.id).with_for_update(of=Frete).all()
+            available = sum((paid_amount(f) if desfazer else Decimal(str(f.valor)) - paid_amount(f)
+                             for f, _ in rows), Decimal('0'))
+            amount = available if valor is None else Decimal(str(valor))
+            if amount < 0 or amount > available or (amount == 0 and available > 0):
+                raise ValueError('Informe um valor maior que zero e até o saldo disponível.')
+            remaining = amount
+            changed = 0
+            # Pay oldest freights first; undo in reverse order.
+            if desfazer:
+                rows.reverse()
             for frete, _pedido in rows:
-                frete.pago = True
+                total = Decimal(str(frete.valor))
+                old_paid = paid_amount(frete)
+                delta = min(remaining, old_paid if desfazer else total - old_paid)
+                if delta == 0 and (total != 0 or frete.pago == (not desfazer)):
+                    continue
+                frete.valor_pago = old_paid - delta if desfazer else old_paid + delta
+                frete.pago = (frete.valor_pago >= total) if total > 0 else not desfazer
+                remaining -= delta
+                changed += 1
             db.commit()
         except Exception:
             db.rollback()
             raise
-        return {"confirmados": len(rows)}
+        return {"confirmados": changed}
 
     @staticmethod
     def _base_query(db: Session):
@@ -69,7 +89,8 @@ class FretesService:
         rows = query.all()
 
         agg: dict = defaultdict(
-            lambda: {"nome": None, "qtd": 0, "total": Decimal("0"), "a_pagar": Decimal("0")}
+            lambda: {"nome": None, "qtd": 0, "total": Decimal("0"), "a_pagar": Decimal("0"),
+                     "valor_pago": Decimal("0"), "pendentes": 0, "pagos": 0}
         )
         for frete, _pedido in rows:
             name = (frete.entregador or "").strip() or "—"
@@ -78,8 +99,10 @@ class FretesService:
             agg[key]["nome"] = min(agg[key]["nome"] or name, name)
             agg[key]["qtd"] += 1
             agg[key]["total"] += Decimal(str(frete.valor))
-            if not frete.pago:
-                agg[key]["a_pagar"] += Decimal(str(frete.valor))
+            agg[key]["valor_pago"] += paid_amount(frete)
+            agg[key]["a_pagar"] += Decimal(str(frete.valor)) - paid_amount(frete)
+            agg[key]["pendentes"] += int(not frete.pago)
+            agg[key]["pagos"] += int(frete.pago or paid_amount(frete) > 0)
 
         por_entregador = sorted(
             [
@@ -88,6 +111,9 @@ class FretesService:
                     "qtd_entregas": v["qtd"],
                     "valor_total": v["total"],
                     "a_pagar": v["a_pagar"],
+                    "valor_pago": v["valor_pago"],
+                    "pendentes": v["pendentes"],
+                    "pagos": v["pagos"],
                 }
                 for k, v in agg.items()
             ],
@@ -132,6 +158,7 @@ class FretesService:
                 "data_frete": frete.data_frete,
                 "valor": Decimal(str(frete.valor)),
                 "pago": frete.pago,
+                "valor_pago": paid_amount(frete),
             }
             for frete, pedido in rows
         ]

@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, HTTPException
 from sqlalchemy.orm import Session
 from typing import Optional, List
 from datetime import date
@@ -19,6 +19,9 @@ class FreteEntregadorSummary(BaseModel):
     qtd_entregas: int
     valor_total: Decimal
     a_pagar: Decimal
+    valor_pago: Decimal = Decimal('0')
+    pendentes: int = 0
+    pagos: int = 0
 
 
 class FretesSummaryResponse(BaseModel):
@@ -38,6 +41,7 @@ class FreteDetalheItem(BaseModel):
     data_frete: date
     valor: Decimal
     pago: bool
+    valor_pago: Decimal = Decimal('0')
 
 
 class FretesDetailResponse(BaseModel):
@@ -53,6 +57,8 @@ class FretePaymentRequest(BaseModel):
     id_loja: Optional[UUID] = None
     data_inicio: Optional[date] = None
     data_fim: Optional[date] = None
+    valor: Optional[Decimal] = Field(default=None, ge=0, max_digits=12, decimal_places=2)
+    desfazer: bool = False
 
     @model_validator(mode="after")
     def valid_period(self):
@@ -71,7 +77,10 @@ def confirm_fretes_payment(
     db: Session = Depends(get_db),
     _: User = Depends(get_current_user_dep),
 ):
-    return FretesService.confirm_payment(db, **payload.model_dump())
+    try:
+        return FretesService.confirm_payment(db, **payload.model_dump())
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 @router.get("/summary", response_model=FretesSummaryResponse)

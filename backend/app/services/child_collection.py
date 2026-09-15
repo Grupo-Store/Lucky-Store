@@ -3,6 +3,7 @@ import json
 
 from app.models.audit_log import AuditLog, AuditAction
 from app.models.status_history import StatusHistory, EntityType
+from app.services.frete_payment import payment_fields
 
 
 def sync_children(db, parent_id, model, parent_field, submitted, entity_type, user_id):
@@ -28,6 +29,8 @@ def sync_children(db, parent_id, model, parent_field, submitted, entity_type, us
         # originally owned a product. ProdutoCreate requires it for new rows.
         if row is not None and entity_type == 'produto':
             values.pop('id_vendedor', None)
+        if row is not None and entity_type == 'frete':
+            values.update(payment_fields(row, values))
         old_status = getattr(row, 'status', None)
         if row is None:
             # Apply schema defaults for a new row (e.g. "To Buy"), but never

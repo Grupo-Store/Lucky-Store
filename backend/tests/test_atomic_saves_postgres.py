@@ -81,7 +81,8 @@ def test_freight_payment_groups_case_variations_and_respects_period(records, sel
     before = FretesService.get_summary(db, **filters)
     assert before['entregadores_ativos'] == 2
     grouped = next(row for row in before['por_entregador'] if row['entregador'] == 'MARCOS')
-    assert grouped == dict(entregador='MARCOS', qtd_entregas=5, valor_total=Decimal('67'), a_pagar=Decimal('48'))
+    assert grouped == dict(entregador='MARCOS', qtd_entregas=5, valor_total=Decimal('67'), a_pagar=Decimal('48'),
+                           valor_pago=Decimal('19'), pendentes=4, pagos=1)
     assert len(FretesService.get_detail(db, entregador=selected_name, **filters)['items']) == 5
     assert FretesService.confirm_payment(db, selected_name, **filters) == {'confirmados': 4}
     db.expire_all()
@@ -115,6 +116,63 @@ def order_item(item_id, vendor_id, **changes):
     result = dict(id=item_id, id_vendedor=vendor_id, descricao='Atualizado', quantidade=2, valor_projetado=50)
     result.update(changes)
     return result
+
+
+def test_partial_freight_payment_persists_survives_os_edit_and_can_be_undone(records):
+    from app.services.fretes import FretesService
+    db, user, _, order, _, _, freight_id, *_ = records
+    freight = db.get(Frete, freight_id)
+    freight.entregador = 'Rafael'
+    freight.valor = 30
+    freight.pago = False
+    db.commit()
+    FretesService.confirm_payment(db, 'RAFAEL', valor=Decimal('10'))
+    db.expire_all()
+    assert freight.valor_pago == 10 and not freight.pago
+    row = FretesService.get_summary(db)['por_entregador'][0]
+    assert row['valor_total'] == 30 and row['valor_pago'] == 10 and row['a_pagar'] == 20
+    PedidoService.update(db, order, PedidoUpdate(fretes=[dict(
+        id=freight_id, entregador='Rafael', valor=30, data_frete=date.today(), pago=False,
+    )]), user)
+    db.expire_all()
+    assert freight.valor_pago == 10
+    FretesService.confirm_payment(db, 'rafael', valor=Decimal('5'), desfazer=True)
+    assert freight.valor_pago == 5
+    FretesService.confirm_payment(db, 'rafael', valor=Decimal('25'))
+    assert freight.pago and freight.valor_pago == 30
+    FretesService.confirm_payment(db, 'rafael', valor=Decimal('30'), desfazer=True)
+    assert not freight.pago and freight.valor_pago == 0
+
+
+def test_partial_payment_allocates_across_freights_and_rejects_excess(records):
+    from app.services.fretes import FretesService
+    db, _, _, order, _, _, freight_id, *_ = records
+    first = db.get(Frete, freight_id)
+    first.entregador = 'Marcos'; first.pago = False; first.data_frete = date(2026, 9, 1)
+    second = Frete(id_pedido=order, entregador='MARCOS', valor=30, data_frete=date(2026, 9, 2), pago=False)
+    db.add(second); db.commit()
+    FretesService.confirm_payment(db, 'marcos', valor=Decimal('25'))
+    assert first.valor_pago == 20 and first.pago
+    assert second.valor_pago == 5 and not second.pago
+    with pytest.raises(ValueError):
+        FretesService.confirm_payment(db, 'Marcos', valor=Decimal('26'))
+    db.expire_all()
+    assert first.valor_pago == 20 and second.valor_pago == 5
+    FretesService.confirm_payment(db, 'marcos', valor=Decimal('10'), desfazer=True)
+    assert second.valor_pago == 0 and first.valor_pago == 15
+
+
+def test_legacy_zero_value_freight_can_be_unpaid(records):
+    from app.services.fretes import FretesService
+    db, _, _, _, _, _, freight_id, *_ = records
+    freight = db.get(Frete, freight_id)
+    freight.entregador = 'Rafael'; freight.valor = 0; freight.pago = True
+    db.commit()
+    row = FretesService.get_summary(db)['por_entregador'][0]
+    assert row['pagos'] == 1 and row['pendentes'] == 0
+    FretesService.confirm_payment(db, 'rafael', valor=Decimal('0'), desfazer=True)
+    assert not freight.pago
+    assert FretesService.get_summary(db)['por_entregador'][0]['pendentes'] == 1
 
 
 def test_quote_edit_preserves_ids_and_retry_does_not_duplicate(records):

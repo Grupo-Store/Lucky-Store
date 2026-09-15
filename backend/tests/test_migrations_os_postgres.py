@@ -46,6 +46,18 @@ def executar(conn, revision):
         module.upgrade()
 
 
+def test_migration_partial_freight_preserves_existing_payments(pg):
+    pg.execute(text('CREATE TABLE frete (id INTEGER PRIMARY KEY, valor NUMERIC(12,2), pago BOOLEAN)'))
+    pg.execute(text('INSERT INTO frete VALUES (1, 30, true), (2, 50, false), (3, 0, true)'))
+    before = pg.execute(text('SELECT id, valor, pago FROM frete ORDER BY id')).all()
+    executar(pg, 'f2a3b4c5d6e7')
+    assert pg.execute(text('SELECT id, valor, pago FROM frete ORDER BY id')).all() == before
+    assert pg.execute(text('SELECT COUNT(*) FROM frete WHERE valor_pago IS NULL')).scalar_one() == 3
+    pg.execute(text('UPDATE frete SET valor_pago=10 WHERE id=2'))
+    executar(pg, 'f2a3b4c5d6e7')
+    assert pg.execute(text('SELECT valor_pago FROM frete WHERE id=2')).scalar_one() == 10
+
+
 def preparar_itens(conn):
     conn.execute(text("CREATE TABLE pedidos (id INTEGER PRIMARY KEY, id_cotacao INTEGER)"))
     conn.execute(text("""CREATE TABLE produtos (

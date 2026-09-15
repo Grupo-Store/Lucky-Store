@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -72,6 +72,17 @@ interface Props {
 }
 
 type Step = 'choose' | 'pick-quote' | 'pick-items';
+type ItemDraft = { quantity: string; cost: string; sale: string };
+
+function parseAmount(value: string): number {
+  const text = value.trim();
+  // Aceita 1234.56, 1234,56 e 1.234,56 sem converter entradas inválidas em zero.
+  const valid = text.includes(',')
+    ? /^(?:\d+|\d{1,3}(?:\.\d{3})+),\d{1,2}$/.test(text)
+    : /^\d+(?:\.\d{1,2})?$/.test(text);
+  if (!valid) return NaN;
+  return Number(text.includes(',') ? text.replace(/\./g, '').replace(',', '.') : text);
+}
 
 export function AddOrderChooser({ open, onClose, onChooseNew, onChooseFromQuote }: Props) {
   const { data: vendedoresData } = useVendedores();
@@ -79,7 +90,27 @@ export function AddOrderChooser({ open, onClose, onChooseNew, onChooseFromQuote 
   const [search, setSearch] = useState('');
   const [picked, setPicked] = useState<CotacaoResponse | null>(null);
   const [selectedItemIds, setSelectedItemIds] = useState<Set<string>>(new Set());
+  const [itemDrafts, setItemDrafts] = useState<Record<string, ItemDraft>>({});
   const [quotePage, setQuotePage] = useState(1);
+  const [buscaServidor, setBuscaServidor] = useState('');
+
+  /* A busca vai para o SERVIDOR, igual à tela de Vendas.
+   *
+   * Filtrando no navegador ela só enxergava as 20 cotações da página aberta:
+   * procurar o índice 23, ou um cliente com cotação antiga, não achava nada e
+   * falhava em silêncio — parecia que a cotação não existia. O servidor procura
+   * em índice (exato), Nº Req., cliente, empresa, loja e vendedor, na base
+   * inteira.
+   *
+   * 350ms para não disparar uma requisição por tecla. Volta para a página 1
+   * junto, senão a busca nova herdaria a página da anterior e viria vazia. */
+  useEffect(() => {
+    const t = setTimeout(() => {
+      setBuscaServidor(search.trim());
+      setQuotePage(1);
+    }, 350);
+    return () => clearTimeout(t);
+  }, [search]);
 
   const {
     data: quotesData,
@@ -87,42 +118,53 @@ export function AddOrderChooser({ open, onClose, onChooseNew, onChooseFromQuote 
     isError: quotesError,
     refetch: quotesRefetch,
   } = useQuery<PaginatedResponse<CotacaoResponse>>({
-    queryKey: ['quotes', 'list', 'chooser', quotePage],
+    queryKey: ['quotes', 'list', 'chooser', quotePage, buscaServidor],
     queryFn: () =>
       apiClient.get('/quotes', {
-        params: { page: quotePage, limit: 20, sort_by: 'data_cotacao', sort_dir: 'desc', eligible_for_order: true },
+        params: {
+          page: quotePage, limit: 20, sort_by: 'data_cotacao', sort_dir: 'desc',
+          eligible_for_order: true,
+          busca: buscaServidor || undefined,
+        },
       }).then(r => r.data),
     enabled: open && step === 'pick-quote',
     staleTime: 60_000,
   });
 
+  /* O reset espera a animação de fechamento para o modal não piscar no passo 1
+   * enquanto some. Guardado num ref porque, solto, ele continuava pendente
+   * depois do componente sair da tela e voltava setando estado num componente
+   * que não existe mais. */
+  const timerDeReset = useRef<ReturnType<typeof setTimeout>>();
+  useEffect(() => () => clearTimeout(timerDeReset.current), []);
+
   const handleOpenChange = (o: boolean) => {
     if (!o) {
       onClose();
-      setTimeout(() => {
+      clearTimeout(timerDeReset.current);
+      timerDeReset.current = setTimeout(() => {
         setStep('choose');
         setPicked(null);
         setSelectedItemIds(new Set());
+        setItemDrafts({});
         setSearch('');
+        setBuscaServidor('');
         setQuotePage(1);
       }, 200);
     }
   };
 
-  const eligibleQuotes = useMemo(() => {
-    const items = quotesData?.items ?? [];
-    const q = search.toLowerCase().trim();
-    if (!q) return items;
-    return items.filter(qt =>
-      qt.cliente.toLowerCase().includes(q) ||
-      (qt.cnpj_cliente ?? '').toLowerCase().includes(q) ||
-      (LOJA_BY_ID[qt.id_loja] ?? '').toLowerCase().includes(q)
-    );
-  }, [quotesData, search]);
+  // Quem filtra o texto é o servidor, pelo parâmetro `busca`. Refiltrar aqui
+  // desfaria isso: o índice casa exato no servidor e não aparece em nenhum
+  // campo de texto, então a linha certa sumiria logo depois de chegar.
+  const eligibleQuotes = quotesData?.items ?? [];
 
   const pickQuote = (qt: CotacaoResponse) => {
     setPicked(qt);
     setSelectedItemIds(new Set((qt.itens ?? []).map(i => i.id)));
+    setItemDrafts(Object.fromEntries((qt.itens ?? []).map(i => [i.id, {
+      quantity: String(i.quantidade), cost: i.valor_unitario, sale: i.valor_fechamento ?? '',
+    }])));
     setStep('pick-items');
   };
 
@@ -134,9 +176,25 @@ export function AddOrderChooser({ open, onClose, onChooseNew, onChooseFromQuote 
     });
   };
 
+  const updateDraft = (id: string, field: keyof ItemDraft, value: string) => {
+    setItemDrafts(prev => ({ ...prev, [id]: { ...prev[id], [field]: value } }));
+  };
+  const chosen = (picked?.itens ?? []).filter(i => selectedItemIds.has(i.id)).map(i => {
+    const draft = itemDrafts[i.id];
+    return {
+      ...i,
+      quantidade: Number(draft?.quantity),
+      valor_unitario: String(parseAmount(draft?.cost ?? '')),
+      valor_fechamento: draft?.sale.trim() ? String(parseAmount(draft.sale)) : null,
+    };
+  });
+  const invalidSelection = chosen.some(i => !Number.isSafeInteger(i.quantidade) || i.quantidade <= 0
+    || !Number.isFinite(Number(i.valor_unitario))
+    || (i.valor_fechamento !== null && !Number.isFinite(Number(i.valor_fechamento))));
+  const selectedTotal = chosen.reduce((sum, i) => sum + Number(i.valor_fechamento ?? 0) * i.quantidade, 0);
+
   const confirmFromQuote = () => {
-    if (!picked) return;
-    const chosen = (picked.itens ?? []).filter(i => selectedItemIds.has(i.id));
+    if (!picked || !chosen.length || invalidSelection) return;
     const regularItems = chosen.filter(i => !i.is_direct_supply);
     const dsItems = chosen.filter(i => i.is_direct_supply);
     const hasDirect = dsItems.length > 0;
@@ -191,7 +249,7 @@ export function AddOrderChooser({ open, onClose, onChooseNew, onChooseFromQuote 
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto bg-card">
+      <DialogContent className="max-w-4xl max-h-[85vh] overflow-y-auto bg-card">
         <DialogHeader>
           <DialogTitle className="text-secondary text-xl flex items-center gap-2">
             {step !== 'choose' && (
@@ -214,7 +272,7 @@ export function AddOrderChooser({ open, onClose, onChooseNew, onChooseFromQuote 
             >
               <FileText className="h-8 w-8 text-secondary mb-3 group-hover:scale-110 transition-transform" />
               <h3 className="font-bold text-secondary uppercase text-sm tracking-wide">Cadastrar a partir de cotação</h3>
-              <p className="text-sm text-muted-foreground mt-2">Pré-preencha o pedido com dados de uma cotação fechada ou caída.</p>
+              <p className="text-sm text-muted-foreground mt-2">Pré-preencha o pedido com dados de uma cotação fechada.</p>
             </button>
             <button
               onClick={() => { onChooseNew(); handleOpenChange(false); }}
@@ -232,7 +290,7 @@ export function AddOrderChooser({ open, onClose, onChooseNew, onChooseFromQuote 
             <div className="relative">
               <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
-                placeholder="Buscar cliente, CPF/CNPJ, empresa..."
+                placeholder="Índice, Cliente, Req, Empresa, Vendedor ou ID..."
                 value={search}
                 onChange={e => setSearch(e.target.value)}
                 onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
@@ -248,10 +306,11 @@ export function AddOrderChooser({ open, onClose, onChooseNew, onChooseFromQuote 
                 </AlertDescription>
               </Alert>
             )}
-            <div className="overflow-x-auto rounded-lg border">
+            <div className="max-h-[45vh] overflow-auto rounded-lg border">
               <Table>
                 <TableHeader>
                   <TableRow className="bg-secondary/10">
+                    <TableHead>Índice</TableHead>
                     <TableHead>Cliente</TableHead>
                     <TableHead>Empresa</TableHead>
                     <TableHead>Data</TableHead>
@@ -264,7 +323,7 @@ export function AddOrderChooser({ open, onClose, onChooseNew, onChooseFromQuote 
                   {quotesLoading ? (
                     Array.from({ length: 5 }).map((_, i) => (
                       <TableRow key={i}>
-                        {Array.from({ length: 6 }).map((_, j) => (
+                        {Array.from({ length: 7 }).map((_, j) => (
                           <TableCell key={j}><Skeleton className="h-4 w-full" /></TableCell>
                         ))}
                       </TableRow>
@@ -273,6 +332,7 @@ export function AddOrderChooser({ open, onClose, onChooseNew, onChooseFromQuote 
                     const phase = getCotacaoPhase(qt);
                     return (
                       <TableRow key={qt.id} className="cursor-pointer hover:bg-muted/50" onClick={() => pickQuote(qt)}>
+                        <TableCell className="font-semibold">{qt.numero ?? '—'}</TableCell>
                         <TableCell className="font-medium">{qt.b2b_company?.trim() || qt.cliente}</TableCell>
                         <TableCell>{LOJA_BY_ID[qt.id_loja] || '—'}</TableCell>
                         <TableCell>{fmtDate(qt.data_cotacao)}</TableCell>
@@ -293,8 +353,8 @@ export function AddOrderChooser({ open, onClose, onChooseNew, onChooseFromQuote 
                   })}
                   {!quotesLoading && eligibleQuotes.length === 0 && (
                     <TableRow>
-                      <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
-                        Nenhuma cotação fechada ou caída encontrada.
+                      <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                        Nenhuma cotação fechada encontrada para esta busca.
                       </TableCell>
                     </TableRow>
                   )}
@@ -330,20 +390,30 @@ export function AddOrderChooser({ open, onClose, onChooseNew, onChooseFromQuote 
                     <TableHead className="w-10"></TableHead>
                     <TableHead>Item</TableHead>
                     <TableHead>Qtd</TableHead>
-                    <TableHead className="text-right">Custo do produto</TableHead>
-                    <TableHead className="text-right">Valor enviado na cotação</TableHead>
+                    <TableHead className="text-right">Custo unitário (R$)</TableHead>
+                    <TableHead className="text-right">Venda unitária (R$)</TableHead>
                     <TableHead>Tipo</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {(picked.itens ?? []).map(it => (
                     <TableRow key={it.id} className="cursor-pointer hover:bg-muted/50" onClick={() => toggleItem(it.id)}>
-                      <TableCell><Checkbox checked={selectedItemIds.has(it.id)} onCheckedChange={() => toggleItem(it.id)} /></TableCell>
+                      <TableCell onClick={e => e.stopPropagation()}><Checkbox aria-label={`Incluir ${it.descricao}`} checked={selectedItemIds.has(it.id)} onCheckedChange={() => toggleItem(it.id)} /></TableCell>
                       <TableCell>{it.descricao}</TableCell>
-                      <TableCell>{it.quantidade}</TableCell>
-                      <TableCell className="text-right">{toBRL(parseFloat(it.valor_unitario) || 0)}</TableCell>
-                      <TableCell className="text-right">
-                        {it.valor_fechamento ? toBRL(parseFloat(it.valor_fechamento)) : '—'}
+                      <TableCell onClick={e => e.stopPropagation()}>
+                        <Input aria-label={`Quantidade de ${it.descricao}`} inputMode="numeric" className="min-w-16"
+                          disabled={!selectedItemIds.has(it.id)} value={itemDrafts[it.id]?.quantity ?? ''}
+                          onChange={e => updateDraft(it.id, 'quantity', e.target.value)} />
+                      </TableCell>
+                      <TableCell onClick={e => e.stopPropagation()}>
+                        <Input aria-label={`Custo unitário de ${it.descricao}`} inputMode="decimal" className="min-w-28 text-right"
+                          disabled={!selectedItemIds.has(it.id)} value={itemDrafts[it.id]?.cost ?? ''}
+                          onChange={e => updateDraft(it.id, 'cost', e.target.value)} />
+                      </TableCell>
+                      <TableCell onClick={e => e.stopPropagation()}>
+                        <Input aria-label={`Venda unitária de ${it.descricao}`} inputMode="decimal" className="min-w-28 text-right"
+                          disabled={!selectedItemIds.has(it.id)} value={itemDrafts[it.id]?.sale ?? ''}
+                          placeholder="Não informado" onChange={e => updateDraft(it.id, 'sale', e.target.value)} />
                       </TableCell>
                       <TableCell>
                         {it.is_direct_supply && (
@@ -357,16 +427,22 @@ export function AddOrderChooser({ open, onClose, onChooseNew, onChooseFromQuote 
                   {(picked.itens ?? []).length === 0 && (
                     <TableRow>
                       <TableCell colSpan={6} className="text-center py-6 text-muted-foreground">
-                        Esta cotação não possui itens. Você pode prosseguir mesmo assim.
+                        Esta cotação não possui itens. Cadastre os itens na cotação antes de criar o pedido.
                       </TableCell>
                     </TableRow>
                   )}
                 </TableBody>
               </Table>
             </div>
+            <p className="text-sm text-muted-foreground">Selecione os itens e ajuste os valores para este pedido. A cotação original será mantida.</p>
+            {invalidSelection ? (
+              <Alert variant="destructive"><AlertDescription>Informe uma quantidade inteira maior que zero e valores válidos, sem negativos e com até duas casas decimais, nos itens selecionados.</AlertDescription></Alert>
+            ) : (
+              <p className="text-right font-semibold">Total selecionado: {toBRL(Math.round(selectedTotal * 100) / 100)}</p>
+            )}
             <DialogFooter>
               <Button variant="outline" onClick={() => handleOpenChange(false)}>Cancelar</Button>
-              <Button onClick={confirmFromQuote} className="bg-secondary hover:bg-secondary/90">
+              <Button onClick={confirmFromQuote} disabled={!chosen.length || invalidSelection} className="bg-secondary hover:bg-secondary/90">
                 Criar Pedido ({selectedItemIds.size} {selectedItemIds.size === 1 ? 'item' : 'itens'})
               </Button>
             </DialogFooter>

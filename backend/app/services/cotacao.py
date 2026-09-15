@@ -58,6 +58,7 @@ def _filtro_de_busca(termo: str):
     condicoes = [
         Cotacao.cliente.ilike(like),
         Cotacao.b2b_company.ilike(like),
+        Cotacao.cnpj_cliente.ilike(like),
         Cotacao.numero_requisicao.ilike(like),
         # Loja e vendedor entram por relacionamento porque a tela ja buscava por
         # eles (o placeholder diz "Cliente, Req, Empresa, Vendedor"). Sem isto, a
@@ -70,6 +71,10 @@ def _filtro_de_busca(termo: str):
         # viraria um numero fora do range do integer e o Postgres estouraria.
         if len(termo) <= 9:
             condicoes.append(Cotacao.numero == int(termo))
+    try:
+        condicoes.append(Cotacao.id == UUID(termo))
+    except ValueError:
+        pass
     return or_(*condicoes)
 
 

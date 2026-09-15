@@ -10,6 +10,9 @@
  *   - Loaded quotes are rendered in the table
  *   - Empty state is shown when no quotes are returned
  *   - Selecting a quote and confirming builds a valid OrderPrefill
+ *   - A busca vai ao servidor (parametro `busca`), e nao filtra so a pagina
+ *     carregada — senao o indice da cotacao e os clientes de paginas
+ *     seguintes sumiam da tela sem erro nenhum.
  */
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
@@ -40,6 +43,7 @@ const VENDOR_ID = '22222222-2222-2222-2222-222222222222';
 
 const mockQuote = {
   id: 'quote-uuid-1',
+  numero: 64,
   id_loja: STORE_ID,
   id_vendedor: VENDOR_ID,
   cliente: 'Empresa Teste Ltda',
@@ -164,7 +168,7 @@ describe('AddOrderChooser — pick-quote step API call', () => {
     fireEvent.click(screen.getByText(/Cadastrar a partir de cotação/i));
 
     await waitFor(() => {
-      expect(screen.getByText(/Nenhuma cotação fechada ou caída encontrada/i)).toBeInTheDocument();
+      expect(screen.getByText(/Nenhuma cotação fechada encontrada/i)).toBeInTheDocument();
     });
   });
 
@@ -211,6 +215,46 @@ describe('AddOrderChooser — pick-items step', () => {
     expect(screen.getByText(/Monitor Dell/i)).toBeInTheDocument();
   });
 
+  it('edita quantidade e valores sem desmarcar o item nem alterar a cotação', async () => {
+    const original = JSON.stringify(mockQuote);
+    await advanceToItems();
+    const cost = screen.getByRole('textbox', { name: /Custo unitário de Monitor/ });
+    fireEvent.click(cost);
+    fireEvent.change(cost, { target: { value: '1.234,56' } });
+    fireEvent.change(screen.getByRole('textbox', { name: /Quantidade de Monitor/ }), { target: { value: '3' } });
+    fireEvent.change(screen.getByRole('textbox', { name: /Venda unitária de Monitor/ }), { target: { value: '2000,50' } });
+    expect(screen.getByRole('checkbox')).toBeChecked();
+    expect(screen.getByText(/Total selecionado/)).toHaveTextContent('6.001,50');
+    fireEvent.click(screen.getByRole('button', { name: /Criar Pedido/ }));
+    expect(defaultProps.onChooseFromQuote).toHaveBeenCalledWith(expect.objectContaining({
+      salesValue: 6001.5,
+      items: [expect.objectContaining({ quantity: 3, projectedValue: 1234.56, saleValue: 2000.5 })],
+    }));
+    expect(JSON.stringify(mockQuote)).toBe(original);
+  });
+
+  it('o check desmarca e remarca uma única vez e impede um pedido sem itens', async () => {
+    await advanceToItems();
+    const checkbox = screen.getByRole('checkbox');
+    fireEvent.click(checkbox);
+    expect(checkbox).not.toBeChecked();
+    expect(screen.getByRole('button', { name: /Criar Pedido/ })).toBeDisabled();
+    fireEvent.click(checkbox);
+    expect(checkbox).toBeChecked();
+    expect(screen.getByRole('button', { name: /Criar Pedido/ })).toBeEnabled();
+  });
+
+  it.each([
+    ['Quantidade', '0'], ['Quantidade', '1.5'], ['Custo unitário', '-1'],
+    ['Custo unitário', 'abc'], ['Venda unitária', '12.345'],
+  ])('bloqueia %s inválido: %s', async (field, value) => {
+    await advanceToItems();
+    fireEvent.change(screen.getByRole('textbox', { name: new RegExp(`${field} de Monitor`) }), { target: { value } });
+    expect(screen.getByRole('button', { name: /Criar Pedido/ })).toBeDisabled();
+    expect(screen.getByRole('alert')).toHaveTextContent('valores válidos');
+    expect(defaultProps.onChooseFromQuote).not.toHaveBeenCalled();
+  });
+
   it('calls onChooseFromQuote with correct prefill when confirmed', async () => {
     const onChooseFromQuote = vi.fn();
     mockGet.mockResolvedValueOnce({ data: paginatedWithQuote });
@@ -233,5 +277,79 @@ describe('AddOrderChooser — pick-items step', () => {
     expect(prefill.customer).toBe('Empresa Teste Ltda');
     expect(prefill.items).toHaveLength(1);
     expect(prefill.items[0].name).toBe('Monitor Dell 27"');
+  });
+});
+
+describe('AddOrderChooser — busca no servidor', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  const abrirListaEBuscar = async (termo: string) => {
+    mockGet.mockResolvedValue({ data: emptyPaginatedResponse });
+    render(<AddOrderChooser {...defaultProps} />, { wrapper: makeWrapper() });
+    fireEvent.click(screen.getByText(/Cadastrar a partir de cotação/i));
+    await waitFor(() => expect(mockGet).toHaveBeenCalled());
+    fireEvent.change(screen.getByPlaceholderText(/Índice, Cliente/i), { target: { value: termo } });
+  };
+
+  it('acessa a segunda pagina e encontra pelo indice uma cotacao fora da pagina inicial', async () => {
+    mockGet.mockImplementation(async (_url: string, config: any) => {
+      const params = config?.params ?? {};
+      const searching = params.busca === '64';
+      const secondPage = params.page === 2;
+      return { data: {
+        items: [searching || secondPage ? mockQuote : { ...mockQuote, id: 'other', numero: 99, cliente: 'Outra empresa' }],
+        page: params.page ?? 1, pages: searching ? 1 : 2, limit: 20, total: searching ? 1 : 21,
+      } };
+    });
+    render(<AddOrderChooser {...defaultProps} />, { wrapper: makeWrapper() });
+    fireEvent.click(screen.getByText(/Cadastrar a partir de cotação/i));
+    await screen.findByText('Outra empresa');
+    fireEvent.click(screen.getByRole('button', { name: 'Próxima' }));
+    await screen.findByText('Empresa Teste Ltda');
+    expect(screen.getByText('Página 2 de 2')).toBeInTheDocument();
+    fireEvent.change(screen.getByPlaceholderText(/Índice, Cliente/i), { target: { value: '64' } });
+    await waitFor(() => expect(mockGet).toHaveBeenCalledWith('/quotes', expect.objectContaining({
+      params: expect.objectContaining({ busca: '64', page: 1 }),
+    })));
+    expect(await screen.findByRole('cell', { name: '64' })).toBeInTheDocument();
+  });
+
+  it('manda o termo digitado para o servidor no parâmetro busca', async () => {
+    await abrirListaEBuscar('64');
+
+    await waitFor(() => {
+      const ultima = mockGet.mock.calls[mockGet.mock.calls.length - 1];
+      expect(ultima[1]?.params?.busca).toBe('64');
+    });
+  });
+
+  it('volta para a página 1 ao buscar, senão a busca herdaria a página anterior', async () => {
+    await abrirListaEBuscar('Hospital');
+
+    await waitFor(() => {
+      const ultima = mockGet.mock.calls[mockGet.mock.calls.length - 1];
+      expect(ultima[1]?.params?.busca).toBe('Hospital');
+      expect(ultima[1]?.params?.page).toBe(1);
+    });
+  });
+
+  it('não refiltra no navegador: a cotação achada pelo índice continua na tela', async () => {
+    // O servidor casa o índice exato; "64" não aparece em nenhum campo de texto
+    // da linha. Um filtro no navegador esconderia a linha recém-chegada.
+    mockGet.mockResolvedValue({ data: paginatedWithQuote });
+
+    render(<AddOrderChooser {...defaultProps} />, { wrapper: makeWrapper() });
+    fireEvent.click(screen.getByText(/Cadastrar a partir de cotação/i));
+    await waitFor(() => expect(screen.getByText('Empresa Teste Ltda')).toBeInTheDocument());
+
+    fireEvent.change(screen.getByPlaceholderText(/Índice, Cliente/i), { target: { value: '64' } });
+
+    await waitFor(() => {
+      const ultima = mockGet.mock.calls[mockGet.mock.calls.length - 1];
+      expect(ultima[1]?.params?.busca).toBe('64');
+    });
+    // Volta assim que a resposta do servidor chega (entre uma e outra a tabela
+    // mostra o esqueleto de carregamento).
+    await waitFor(() => expect(screen.getByText('Empresa Teste Ltda')).toBeInTheDocument());
   });
 });

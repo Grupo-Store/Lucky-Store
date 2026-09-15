@@ -124,7 +124,7 @@ def test_confirm_payment_passes_selected_row_and_period(make_test_client):
         })
     assert response.status_code == 200
     assert response.json() == {"confirmados": 2}
-    assert service.call_args.kwargs == dict(entregador="MARCOS", id_loja=None,
+    assert service.call_args.kwargs == dict(entregador="MARCOS", id_loja=None, valor=None, desfazer=False,
                                            data_inicio=date(2026, 9, 1), data_fim=date(2026, 9, 30))
 
 

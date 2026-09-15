@@ -70,6 +70,7 @@ class FreteOut(BaseModel):
     valor: Decimal
     data_frete: date
     pago: bool = False
+    valor_pago: Optional[Decimal] = None
 
     class Config:
         from_attributes = True

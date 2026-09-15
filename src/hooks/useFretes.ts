@@ -25,6 +25,9 @@ export interface FreteEntregadorSummary {
   qtd_entregas: number
   valor_total: string | number
   a_pagar: string | number
+  valor_pago: string | number
+  pendentes: number
+  pagos: number
 }
 
 export interface FretesSummaryResponse {
@@ -44,6 +47,7 @@ export interface FreteDetalheItem {
   data_frete: string
   valor: string | number
   pago: boolean
+  valor_pago?: string | number
 }
 
 export interface FretesDetailResponse {
@@ -116,7 +120,7 @@ export function useToggleFretePago() {
 export function useConfirmFretesPayment() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: (payload: FreteFilters & { entregador: string }) =>
+    mutationFn: (payload: FreteFilters & { entregador: string; valor?: string; desfazer?: boolean }) =>
       apiClient.patch('/fretes/pagamento', payload).then(r => r.data),
     onSuccess: async () => {
       await Promise.all([

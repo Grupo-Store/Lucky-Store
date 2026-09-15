@@ -19,6 +19,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table';
@@ -37,6 +38,7 @@ import { useOrders, calcTotal, Order } from '@/store/OrderStore';
 import { useFinancialOrders } from '@/hooks/use-financial-orders';
 import { useRmas } from '@/api/hooks/useRma';
 import { useToggleFretePago, useFretesSummary, useFretesDetail, useConfirmFretesPayment } from '@/hooks/useFretes';
+import type { FreteEntregadorSummary, FreteFilters } from '@/hooks/useFretes';
 import { ExpenseModal } from './ExpenseModal';
 import { OrderModal } from '@/components/OrderModal';
 import { RmaEditModal } from '@/components/RmaEditModal';
@@ -79,6 +81,8 @@ export function FinancialManager() {
   const qc = useQueryClient();
   const { mutate: togglePago, isPending: paymentPending, variables: paymentVariables } = useToggleFretePago();
   const confirmFretes = useConfirmFretesPayment();
+  const [freightPayment, setFreightPayment] = useState<{ row: FreteEntregadorSummary; filters: FreteFilters; undo: boolean } | null>(null);
+  const [paymentValue, setPaymentValue] = useState('');
   const [view, setView] = useState<ViewMode>('all');
   const [layout, setLayout] = useState<Layout>('calendar');
   const [typeFilter, setTypeFilter] = useState<TypeFilter>('all');
@@ -264,6 +268,31 @@ export function FinancialManager() {
     const q = freightSearch.toLowerCase().trim();
     return q ? items.filter(e => e.entregador.toLowerCase().includes(q)) : items;
   }, [summaryData, freightSearch]);
+
+  const openFreightPayment = (row: FreteEntregadorSummary, undo = false) => {
+    const amount = Number(undo ? row.valor_pago : row.a_pagar);
+    setPaymentValue(amount.toFixed(2).replace('.', ','));
+    setFreightPayment({ row, filters: freightApiFilters, undo });
+  };
+  const submitFreightPayment = () => {
+    if (!freightPayment || confirmFretes.isPending) return;
+    const normalized = paymentValue.trim().includes(',')
+      ? paymentValue.trim().replace(/\./g, '').replace(',', '.') : paymentValue.trim();
+    const amount = Number(normalized);
+    const limit = Number(freightPayment.undo ? freightPayment.row.valor_pago : freightPayment.row.a_pagar);
+    if (!/^\d+(\.\d{1,2})?$/.test(normalized) || !Number.isFinite(amount) || amount > limit || (amount === 0 && limit > 0)) {
+      toast.error(`Informe um valor ${limit > 0 ? 'maior que zero e ' : ''}até ${BRL(limit)}.`);
+      return;
+    }
+    confirmFretes.mutate({ entregador: freightPayment.row.entregador, ...freightPayment.filters,
+      valor: amount.toFixed(2), desfazer: freightPayment.undo }, {
+      onSuccess: () => {
+        toast.success(freightPayment.undo ? 'Pagamento desfeito. Saldo atualizado.' : 'Pagamento registrado. Saldo atualizado.');
+        setFreightPayment(null);
+      },
+      onError: err => toast.error(getApiError(err)),
+    });
+  };
 
   return (
     <div className="space-y-4">
@@ -640,7 +669,7 @@ export function FinancialManager() {
                 <Table>
                   <TableHeader>
                     <TableRow style={{ background: '#F8FAFD', borderBottom: '1px solid #EEF2F8' }}>
-                      {['Entregador', 'Qtd. Entregas', 'Total', 'A Pagar', 'Pagamentos'].map((h, i) => (
+                      {['Entregador', 'Qtd. Entregas', 'Total a pagar', 'A Pagar', 'Pagamentos'].map((h, i) => (
                         <TableHead key={h} className={i > 0 ? 'text-right' : ''} style={{ fontSize: 11.5, fontWeight: 600, letterSpacing: '0.1em', textTransform: 'uppercase', color: '#5B6B82', padding: '12px 18px' }}>{h}</TableHead>
                       ))}
                     </TableRow>
@@ -662,21 +691,23 @@ export function FinancialManager() {
                             <TableCell className="font-medium">{row.entregador}</TableCell>
                             <TableCell className="text-right">{row.qtd_entregas}</TableCell>
                             <TableCell className="text-right font-semibold text-green-700">{BRL(parseFloat(String(row.valor_total)))}</TableCell>
-                            <TableCell className={cn('text-right font-semibold', Number(row.a_pagar) > 0 ? 'text-red-600' : 'text-green-700')}>
-                              {Number(row.a_pagar) > 0 ? BRL(Number(row.a_pagar)) : 'Pago'}
+                            <TableCell className={cn('text-right font-semibold', row.pendentes > 0 ? 'text-red-600' : 'text-green-700')}>
+                              {row.pendentes > 0 ? BRL(Number(row.a_pagar)) : 'Pago'}
                             </TableCell>
                             <TableCell className="text-right">
                               <div className="flex justify-end gap-2">
                                 <Button variant="outline" size="sm"
-                                  disabled={confirmFretes.isPending || paymentPending || Number(row.a_pagar) <= 0}
+                                  disabled={confirmFretes.isPending || paymentPending || row.pendentes === 0}
                                   onClick={event => {
                                     event.stopPropagation();
-                                    confirmFretes.mutate({ entregador: row.entregador, ...freightApiFilters }, {
-                                      onSuccess: () => toast.success('Pagamento confirmado. Fretes baixados do A pagar.'),
-                                      onError: err => toast.error(getApiError(err)),
-                                    });
+                                    openFreightPayment(row);
                                   }}>{confirmFretes.isPending && confirmFretes.variables?.entregador === row.entregador
                                     ? 'Salvando...' : 'Confirmar pagamento'}</Button>
+                                {row.pagos > 0 && <Button variant="outline" size="sm"
+                                  disabled={confirmFretes.isPending || paymentPending}
+                                  onClick={event => { event.stopPropagation(); openFreightPayment(row, true); }}>
+                                  Desfazer pagamento
+                                </Button>}
                                 <Button variant="ghost" size="sm" onClick={event => {
                                   event.stopPropagation();
                                   setFreightDetail({ open: true, person: row.entregador, personKey: row.entregador.trim().toLowerCase() });
@@ -721,7 +752,7 @@ export function FinancialManager() {
                 {(() => {
                   const items = detailData?.items ?? [];
                   const total = items.reduce((s, r) => s + parseFloat(String(r.valor)), 0);
-                  const aPagar = items.filter(r => !r.pago).reduce((s, r) => s + parseFloat(String(r.valor)), 0);
+                  const aPagar = items.reduce((s, r) => s + Number(r.valor) - Number(r.valor_pago ?? (r.pago ? r.valor : 0)), 0);
                   const stat = [
                     { label: 'Entregas', value: String(items.length), color: '#2F6BFF' },
                     { label: 'Total', value: BRL(total), color: '#157A52' },
@@ -761,6 +792,7 @@ export function FinancialManager() {
                               <CheckCircle2 className="h-4 w-4" /> Pago
                             </span>
                           )}
+                          {!r.pago && Number(r.valor_pago) > 0 && <span className="block text-xs text-green-700">Pago: {BRL(Number(r.valor_pago))}</span>}
                           <Button
                             size="sm"
                             variant={r.pago ? 'ghost' : 'default'}
@@ -777,6 +809,12 @@ export function FinancialManager() {
                               ? 'Salvando...'
                               : r.pago ? 'Desfazer pagamento' : 'Confirmar pagamento'}
                           </Button>
+                          {!r.pago && Number(r.valor_pago) > 0 && <Button size="sm" variant="ghost"
+                            disabled={paymentPending || confirmFretes.isPending}
+                            onClick={() => togglePago({ pedidoId: String(r.id_pedido), freteId: String(r.id), pago: false }, {
+                              onSuccess: () => toast.success('Pagamento desfeito. Saldo atualizado.'),
+                              onError: err => toast.error(getApiError(err)),
+                            })}>Desfazer pagamento</Button>}
                         </TableCell>
                       </TableRow>
                     ))}
@@ -791,6 +829,20 @@ export function FinancialManager() {
         </TabsContent>
       </Tabs>
 
+      <Dialog open={!!freightPayment} onOpenChange={open => { if (!open && !confirmFretes.isPending) setFreightPayment(null); }}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>{freightPayment?.undo ? 'Desfazer pagamento' : 'Confirmar pagamento'} — {freightPayment?.row.entregador}</DialogTitle></DialogHeader>
+          <p className="text-sm text-muted-foreground">Total a pagar: {BRL(Number(freightPayment?.row.valor_total ?? 0))} · Já pago: {BRL(Number(freightPayment?.row.valor_pago ?? 0))} · Pendente: {BRL(Number(freightPayment?.row.a_pagar ?? 0))}</p>
+          <form onSubmit={event => { event.preventDefault(); submitFreightPayment(); }} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="freight-payment-value">{freightPayment?.undo ? 'Valor a desfazer (R$)' : 'Valor a pagar agora (R$)'}</Label>
+              <Input id="freight-payment-value" inputMode="decimal" value={paymentValue} onChange={event => setPaymentValue(event.target.value)} disabled={confirmFretes.isPending} />
+              <p className="text-sm text-muted-foreground">{freightPayment?.undo ? 'Esse valor voltará ao saldo pendente.' : 'Você pode pagar uma parte e deixar o restante pendente.'}</p>
+            </div>
+            <Button type="submit" disabled={confirmFretes.isPending}>{confirmFretes.isPending ? 'Salvando...' : freightPayment?.undo ? 'Desfazer valor' : 'Registrar pagamento'}</Button>
+          </form>
+        </DialogContent>
+      </Dialog>
       <ExpenseModal
         open={expModal.open}
         expense={expModal.expense}
