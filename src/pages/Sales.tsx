@@ -715,7 +715,7 @@ export default function Sales() {
                   </Alert>
                 )}
                 <div className="overflow-x-auto rounded-lg border">
-                  <Table>
+                  <Table className="text-[13px] [&_th]:whitespace-nowrap [&_td]:whitespace-nowrap [&_th]:!px-3 [&_th]:!py-2.5 [&_td]:!px-3 [&_td]:!py-2.5">
                     <TableHeader>
                       <TableRow style={{ background: '#F8FAFD', borderBottom: '1px solid #EEF2F8' }}>
                         {['Índice', 'Cliente', 'Data Req.', 'Nº Req.', 'Empresa', 'Vendedor', 'Status', 'Itens', 'Valor'].map((h, i) => (
@@ -752,7 +752,7 @@ export default function Sales() {
                             <TableCell style={{ padding: '15px 18px' }}>{vendedores.find(v => v.id === qt.id_vendedor)?.nome || '—'}</TableCell>
                             <TableCell style={{ padding: '15px 18px' }}>
                               {highest ? (
-                                <span className={cn('px-2 py-0.5 rounded text-xs font-semibold border', QUOTE_PHASE_COLORS[highest])}>
+                                <span className={cn('inline-flex whitespace-nowrap px-2 py-0.5 rounded text-xs font-semibold border', QUOTE_PHASE_COLORS[highest])}>
                                   {QUOTE_PHASE_LABELS[highest]}
                                 </span>
                               ) : <span className="text-muted-foreground text-xs">—</span>}
