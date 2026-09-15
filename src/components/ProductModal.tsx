@@ -22,6 +22,7 @@ import {
   calcItemFinalValue, calcItemLatestDelivery,
 } from '@/store/OrderStore';
 import { useVendedores } from '@/hooks/useVendedores';
+import { ProductPrintDocument } from '@/components/ProductPrintDocument';
 
 const ITEM_STATUS_LABELS: Record<ItemStatus, string> = {
   'To Buy': 'A Comprar', 'Bought': 'Comprado', 'In Stock': 'Em Estoque',
@@ -225,6 +226,7 @@ export function ProductModal({ open, onClose, order, item, onSave }: Props) {
 
   return (
     <Dialog open={open} onOpenChange={v => !v && onClose()}>
+      {open && <ProductPrintDocument order={order} item={item} subs={subs} observations={observacoes} />}
       <DialogContent className="w-[90vw] max-w-[90vw] h-[90vh] max-h-[90vh] overflow-y-auto bg-[#eef1f5] pm-root print:max-w-full print:max-h-none print:shadow-none">
         <style>{PRODUCT_MODAL_CSS}</style>
         <DialogHeader className="sr-only">

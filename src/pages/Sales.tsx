@@ -748,7 +748,7 @@ export default function Sales() {
                             <TableCell className="font-medium" style={{ padding: '15px 18px' }}>{qt.b2b_company?.trim() || qt.cliente}</TableCell>
                             <TableCell style={{ padding: '15px 18px' }}>{fmtDate(qt.data_cotacao)}</TableCell>
                             <TableCell style={{ padding: '15px 18px' }}>{qt.numero_requisicao || '—'}</TableCell>
-                            <TableCell style={{ padding: '15px 18px' }}>{LOJA_BY_ID[qt.id_loja] || '—'}</TableCell>
+                            <TableCell style={{ padding: '15px 18px' }}>{LOJA_BY_ID[qt.id_loja] || '—'}{qt.numero_loja != null && <span className="ml-2 whitespace-nowrap text-xs text-muted-foreground" title="Número da cotação nesta empresa">Nº {qt.numero_loja}</span>}</TableCell>
                             <TableCell style={{ padding: '15px 18px' }}>{vendedores.find(v => v.id === qt.id_vendedor)?.nome || '—'}</TableCell>
                             <TableCell style={{ padding: '15px 18px' }}>
                               {highest ? (
