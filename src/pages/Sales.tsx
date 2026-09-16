@@ -34,6 +34,7 @@ import { LOJA_IDS, FORMA_PAGAMENTO_MAP } from '@/api/storeConfig';
 import { OrderModal } from '@/components/OrderModal';
 import { ProductModal } from '@/components/ProductModal';
 import { QuoteModal } from '@/components/QuoteModal';
+import { QuotePhaseEditor } from '@/components/QuotePhaseEditor';
 import { RmaModal } from '@/components/RmaModal';
 import { RmaEditModal } from '@/components/RmaEditModal';
 import { AddOrderChooser, OrderPrefill } from '@/components/AddOrderChooser';
@@ -750,12 +751,8 @@ export default function Sales() {
                             <TableCell style={{ padding: '15px 18px' }}>{qt.numero_requisicao || '—'}</TableCell>
                             <TableCell style={{ padding: '15px 18px' }}>{LOJA_BY_ID[qt.id_loja] || '—'}{qt.numero_loja != null && <span className="ml-2 whitespace-nowrap text-xs text-muted-foreground" title="Número da cotação nesta empresa">Nº {qt.numero_loja}</span>}</TableCell>
                             <TableCell style={{ padding: '15px 18px' }}>{vendedores.find(v => v.id === qt.id_vendedor)?.nome || '—'}</TableCell>
-                            <TableCell style={{ padding: '15px 18px' }}>
-                              {highest ? (
-                                <span className={cn('inline-flex whitespace-nowrap px-2 py-0.5 rounded text-xs font-semibold border', QUOTE_PHASE_COLORS[highest])}>
-                                  {QUOTE_PHASE_LABELS[highest]}
-                                </span>
-                              ) : <span className="text-muted-foreground text-xs">—</span>}
+                            <TableCell style={{ padding: '15px 18px' }} onClick={event => event.stopPropagation()}>
+                              <QuotePhaseEditor quote={qt} phase={highest} />
                             </TableCell>
                             <TableCell style={{ padding: '15px 18px' }}>{qt.itens?.length ?? 0}</TableCell>
                             <TableCell className="text-right font-semibold" style={{ padding: '15px 18px', fontVariantNumeric: 'tabular-nums' }}>
