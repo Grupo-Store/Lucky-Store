@@ -3,8 +3,8 @@ from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Optional
 from uuid import UUID
-from sqlalchemy.orm import Session
-from sqlalchemy import asc, desc, nullslast, text, func, or_, cast, String
+from sqlalchemy.orm import Session, aliased
+from sqlalchemy import asc, desc, nullslast, text, func, or_, cast, String, select, false
 from sqlalchemy.exc import IntegrityError
 
 from app.models.cotacao import Cotacao
@@ -42,18 +42,23 @@ def _cotacao_da_tentativa(db: Session, current_user_id: UUID,
 
 
 def _filtro_de_busca(termo: str):
-    """Uma caixa de busca so, procurando em tudo que identifica a cotacao.
-
-    Precisa ser OU, e nao "se for numero e indice": varios numeros de requisicao
-    sao numericos (5137, 3216385). Tratar todo termo numerico como indice faria
-    buscar 5137 parar de achar a cotacao cujo Nº Req. e 5137 — trocaria um
-    problema por outro.
-
-    O indice casa EXATO, o resto casa por pedaco. Assim "64" traz a cotacao de
-    indice 64 e tambem qualquer uma cujo Nº Req. contenha 64, que e o que quem
-    digita numa caixa unica espera. Casar o indice por pedaco faria "6" devolver
-    6, 16, 60..69 e a busca perderia a serventia.
-    """
+    """Números buscam índice/número por loja exatos; texto busca os demais campos."""
+    # Termos apenas numéricos identificam a cotação, não trechos de CNPJ ou
+    # requisição. O número por loja usa a mesma regra da impressão.
+    if termo.isascii() and termo.isdigit():
+        digits = termo.lstrip('0') or '0'
+        if len(digits) > 10 or int(digits) > 2147483647:
+            return false()
+        numero = int(digits)
+        anterior = aliased(Cotacao)
+        numero_loja = select(func.count(anterior.id)).where(
+            anterior.id_loja == Cotacao.id_loja,
+            anterior.deleted_at.is_(None),
+            anterior.numero.isnot(None),
+            anterior.numero <= Cotacao.numero,
+        ).correlate(Cotacao).scalar_subquery()
+        return or_(Cotacao.numero == numero,
+                   Cotacao.numero.isnot(None) & (numero_loja == numero))
     like = f"%{termo}%"
     condicoes = [
         Cotacao.cliente.ilike(like),
@@ -66,11 +71,6 @@ def _filtro_de_busca(termo: str):
         Cotacao.loja.has(Loja.nome.ilike(like)),
         Cotacao.vendedor.has(Vendedor.nome.ilike(like)),
     ]
-    if termo.isdigit():
-        # int() so depois do isdigit: o cast e barato, mas um termo enorme
-        # viraria um numero fora do range do integer e o Postgres estouraria.
-        if len(termo) <= 9:
-            condicoes.append(Cotacao.numero == int(termo))
     try:
         condicoes.append(Cotacao.id == UUID(termo))
     except ValueError:

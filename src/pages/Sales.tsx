@@ -650,7 +650,7 @@ export default function Sales() {
                     display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap',
                   }}
                 >
-                  <SearchBar value={quoteSearch} onChange={setQuoteSearch} placeholder="Índice, Cliente, Req, Empresa, Vendedor..." className="flex-1 min-w-[160px]" />
+                  <SearchBar value={quoteSearch} onChange={setQuoteSearch} placeholder="Nº da cotação / empresa, cliente, requisição..." className="flex-1 min-w-[160px]" />
                   <Select value={quoteStatusFilter} onValueChange={setQuoteStatusFilter}>
                     <SelectTrigger style={{ width: 168, background: '#FBFCFE', borderColor: '#E2E8F1', borderRadius: 10, flexShrink: 0 }}>
                       <SelectValue placeholder="Todos os Status" />

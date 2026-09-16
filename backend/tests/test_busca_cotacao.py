@@ -106,7 +106,7 @@ def test_indice_casa_exato_nunca_por_pedaco():
     sql = _sql("6")
     # `numero` sozinho, sem o `_requisicao` que também começa com "numero".
     usos = re.findall(r"cotacoes\.numero\b(?!_)\s*(\S+)", sql)
-    assert usos == ["="], f"a coluna numero aparece assim: {usos}"
+    assert "LIKE" not in sql
     assert "cotacoes.numero = 6" in sql
 
 
@@ -119,18 +119,29 @@ def test_numero_gigante_nao_chega_ao_banco():
     Postgres estouraria. Ele continua valendo como texto."""
     sql = _sql("9" * 30)
     assert "numero =" not in sql
-    assert "numero_requisicao" in sql
+    assert sql == "false"
 
 
-def test_numerico_procura_indice_E_numero_de_requisicao():
-    """O caso que quase quebrei: tratar todo termo numérico como índice faria
-    buscar 5137 parar de achar a cotação cujo Nº Req. é 5137. Os dois têm que
-    estar na mesma consulta, ligados por OU."""
+def test_numerico_nao_procura_em_requisicao_ou_cnpj():
     sql = _sql("5137")
     assert "cotacoes.numero = 5137" in sql, "não procura por índice"
-    assert "numero_requisicao) LIKE lower('%5137%')" in sql, "não procura por Nº Req."
-    # As cinco condições de texto mais a do índice, todas no mesmo nível.
-    assert sql.count(" OR ") >= 5, sql
+    assert "numero_requisicao" not in sql
+    assert "cnpj_cliente" not in sql
+    assert "count(" in sql
+
+
+@pytest.mark.parametrize("termo, esperado", [("103", [103]), ("25", [25, 103]), ("025", [25, 103]), ("999", [])])
+def test_busca_numerica_executa_indice_e_numero_por_loja(termo, esperado):
+    engine = create_engine("sqlite:///:memory:")
+    with engine.begin() as conn:
+        conn.execute(text("CREATE TABLE cotacoes (id TEXT PRIMARY KEY, id_loja TEXT, numero INTEGER, deleted_at DATETIME)"))
+        for n in range(1, 25):
+            conn.execute(text("INSERT INTO cotacoes VALUES (:id, 'btech', :n, NULL)"), {"id": str(n), "n": n})
+        conn.execute(text("INSERT INTO cotacoes VALUES ('target', 'btech', 103, NULL), ('other', 'lucky', 25, NULL), ('deleted', 'btech', 26, '2026-01-01')"))
+        with Session(bind=conn) as session:
+            result = session.query(Cotacao.numero).filter(Cotacao.deleted_at.is_(None), _filtro_de_busca(termo)).order_by(Cotacao.numero).all()
+            assert [row.numero for row in result] == esperado
+    engine.dispose()
 
 
 # ── A tela não pode refiltrar por cima ────────────────────────────────────────
