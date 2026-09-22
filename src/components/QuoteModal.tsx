@@ -408,8 +408,6 @@ function QuotePrintTemplate({ form, rows, total, vendedor }: {
 
             <div className="qp-endrow">
               <div className="qp-signoff">
-                <p>Sujeito a disponibilidade</p>
-                <p>Agora disponível</p>
                 <p>Fico a sua disposição, obrigado.</p>
               </div>
             </div>
@@ -571,7 +569,14 @@ export function QuoteModal({ open, onClose, quote, onSave, onDelete, nextIndex }
     childIds.current.clear();
   }, [quote, open, nextIndex]);
 
-  const set = <K extends keyof Quote>(k: K, v: Quote[K]) => setForm(prev => ({ ...prev, [k]: v }));
+  const set = <K extends keyof Quote>(k: K, v: Quote[K]) => setForm(prev => {
+    const next = { ...prev, [k]: v };
+    // Nome e cadastro precisam mudar juntos: o rodapé busca o contato pelo ID.
+    if (k === 'seller' || k === 'company') {
+      next.sellerId = vendorIdByName(next.seller ?? '', next.company) || undefined;
+    }
+    return next;
+  });
 
   const setPhase = <K extends keyof QuotePhases>(key: K, patch: Partial<QuotePhases[K]>) => {
     setForm(prev => ({ ...prev, phases: { ...prev.phases, [key]: { ...prev.phases[key], ...patch } as QuotePhases[K] } }));

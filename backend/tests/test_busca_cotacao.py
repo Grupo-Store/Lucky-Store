@@ -130,7 +130,7 @@ def test_numerico_nao_procura_em_requisicao_ou_cnpj():
     assert "count(" in sql
 
 
-@pytest.mark.parametrize("termo, esperado", [("103", [103]), ("25", [25, 103]), ("025", [25, 103]), ("999", [])])
+@pytest.mark.parametrize("termo, esperado", [("15", [15]), ("103", [103]), ("25", [25, 103]), ("025", [25, 103]), ("999", [])])
 def test_busca_numerica_executa_indice_e_numero_por_loja(termo, esperado):
     engine = create_engine("sqlite:///:memory:")
     with engine.begin() as conn:
@@ -145,6 +145,26 @@ def test_busca_numerica_executa_indice_e_numero_por_loja(termo, esperado):
 
 
 # ── A tela não pode refiltrar por cima ────────────────────────────────────────
+
+def test_listagem_retorna_tres_correspondencias_para_15():
+    """Índice 15 mais o 15º registro de duas lojas: nenhum deve sumir."""
+    engine = create_engine("sqlite:///:memory:")
+    with engine.begin() as conn:
+        conn.execute(text("CREATE TABLE cotacoes (id TEXT PRIMARY KEY, id_loja TEXT, numero INTEGER, deleted_at DATETIME)"))
+        conn.execute(text("INSERT INTO cotacoes VALUES ('geral', 'ajj', 15, NULL)"))
+        for loja, inicio, ultimo in [('lucky', 16, 38), ('btech', 50, 82)]:
+            for n in range(inicio, inicio + 14):
+                conn.execute(text("INSERT INTO cotacoes VALUES (:id, :loja, :n, NULL)"), {"id": str(n), "loja": loja, "n": n})
+            conn.execute(text("INSERT INTO cotacoes VALUES (:id, :loja, :n, NULL)"), {"id": str(ultimo), "loja": loja, "n": ultimo})
+        with Session(bind=conn) as session:
+            db = MagicMock()
+            db.query.return_value = session.query(Cotacao.numero)
+            with patch('app.services.cotacao._hydrate_cotacao'):
+                items, total, pages = CotacaoService.list(db, busca='15')
+            assert [item.numero for item in items] == [82, 38, 15]
+            assert total == 3
+            assert pages == 1
+    engine.dispose()
 
 def test_a_tela_nao_refiltra_o_texto_no_navegador():
     """Refiltrar desfaria a busca do servidor: o índice casa exato lá e não

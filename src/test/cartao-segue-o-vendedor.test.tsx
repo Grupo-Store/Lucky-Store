@@ -1,21 +1,6 @@
-/**
- * O contato do timbrado segue o VENDEDOR escolhido — nada ali é fixo.
- *
- * Este teste renderiza o QuoteModal de verdade, duas vezes, mudando só o
- * vendedor da cotação, e confere que telefone, e-mail e assinatura acompanham.
- * Os outros testes do cartão leem o código-fonte; este exercita o componente,
- * que é o único jeito de garantir que o valor não está cravado em algum lugar
- * no meio do caminho.
- *
- * O CNPJ é a única coisa fixa, e de propósito: ele é da LOJA, não do vendedor.
- *
- * Contexto: o cartão saía com o telefone errado, e a suspeita inicial foi de
- * valor fixo no código. Não era — o valor vem do cadastro do vendedor e estava
- * errado no banco. Este teste existe para que essa dúvida não precise ser
- * investigada de novo.
- */
+/** Confere o contato impresso e a troca de vendedor dentro do editor. */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, cleanup } from '@testing-library/react';
+import { render, cleanup, screen, fireEvent } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 const ALCIDES = {
@@ -87,7 +72,7 @@ describe('o contato do timbrado segue o vendedor da cotação', () => {
   it('vendedor sem telefone e e-mail cadastrados não deixa linha vazia', () => {
     const t = timbrado(SEM_CONTATO);
     expect(t.linhas).toEqual([]);
-    // O cartao continua identificando a empresa, e a assinatura o vendedor.
+    // O nome continua visível mesmo sem telefone ou e-mail cadastrado.
     expect(t.rodape).toContain('CNPJ 54.677.704/0001-22');
     expect(t.nome).toBe('Pedro');
   });
@@ -98,5 +83,24 @@ describe('o contato do timbrado segue o vendedor da cotação', () => {
     const l = timbrado(LUCAS);
     expect(a.rodape).toContain('CNPJ 54.677.704/0001-22');
     expect(l.rodape).toContain('CNPJ 54.677.704/0001-22');
+  });
+});
+
+
+describe('troca do vendedor na cotação já aberta', () => {
+  it.each([LUCAS, SEM_CONTATO])('troca Alcides por $nome antes de salvar ou imprimir', async (vendedor) => {
+    timbrado(ALCIDES);
+    const seletor = screen.getAllByRole('combobox').find(
+      el => el.closest('div')?.textContent?.includes('Vendedor'),
+    );
+    expect(seletor).toBeDefined();
+    fireEvent.click(seletor!);
+    fireEvent.click(await screen.findByRole('option', { name: vendedor.nome }));
+    expect(document.querySelector('.qp-fcard-nome')?.textContent).toBe(vendedor.nome);
+    expect(document.querySelector('.qp-signoff')?.textContent).toBe('Fico a sua disposição, obrigado.');
+    const linhas = Array.from(document.querySelectorAll('.qp-fcard-linha')).map(el => el.textContent);
+    expect(linhas).toEqual(vendedor.phone ? [vendedor.phone, `e-mail: ${vendedor.email}`] : []);
+    expect(document.querySelector('.qp-fcard')?.textContent).not.toContain(ALCIDES.phone);
+    expect(document.querySelector('.qp-fcard')?.textContent).not.toContain(ALCIDES.email);
   });
 });
