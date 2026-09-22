@@ -58,7 +58,8 @@ describe('a linha de texto do rodapé', () => {
 });
 
 describe('o nome do vendedor não se perde do documento', () => {
-  it('continua na linha de assinatura', () => {
-    expect(fonte).toContain('<span className="qp-sign-name">{sellerName}</span>');
+  it('fica no cartão, sem campo de assinatura', () => {
+    expect(fonte).toContain('<div className="qp-fcard-nome">{sellerName}</div>');
+    expect(fonte).not.toContain('className="qp-sign"');
   });
 });

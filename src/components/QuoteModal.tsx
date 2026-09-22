@@ -171,7 +171,7 @@ const QUOTE_PRINT_CSS = `
   .qp-content{padding:0 14mm}
   .qp-inner{max-width:150mm;margin:0 auto}
   .qp-header{text-align:center;padding-bottom:8px}
-  .qp-header-img{display:block;margin:0 auto;max-width:300px;width:58%;height:auto}
+  .qp-header-img{display:block;margin:0 auto;max-width:240px;width:48%;max-height:40mm;object-fit:contain;height:auto}
 
   .qp-title{text-align:center;font-family:'Space Grotesk',sans-serif;font-size:17px;font-weight:800;
     letter-spacing:.18em;color:#2c5f9e;margin:4px 0 16px;padding-bottom:10px;border-bottom:2px solid #5b9bd5;break-inside:avoid}
@@ -206,9 +206,6 @@ const QUOTE_PRINT_CSS = `
   .qp-signoff{flex:1;font-size:12.5px;color:#1f2d3d}
   .qp-signoff p{margin:0 0 2px}
   .qp-signoff p:last-child{margin-top:12px}
-  .qp-sign{text-align:center;min-width:210px}
-  .qp-sign-line{border-top:1px solid #1f2d3d;width:210px;margin:0 auto 5px}
-  .qp-sign-name{font-size:12px;color:#1f2d3d}
 `;
 
 /** Endereço e CEP, iguais para as lojas do grupo.
@@ -414,10 +411,6 @@ function QuotePrintTemplate({ form, rows, total, vendedor }: {
                 <p>Sujeito a disponibilidade</p>
                 <p>Agora disponível</p>
                 <p>Fico a sua disposição, obrigado.</p>
-              </div>
-              <div className="qp-sign">
-                <div className="qp-sign-line" />
-                <span className="qp-sign-name">{sellerName}</span>
               </div>
             </div>
               </div>{/* /qp-inner */}

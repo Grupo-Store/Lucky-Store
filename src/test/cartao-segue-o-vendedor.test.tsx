@@ -60,8 +60,9 @@ function timbrado(vendedor: { id: string; nome: string }) {
   );
   return {
     cartao: document.querySelector('.qp-fcard')?.textContent ?? '',
+    rodape: document.querySelector('.qp-footer-text')?.textContent ?? '',
     linhas: Array.from(document.querySelectorAll('.qp-fcard-linha')).map(e => e.textContent),
-    assinatura: document.querySelector('.qp-sign-name')?.textContent ?? '',
+    nome: document.querySelector('.qp-fcard-nome')?.textContent ?? '',
   };
 }
 
@@ -71,13 +72,13 @@ describe('o contato do timbrado segue o vendedor da cotação', () => {
   it('cotação do Alcides sai com o contato do Alcides', () => {
     const t = timbrado(ALCIDES);
     expect(t.linhas).toEqual(['(81) 99989-6762', 'e-mail: alcides@luckystore.com.br']);
-    expect(t.assinatura).toBe('Alcides');
+    expect(t.nome).toBe('Alcides');
   });
 
   it('trocando o vendedor, o contato inteiro troca junto', () => {
     const t = timbrado(LUCAS);
     expect(t.linhas).toEqual(['(81) 98123-4455', 'e-mail: lucas@luckystore.com.br']);
-    expect(t.assinatura).toBe('Lucas');
+    expect(t.nome).toBe('Lucas');
     // O do outro vendedor nao pode sobrar em lugar nenhum do papel.
     expect(t.cartao).not.toContain('99989-6762');
     expect(t.cartao).not.toContain('alcides@');
@@ -87,15 +88,15 @@ describe('o contato do timbrado segue o vendedor da cotação', () => {
     const t = timbrado(SEM_CONTATO);
     expect(t.linhas).toEqual([]);
     // O cartao continua identificando a empresa, e a assinatura o vendedor.
-    expect(t.cartao).toContain('CNPJ 54.677.704/0001-22');
-    expect(t.assinatura).toBe('Pedro');
+    expect(t.rodape).toContain('CNPJ 54.677.704/0001-22');
+    expect(t.nome).toBe('Pedro');
   });
 
   it('o CNPJ é o único fixo — e é da loja, não do vendedor', () => {
     const a = timbrado(ALCIDES);
     cleanup();
     const l = timbrado(LUCAS);
-    expect(a.cartao).toContain('CNPJ 54.677.704/0001-22');
-    expect(l.cartao).toContain('CNPJ 54.677.704/0001-22');
+    expect(a.rodape).toContain('CNPJ 54.677.704/0001-22');
+    expect(l.rodape).toContain('CNPJ 54.677.704/0001-22');
   });
 });

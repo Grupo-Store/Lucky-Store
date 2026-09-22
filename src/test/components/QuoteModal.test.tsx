@@ -161,7 +161,7 @@ describe('QuoteModal — create mode', () => {
 describe('QuoteModal — seller name in print document', () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it('shows Alcides Campos in the signature when seller is "Alcides Campos"', () => {
+  it('shows Alcides Campos in the contact card when seller is "Alcides Campos"', () => {
     render(
       <QuoteModal
         open
@@ -171,12 +171,12 @@ describe('QuoteModal — seller name in print document', () => {
         nextIndex={() => 'COT-001'}
       />
     );
-    const signatureNodes = document.querySelectorAll('.qp-sign-name');
+    const signatureNodes = document.querySelectorAll('.qp-fcard-nome');
     expect(signatureNodes.length).toBeGreaterThan(0);
     signatureNodes.forEach(node => expect(node.textContent).toBe('Alcides Campos'));
   });
 
-  it('shows J. Lucas Campos in the signature — not "Lucas Campos"', () => {
+  it('shows J. Lucas Campos in the contact card — not "Lucas Campos"', () => {
     render(
       <QuoteModal
         open
@@ -186,7 +186,7 @@ describe('QuoteModal — seller name in print document', () => {
         nextIndex={() => 'COT-001'}
       />
     );
-    const signatureNodes = document.querySelectorAll('.qp-sign-name');
+    const signatureNodes = document.querySelectorAll('.qp-fcard-nome');
     expect(signatureNodes.length).toBeGreaterThan(0);
     signatureNodes.forEach(node => {
       expect(node.textContent).toBe('J. Lucas Campos');
@@ -194,7 +194,7 @@ describe('QuoteModal — seller name in print document', () => {
     });
   });
 
-  it('shows J. Pedro Campos in the signature — not "Pedro Campos"', () => {
+  it('shows J. Pedro Campos in the contact card — not "Pedro Campos"', () => {
     render(
       <QuoteModal
         open
@@ -204,7 +204,7 @@ describe('QuoteModal — seller name in print document', () => {
         nextIndex={() => 'COT-001'}
       />
     );
-    const signatureNodes = document.querySelectorAll('.qp-sign-name');
+    const signatureNodes = document.querySelectorAll('.qp-fcard-nome');
     expect(signatureNodes.length).toBeGreaterThan(0);
     signatureNodes.forEach(node => {
       expect(node.textContent).toBe('J. Pedro Campos');
@@ -212,7 +212,7 @@ describe('QuoteModal — seller name in print document', () => {
     });
   });
 
-  it('shows "—" in the signature when seller is empty', () => {
+  it('shows "—" in the contact card when seller is empty', () => {
     render(
       <QuoteModal
         open
@@ -222,12 +222,12 @@ describe('QuoteModal — seller name in print document', () => {
         nextIndex={() => 'COT-001'}
       />
     );
-    const signatureNodes = document.querySelectorAll('.qp-sign-name');
+    const signatureNodes = document.querySelectorAll('.qp-fcard-nome');
     expect(signatureNodes.length).toBeGreaterThan(0);
     signatureNodes.forEach(node => expect(node.textContent).toBe('—'));
   });
 
-  it('shows same seller name in Liner field and in signature', () => {
+  it('shows same seller name in Liner field and in contact card', () => {
     render(
       <QuoteModal
         open
@@ -238,7 +238,7 @@ describe('QuoteModal — seller name in print document', () => {
       />
     );
     const linerNodes  = document.querySelectorAll('.qp-info b');
-    const signNodes   = document.querySelectorAll('.qp-sign-name');
+    const signNodes   = document.querySelectorAll('.qp-fcard-nome');
 
     const linerTexts = Array.from(linerNodes).map(n => n.textContent);
     expect(linerTexts).toContain('J. Lucas Campos');

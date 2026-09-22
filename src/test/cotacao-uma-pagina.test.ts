@@ -91,8 +91,8 @@ describe('o CSS carrega esses valores', () => {
     expect(fonte).toContain('@page{size:A4;margin:10mm 0 0 0}');
   });
 
-  it('o logo NÃO foi reduzido: o timbrado continua o mesmo', () => {
-    expect(fonte).toContain('max-width:300px');
+  it('o logo é compacto para reservar espaço ao rodapé', () => {
+    expect(fonte).toContain('max-width:240px;width:48%;max-height:40mm;object-fit:contain');
     expect(fonte).toContain('.qp-header{text-align:center;padding-bottom:8px}');
   });
 
