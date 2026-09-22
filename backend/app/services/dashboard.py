@@ -3,7 +3,7 @@ from decimal import Decimal
 from typing import Optional
 from uuid import UUID
 
-from sqlalchemy import func, case, or_, and_
+from sqlalchemy import func, case, or_, and_, select
 from sqlalchemy.orm import Session
 
 from app.models.pedido import Pedido, CustoPedido, Frete, PEDIDO_ATIVO, PEDIDO_CANCELADO
@@ -110,8 +110,75 @@ def _custos_adicionais_sql():
     ))
 
 
+def _frete_do_pedido_sql():
+    """Frete do pedido, somado da tabela de fretes e correlacionado ao pedido.
+
+    O frete era somado a parte, pela data dele e sem olhar o pedido. Ficava de
+    fora das tabelas por empresa e por vendedor (que entao nao fechavam com o
+    card), e sobrevivia ao cancelamento: cancelar um pedido tirava a receita do
+    dashboard e deixava o frete la como custo. Pendurado no pedido, ele entra e
+    sai junto com o resto.
+    """
+    return (
+        select(func.coalesce(func.sum(Frete.valor), 0))
+        .where(Frete.id_pedido == Pedido.id)
+        .correlate(Pedido)
+        .scalar_subquery()
+    )
+
+
 def _custos_pedido_sql():
-    return func.coalesce(CustoPedido.custo_produto_final, 0) + _custos_adicionais_sql()
+    """O custo de um pedido. UM lugar so — os quatro relatorios leem daqui.
+
+    Havia tres contas diferentes para a mesma palavra "custo": o card somava
+    tudo mais frete, o grafico somava tudo menos frete, e as tabelas por empresa
+    e por vendedor somavam so produto e servico. O mesmo pedido aparecia com
+    tres lucros e tres margens na mesma tela, e a meta de lucro do vendedor era
+    medida contra a conta mais frouxa das tres.
+    """
+    return (
+        func.coalesce(CustoPedido.custo_produto_final, 0)
+        + _custos_adicionais_sql()
+        + _frete_do_pedido_sql()
+    )
+
+
+def _estornos_por(db: Session, inicio: date, fim: date, chave, id_loja: Optional[UUID]):
+    """Estornos de RMA do periodo, somados por `chave`.
+
+    `chave` e a coluna que agrupa — a loja, o vendedor ou o dia do estorno. Com
+    None, vem o total do periodo numa chave unica.
+
+    O estorno abatia o faturamento so no card de KPI. O grafico e as tabelas por
+    empresa e por vendedor somavam `valor_venda` cheio, entao um mes com estorno
+    fechava com a soma das partes acima do total e sem nenhuma linha explicando
+    a diferenca. Agora os quatro descontam, cada um pela sua chave.
+
+    A data e a do estorno (e a do registro do RMA quando ela nao foi
+    preenchida): o estorno cai no periodo em que aconteceu, e nao no periodo do
+    pedido de origem, que pode ser de meses antes.
+    """
+    dia_do_estorno = func.coalesce(ItemRma.data_estorno, Rma.data_registro)
+    soma = func.coalesce(func.sum(ItemRma.valor_estornado), 0)
+
+    def _base(*colunas):
+        q = (
+            db.query(*colunas)
+            .select_from(ItemRma)
+            .join(Rma, ItemRma.id_rma == Rma.id)
+            .filter(
+                Rma.deleted_at.is_(None),
+                dia_do_estorno >= inicio,
+                dia_do_estorno <= fim,
+            )
+        )
+        return q.filter(Rma.id_loja == id_loja) if id_loja else q
+
+    if chave is None:
+        return {None: Decimal(str(_base(soma).scalar() or 0))}
+
+    linhas = _base(chave.label("chave"), soma.label("total")).group_by(chave).all()
+    return {linha.chave: Decimal(str(linha.total or 0)) for linha in linhas}
 
 
 def _aggregate(
@@ -142,6 +209,12 @@ def _aggregate(
             func.coalesce(func.sum(
                 case((PEDIDO_ATIVO, _custos_adicionais_sql()), else_=0)
             ), 0).label("custo_adicionais"),
+            func.coalesce(func.sum(
+                case((PEDIDO_ATIVO, _frete_do_pedido_sql()), else_=0)
+            ), 0).label("custo_frete"),
+            func.coalesce(func.sum(
+                case((PEDIDO_ATIVO, _custos_pedido_sql()), else_=0)
+            ), 0).label("custo_total"),
             func.count(case((PEDIDO_ATIVO, 1))).label("num_pedidos"),
             func.count(case((PEDIDO_CANCELADO, 1))).label("num_cancelamentos"),
             func.coalesce(func.sum(
@@ -179,22 +252,13 @@ def get_kpis(
     imposto_compra = Decimal(str(row.imposto_compra or 0))
     imposto_venda = Decimal(str(row.imposto_venda or 0))
     custo_adicionais = Decimal(str(row.custo_adicionais or 0))
-    custo = custo_produto + custo_adicionais
+    custo_frete = Decimal(str(row.custo_frete or 0))
+    # Uma conta so, a de _custos_pedido_sql: produto + adicionais + frete.
+    custo = Decimal(str(row.custo_total or 0))
 
     # Estornos (devoluções de RMA) abatem o faturamento no período — por data do estorno
     # (fallback: data de registro do RMA quando o estorno não tem data preenchida)
-    estornos_q = (
-        db.query(func.coalesce(func.sum(ItemRma.valor_estornado), 0))
-        .join(Rma, ItemRma.id_rma == Rma.id)
-        .filter(
-            Rma.deleted_at.is_(None),
-            func.coalesce(ItemRma.data_estorno, Rma.data_registro) >= inicio,
-            func.coalesce(ItemRma.data_estorno, Rma.data_registro) <= fim,
-        )
-    )
-    if id_loja:
-        estornos_q = estornos_q.filter(Rma.id_loja == id_loja)
-    estornos = Decimal(str(estornos_q.scalar() or 0))
+    estornos = sum(_estornos_por(db, inicio, fim, None, id_loja).values(), Decimal(0))
 
     receita = receita_bruta - estornos
     gastos_fixos_q = (
@@ -218,20 +282,6 @@ def get_kpis(
     )
     outros_custos = Decimal(str(gastos_fixos_q.scalar() or 0))
 
-    frete_q = (
-        db.query(func.coalesce(func.sum(Frete.valor), 0))
-        .filter(
-            Frete.data_frete >= inicio,
-            Frete.data_frete <= fim,
-        )
-    )
-    if id_loja:
-        frete_q = (
-            frete_q.join(Pedido, Pedido.id == Frete.id_pedido)
-            .filter(Pedido.id_loja == id_loja)
-        )
-    custo_frete = Decimal(str(frete_q.scalar() or 0))
-    custo += custo_frete
     lucro = receita - custo
     margem = (lucro / receita).quantize(Decimal("0.0001")) if receita > 0 else Decimal("0")
 
@@ -290,13 +340,13 @@ def get_breakdown_by_company(
 
     q = (
         db.query(
+            Loja.id.label("id_loja"),
             Loja.nome.label("nome"),
             func.coalesce(func.sum(
                 case((PEDIDO_ATIVO, Pedido.valor_venda), else_=0)
             ), 0).label("receita"),
             func.coalesce(func.sum(
-                case((PEDIDO_ATIVO,
-                      CustoPedido.custo_produto_final + CustoPedido.custo_servico), else_=0)
+                case((PEDIDO_ATIVO, _custos_pedido_sql()), else_=0)
             ), 0).label("custo"),
             func.count(case((PEDIDO_ATIVO, 1))).label("num_pedidos"),
             func.count(case((PEDIDO_CANCELADO, 1))).label("num_cancelamentos"),
@@ -320,9 +370,13 @@ def get_breakdown_by_company(
     if id_loja:
         q = q.filter(Pedido.id_loja == id_loja)
 
+    estornos = _estornos_por(db, inicio, fim, Rma.id_loja, id_loja)
+
     items = []
+    vistos = set()
     for row in q.all():
-        receita = Decimal(str(row.receita or 0))
+        vistos.add(row.id_loja)
+        receita = Decimal(str(row.receita or 0)) - estornos.get(row.id_loja, Decimal(0))
         custo = Decimal(str(row.custo or 0))
         lucro = receita - custo
         margem = (lucro / receita).quantize(Decimal("0.0001")) if receita > 0 else Decimal("0")
@@ -340,6 +394,20 @@ def get_breakdown_by_company(
             ticket_custo=(custo / num_pedidos).quantize(Decimal("0.01")) if num_pedidos else Decimal("0"),
             ticket_lucro=(lucro / num_pedidos).quantize(Decimal("0.01")) if num_pedidos else Decimal("0"),
         ))
+
+    # Estorno de pedido antigo: a loja nao tem pedido NESTE periodo, mas o
+    # dinheiro saiu nele. Sem esta linha a soma das empresas nao fecha com o
+    # total, e o estorno some da tela.
+    faltando = {k: v for k, v in estornos.items() if k not in vistos and v}
+    if faltando:
+        nomes = dict(db.query(Loja.id, Loja.nome).filter(Loja.id.in_(faltando)).all())
+        for id_loja_estorno, valor in faltando.items():
+            items.append(BreakdownItem(
+                nome=nomes.get(id_loja_estorno, "—"),
+                receita=-valor, custo=Decimal(0), lucro=-valor, margem=Decimal("0"),
+                num_pedidos=0, num_cancelamentos=0, valor_cancelamentos=Decimal(0),
+                ticket_venda=Decimal("0"), ticket_custo=Decimal("0"), ticket_lucro=Decimal("0"),
+            ))
     return BreakdownByCompanyResponse(items=items)
 
 
@@ -361,8 +429,7 @@ def get_breakdown_by_seller(
                 case((PEDIDO_ATIVO, Pedido.valor_venda), else_=0)
             ), 0).label("receita"),
             func.coalesce(func.sum(
-                case((PEDIDO_ATIVO,
-                      CustoPedido.custo_produto_final + CustoPedido.custo_servico), else_=0)
+                case((PEDIDO_ATIVO, _custos_pedido_sql()), else_=0)
             ), 0).label("custo"),
             func.count(case((PEDIDO_ATIVO, 1))).label("num_pedidos"),
             func.count(case((PEDIDO_CANCELADO, 1))).label("num_cancelamentos"),
@@ -386,9 +453,13 @@ def get_breakdown_by_seller(
     if id_loja:
         q = q.filter(Pedido.id_loja == id_loja)
 
+    estornos = _estornos_por(db, inicio, fim, Rma.id_vendedor, id_loja)
+
     items = []
+    vistos = set()
     for row in q.all():
-        receita = Decimal(str(row.receita or 0))
+        vistos.add(row.id_vendedor)
+        receita = Decimal(str(row.receita or 0)) - estornos.get(row.id_vendedor, Decimal(0))
         custo = Decimal(str(row.custo or 0))
         lucro = receita - custo
         margem = (lucro / receita).quantize(Decimal("0.0001")) if receita > 0 else Decimal("0")
@@ -407,6 +478,18 @@ def get_breakdown_by_seller(
             ticket_custo=(custo / num_pedidos).quantize(Decimal("0.01")) if num_pedidos else Decimal("0"),
             ticket_lucro=(lucro / num_pedidos).quantize(Decimal("0.01")) if num_pedidos else Decimal("0"),
         ))
+
+    faltando = {k: v for k, v in estornos.items() if k not in vistos and v}
+    if faltando:
+        nomes = dict(db.query(Vendedor.id, Vendedor.nome).filter(Vendedor.id.in_(faltando)).all())
+        for id_vendedor_estorno, valor in faltando.items():
+            items.append(BreakdownBySellerItem(
+                id_vendedor=id_vendedor_estorno,
+                nome=nomes.get(id_vendedor_estorno, "—"),
+                receita=-valor, custo=Decimal(0), lucro=-valor, margem=Decimal("0"),
+                num_pedidos=0, num_cancelamentos=0, valor_cancelamentos=Decimal(0),
+                ticket_venda=Decimal("0"), ticket_custo=Decimal("0"), ticket_lucro=Decimal("0"),
+            ))
     return BreakdownBySellerResponse(items=items)
 
 
@@ -581,6 +664,9 @@ def get_daily_series(
                     case((PEDIDO_ATIVO,
                           func.coalesce(Pedido.multa, 0) + func.coalesce(Pedido.juros, 0)), else_=0)
                 ), 0).label("ganhos"),
+                func.coalesce(func.sum(
+                    case((PEDIDO_ATIVO, _frete_do_pedido_sql()), else_=0)
+                ), 0).label("fretes"),
             )
             .outerjoin(CustoPedido, CustoPedido.id_pedido == Pedido.id)
             .filter(
@@ -622,24 +708,12 @@ def get_daily_series(
             continue
         gastos_by_day[dia] = gastos_by_day.get(dia, Decimal(0)) + Decimal(str(val or 0))
 
-    # Fretes pela data efetiva, como no indicador de custo total
-    frete_dia = Frete.data_frete
-    frete_q = (
-        db.query(
-            frete_dia.label("dia"),
-            func.coalesce(func.sum(Frete.valor), 0).label("total"),
-        )
-        .filter(frete_dia >= inicio, frete_dia <= fim)
-        .group_by(frete_dia)
+    # O frete vem junto do pedido, dentro de _custos_pedido_sql, no dia do
+    # pedido. Antes era somado pela data do frete, por fora do custo do pedido:
+    # o gráfico mostrava frete de pedido cancelado e de pedido já excluído.
+    estornos_por_dia = _estornos_por(
+        db, inicio, fim, func.coalesce(ItemRma.data_estorno, Rma.data_registro), id_loja,
     )
-    if id_loja:
-        frete_q = (
-            frete_q.join(Pedido, Pedido.id == Frete.id_pedido)
-            .filter(Pedido.id_loja == id_loja)
-        )
-    fretes_by_day: dict[date, Decimal] = {
-        row.dia: Decimal(str(row.total or 0)) for row in frete_q.all()
-    }
 
     # Previous year: same calendar window, clamp day to avoid Feb-29 errors
     def _prev_year_date(d: date) -> date:
@@ -664,8 +738,8 @@ def get_daily_series(
         custo = Decimal(str(row.custo or 0)) if row else Decimal(0)
         ganhos = Decimal(str(row.ganhos or 0)) if row else Decimal(0)
         gastos_fixos = gastos_by_day.get(current, Decimal(0))
-        fretes = fretes_by_day.get(current, Decimal(0))
-        custo += fretes
+        fretes = Decimal(str(row.fretes or 0)) if row else Decimal(0)
+        receita -= estornos_por_dia.get(current, Decimal(0))
         items.append(DailySeriesItem(
             data=current.isoformat(),
             faturamento=receita,
