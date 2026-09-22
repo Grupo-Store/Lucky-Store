@@ -159,9 +159,13 @@ describe('o documento da OS', () => {
 
   it('a coluna de compra continua mostrando o que foi pago ao fornecedor', () => {
     // A outra metade do defeito: aqui vinha o preço do cliente.
+    //
+    // 4.100 por unidade × 2. As duas colunas de dinheiro do papel são o total
+    // da linha: a de venda sempre multiplicou pela quantidade, e a de compra
+    // passou a multiplicar também — os valores da linha são todos unitários.
     abrir([item({ purchaseValue: 4100 })]);
-    expect(celula('Valor de compra')).toBe('R$ 4.100,00');
-    expect(celula('Valor de compra')).not.toBe('R$ 6.480,00');
+    expect(celula('Valor de compra')).toBe('R$ 8.200,00');
+    expect(celula('Valor de compra')).not.toBe('R$ 12.960,00');
   });
 
   it('as duas colunas não mostram o mesmo número', () => {

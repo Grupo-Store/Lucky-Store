@@ -158,12 +158,25 @@ export interface DirectSupplyOrderItem {
   supplierInvoice: string;
 }
 
-/** Sum of all purchase values from sub-purchases (falls back to item.purchaseValue if none). */
+/**
+ * Quanto se pagou por este item, no total.
+ *
+ * Os valores em dinheiro da linha são todos UNITÁRIOS — custo projetado, valor
+ * de compra e valor de venda — e cada total é o unitário × a quantidade. O
+ * mesmo vale dentro de cada sub-compra: o valor é o de uma unidade, e a
+ * quantidade dela é `selectedQuantity` (30 unidades a R$170 = R$5.100).
+ *
+ * Antes esta função somava os valores das sub-compras sem multiplicar, e caía
+ * no `purchaseValue` cru quando não havia sub-compra: 30 unidades a R$170
+ * apareciam como R$170 de custo, no resumo do pedido e no papel da OS, contra
+ * um custo projetado que já vinha multiplicado (R$5.250). O "lucro" saía da
+ * diferença entre um total e um unitário.
+ */
 export function calcItemFinalValue(item: OrderItem): number {
   if (item.subPurchases && item.subPurchases.length > 0) {
-    return item.subPurchases.reduce((s, sp) => s + (sp.purchaseValue || 0), 0);
+    return item.subPurchases.reduce((s, sp) => s + (sp.purchaseValue || 0) * (sp.selectedQuantity || 0), 0);
   }
-  return item.purchaseValue || 0;
+  return (item.purchaseValue || 0) * (item.quantity || 0);
 }
 
 /** Latest product delivery date among sub-purchases (ISO yyyy-mm-dd) */
@@ -394,18 +407,22 @@ export function calcTotal(o: Partial<Order>): number {
 }
 
 /**
- * Valor de Venda do pedido = soma do valor projetado de cada produto × quantidade
- * (itens normais + fornecimento direto).
+ * Valor de Venda do pedido = o que o cliente paga por cada item × a quantidade
+ * dele, somando itens normais e de fornecimento direto.
  *
- * Fonte ÚNICA usada tanto pelos modais (OrderModal/ProductModal) quanto pela lista
- * de pedidos, para que os valores correspondentes fiquem sempre consistentes.
- * Aceita qualquer objeto com { projectedValue, quantity } — inclusive itens vindos
- * da API mapeados a partir de valor_projetado / quantidade.
+ * O preço de venda unitário mora em `saleValue` no item normal e em
+ * `closingValue` no de fornecimento direto — os dois campos aparecem na tela
+ * como "Val. Venda".
+ *
+ * Antes esta função somava `projectedValue`, que é CUSTO, não venda: ninguém a
+ * chamava, então o erro nunca apareceu, e o resumo do pedido lia um campo
+ * "Valor de Venda" digitado à parte, que ficava em zero enquanto o vendedor
+ * preenchia o valor na linha do item.
  */
-type ValuedItem = { projectedValue?: number; quantity?: number };
+type ValuedItem = { saleValue?: number; closingValue?: number; quantity?: number };
 export function calcOrderSalesValue(items?: ValuedItem[], directSupplyItems?: ValuedItem[]): number {
   const sum = (arr?: ValuedItem[]) =>
-    (arr || []).reduce((s, i) => s + (i.projectedValue || 0) * (i.quantity || 0), 0);
+    (arr || []).reduce((s, i) => s + ((i.saleValue ?? i.closingValue) || 0) * (i.quantity || 0), 0);
   return sum(items) + sum(directSupplyItems);
 }
 

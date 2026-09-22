@@ -24,7 +24,7 @@ import {
   ITEM_STATUS_COLORS, ORDER_STATUS_COLORS, ORDER_STATUS_LABELS,
   PAYMENT_METHODS, PAYMENT_METHOD_LABELS,
   calcFinalCost, calcPartialCost, calcDirectSupplyCost, calcProfit, calcFreightTotal,
-  calcItemFinalValue,
+  calcItemFinalValue, calcOrderSalesValue,
 } from '@/store/OrderStore';
 import type { OrderPrefill } from '@/components/AddOrderChooser';
 import { StatusTimeline } from '@/components/StatusTimeline';
@@ -654,15 +654,39 @@ export function OrderModal({ open, onClose, order, onSave, nextOS, prefill }: Pr
   );
   const derivedFinalProductCost = useMemo(
     () => {
-      // item.purchaseValue já é o total comprado (soma das sub-compras, ver
-      // OrderStore.tsx SubPurchase/OrderItem) — só ds items usam valor por unidade.
-      const regular = (form.items || []).reduce((s, i) => s + (i.purchaseValue || 0), 0);
+      // calcItemFinalValue é quem sabe somar: multiplica o valor unitário pela
+      // quantidade, e nas sub-compras usa a quantidade de cada uma.
+      const regular = (form.items || []).reduce((s, i) => s + calcItemFinalValue(i), 0);
       const ds = (form.directSupplyItems || []).reduce((s, i) => s + (i.purchaseValue || 0) * (i.quantity || 0), 0);
       return regular + ds;
     },
     [form.items, form.directSupplyItems]
   );
   const derivedFreightTotal = useMemo(() => calcFreightTotal(form.freight), [form.freight]);
+
+  /* Valor de Venda do pedido = soma do "Val. Venda" de cada linha × a quantidade.
+   *
+   * Era um campo digitado à parte, lá na seção Geral, sem ligação nenhuma com as
+   * linhas: o vendedor preenchia o Val. Venda do item, o resumo continuava em
+   * R$ 0,00 e o Lucro do Pedido aparecia como o custo inteiro negativo.
+   *
+   * O valor derivado é escrito de volta no form para que tudo que já lia
+   * `salesValue` — resumo, margem, impostos de cartão, documento da OS e o que
+   * é gravado no banco — continue lendo de um lugar só.
+   *
+   * Sem valor de venda nas linhas o campo segue digitável: pedidos antigos e os
+   * que só têm um total fechado continuam funcionando como antes. */
+  const derivedSalesValue = useMemo(
+    () => calcOrderSalesValue(form.items, form.directSupplyItems),
+    [form.items, form.directSupplyItems]
+  );
+  const salesValueVemDosItens = derivedSalesValue > 0;
+
+  useEffect(() => {
+    if (salesValueVemDosItens && derivedSalesValue !== form.salesValue) {
+      set('salesValue', derivedSalesValue);
+    }
+  }, [derivedSalesValue, salesValueVemDosItens, form.salesValue]);
 
   const dsItems = form.directSupplyItems || [];
   /** Parte da venda que vai para o fornecedor direto (margem × % + frete). */
@@ -1206,7 +1230,11 @@ export function OrderModal({ open, onClose, order, onSave, nextOS, prefill }: Pr
               </Select>
             </div>
 
-            {renderCurrencyInput('salesValue', 'Valor de Venda')}
+            {renderCurrencyInput(
+              'salesValue',
+              salesValueVemDosItens ? 'Valor de Venda (soma dos itens)' : 'Valor de Venda',
+              { readOnly: salesValueVemDosItens, muted: salesValueVemDosItens },
+            )}
 
             <div>
               <Label>Nota Fiscal</Label>

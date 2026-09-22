@@ -37,7 +37,9 @@ describe('salvar compra de produto', () => {
     expect(apiClient.put).toHaveBeenCalledWith('/pedidos/order-1/items/item-1', expect.objectContaining({
       status: 'Bought', valor_compra: 420,
     }));
-    expect(onSave.mock.calls[0][0]).toMatchObject({ finalProductCost: 520, purchaseTaxValue: 52,
+    // 420 por unidade × 3 do item = 1.260, mais 50 × 2 do fornecimento direto.
+    // Antes somava os 420 sem multiplicar, e o custo do pedido saía 520.
+    expect(onSave.mock.calls[0][0]).toMatchObject({ finalProductCost: 1360, purchaseTaxValue: 136,
       items: [expect.objectContaining({ status: 'Bought', purchaseValue: 420 })] });
     expect(qc.getQueryState(dashboardKey)?.isInvalidated).toBe(true);
     expect(qc.getQueryState(['financial-orders'])?.isInvalidated).toBe(true);

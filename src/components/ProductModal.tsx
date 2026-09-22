@@ -150,8 +150,18 @@ export function ProductModal({ open, onClose, order, item, onSave }: Props) {
   }, [item, open]);
 
   const totalSelected = useMemo(() => subs.reduce((s, sp) => s + (sp.selectedQuantity || 0), 0), [subs]);
-  const projected = item?.projectedValue || 0;
-  const finalValue = useMemo(() => subs.reduce((s, sp) => s + (sp.purchaseValue || 0), 0), [subs]);
+  /* O projetado da linha inteira: custo unitário × quantidade.
+   *
+   * Mostrava só o unitário e comparava com o total das sub-compras, então 30
+   * unidades a R$175 apareciam como R$175 e a "Economia" saía de uma conta
+   * entre grandezas diferentes (unitário − total). */
+  const projected = (item?.projectedValue || 0) * (item?.quantity || 0);
+  // O valor da sub-compra é o de UMA unidade; o total dela é × a quantidade
+  // comprada naquela compra (30 unidades a R$170 = R$5.100).
+  const finalValue = useMemo(
+    () => subs.reduce((s, sp) => s + (sp.purchaseValue || 0) * (sp.selectedQuantity || 0), 0),
+    [subs],
+  );
   const savings = projected - finalValue;
   const overQuantity = item ? totalSelected > (item.quantity || 0) : false;
 
@@ -169,14 +179,24 @@ export function ProductModal({ open, onClose, order, item, onSave }: Props) {
       observations: observacoes,
       subPurchases: subs,
     };
-    updatedItem.purchaseValue = calcItemFinalValue(updatedItem);
+    /* `purchaseValue` é o valor de compra de UMA unidade, como os vizinhos dele
+     * na linha do item. Com várias sub-compras a preços diferentes, o unitário
+     * que representa o item é o total dividido pela quantidade.
+     *
+     * O custo do pedido não sai daqui: quem soma é calcItemFinalValue, sobre as
+     * sub-compras, sem passar por esta divisão — então nenhum centavo de
+     * arredondamento entra na conta. */
+    const totalComprado = calcItemFinalValue(updatedItem);
+    updatedItem.purchaseValue = updatedItem.quantity
+      ? Math.round((totalComprado / updatedItem.quantity) * 100) / 100
+      : 0;
     updatedItem.productDeliveryDate = calcItemLatestDelivery(updatedItem);
 
     const updatedOrder: Order = {
       ...order,
       items: order.items.map(i => i.id === item.id ? updatedItem : i),
     };
-    updatedOrder.finalProductCost = updatedOrder.items.reduce((s, i) => s + (i.purchaseValue || 0), 0)
+    updatedOrder.finalProductCost = updatedOrder.items.reduce((s, i) => s + calcItemFinalValue(i), 0)
       + (updatedOrder.directSupplyItems || []).reduce((s, i) => s + i.purchaseValue * i.quantity, 0);
     updatedOrder.purchaseTaxValue = updatedOrder.finalProductCost * (updatedOrder.purchaseTaxPercent || 0) / 100;
 
