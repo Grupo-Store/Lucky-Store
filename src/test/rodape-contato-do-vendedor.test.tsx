@@ -75,7 +75,7 @@ function cartao(quote: Quote) {
   const card = raiz?.querySelector('.qp-fcard');
   expect(card, 'a cotação saiu sem cartão de contato no rodapé').not.toBeNull();
   return {
-    cnpj: card!.querySelector('.qp-fcard-cnpj')?.textContent ?? '',
+    nome: card!.querySelector('.qp-fcard-nome')?.textContent ?? '',
     linhas: [...card!.querySelectorAll('.qp-fcard-linha')].map(e => e.textContent ?? ''),
     /** A linha de letra miúda embaixo do cartão. */
     rodapeTexto: raiz!.querySelector('.qp-footer-text')?.textContent ?? '',
@@ -99,9 +99,9 @@ describe.each(EMPRESAS)('cotação da %s', (empresa, cnpjEsperado) => {
     });
 
     it('imprime o CNPJ da empresa da cotação', () => {
-      // As duas usam o mesmo cartão agora; o CNPJ é o que continua distinto.
-      expect(cartao(cotacao({ company: empresa, seller: v.nome, sellerId: v.id })).cnpj)
-        .toBe(cnpjEsperado);
+      const c = cartao(cotacao({ company: empresa, seller: v.nome, sellerId: v.id }));
+      expect(c.nome).toBe(v.nome);
+      expect(c.rodapeTexto).toContain(cnpjEsperado);
     });
 
     it('a linha embaixo do cartão traz endereço e CEP, e nada de contato', () => {
