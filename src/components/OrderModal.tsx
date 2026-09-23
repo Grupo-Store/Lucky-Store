@@ -1,4 +1,5 @@
 import { saveChildId } from '@/lib/save-ids';
+import { sellerPrintName } from '@/lib/seller-print-name';
 import { resizeInstallments } from '@/lib/installments';
 import { useState, useEffect, useRef, Fragment, KeyboardEvent, useMemo } from 'react';
 import { createPortal } from 'react-dom';
@@ -366,7 +367,7 @@ function OrderPrintTemplate({ form, valores, vendedor }: {
         <div><span className="k">Empresa</span><span className="v">{form.customerCompany?.trim() || form.customer || '—'}</span></div>
         <div><span className="k">Cliente</span><span className="v">{form.customerContact || '—'}</span></div>
         <div><span className="k">CPF/CNPJ</span><span className="v">{form.cnpj || '—'}</span></div>
-        <div><span className="k">Vendedor</span><span className="v">{form.seller || '—'}</span></div>
+        <div><span className="k">Vendedor</span><span className="v">{sellerPrintName(form.seller)}</span></div>
         <div><span className="k">OC/AF/PED</span><span className="v">{form.ocAfPed || '—'}</span></div>
         <div><span className="k">Data do pedido</span><span className="v">{dt(form.orderDate)}</span></div>
         <div><span className="k">Data de entrega</span><span className="v">{dt(form.deliveryDate)}</span></div>

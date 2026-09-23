@@ -1,4 +1,5 @@
 import { saveChildId } from '@/lib/save-ids';
+import { sellerPrintName } from '@/lib/seller-print-name';
 import { useState, useEffect, useRef, KeyboardEvent } from 'react';
 import { createPortal } from 'react-dom';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -282,7 +283,7 @@ function QuotePrintTemplate({ form, rows, total, vendedor }: {
   /** Registro do vendedor da cotacao — usado pelo cartao do rodape da BTech. */
   vendedor?: { nome: string; email: string | null; phone: string | null };
 }) {
-  const sellerName = (form.seller || '').trim() || '—';
+  const sellerName = sellerPrintName(form.seller);
   const sendDate = format(new Date(), 'dd/MM/yyyy');
 
   // ATENCAO ao que este fallback imprime. Ele existe para a cotacao cuja
