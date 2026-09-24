@@ -30,6 +30,21 @@ export function UpdateNotifier() {
               label: 'Atualizar',
               onClick: () => window.location.reload(),
             },
+            // Mesmo azul escuro do botão "Entrar" da tela de login (T.accentDark em LoginScreen.tsx).
+            // Precisa ficar aqui no nível do toast(), não dentro de `action` — é onde o sonner lê o estilo.
+            actionButtonStyle: {
+              background: '#1E4FD8',
+              color: '#fff',
+            },
+            // Maior e com botão em linha própria: cliente relatou dificuldade de notar
+            // avisos discretos. Não alargar o card — o container do sonner tem largura
+            // fixa e um card mais largo vaza pra fora da tela.
+            classNames: {
+              toast: '!p-5 !gap-3 !flex-col !items-stretch',
+              title: '!text-base !font-semibold',
+              description: '!text-sm !mt-0.5',
+              actionButton: '!w-full !mx-0 !mt-2 !h-auto !py-3 !text-sm !font-semibold',
+            },
           });
         }
       } catch {
