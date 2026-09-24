@@ -4,6 +4,7 @@ import { BrowserRouter, Route, Routes } from "react-router-dom";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { UpdateNotifier } from "@/components/UpdateNotifier";
 import { AuthProvider, useAuth } from "@/store/AuthStore";
 import { OrderProvider } from "@/store/OrderStore";
 import { QuoteProvider } from "@/store/QuoteStore";
@@ -65,6 +66,7 @@ const App = () => (
     <TooltipProvider>
       <Toaster />
       <Sonner />
+      <UpdateNotifier />
       <AuthProvider>
         <BrowserRouter>
           <AuthGate />
